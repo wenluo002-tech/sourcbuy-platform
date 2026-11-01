@@ -1,6 +1,7 @@
 import { getDb } from "./connection";
 import { factories, factoryScores, commissionRules } from "../../db/schema";
 import { eq, and, desc, like, gte, lte, sql, type SQL } from "drizzle-orm";
+import { expandQuery } from "../../contracts/lexicon";
 
 export interface FactoryFilter {
   tier?: string;
@@ -25,22 +26,42 @@ export async function findFactories(f: FactoryFilter) {
     conds.push(gte(factories.score, String(f.minScore)));
   if (f.minYears != null)
     conds.push(gte(factories.years, String(f.minYears)));
+  let categoryMatched: string | null = null;
   if (f.keyword) {
-    conds.push(
-      sql`(${factories.name} LIKE ${"%" + f.keyword + "%"} OR ${factories.review} LIKE ${"%" + f.keyword + "%"} OR ${factories.productionType} LIKE ${"%" + f.keyword + "%"} OR ${factories.oemMode} LIKE ${"%" + f.keyword + "%"})`
+    const { terms, category } = expandQuery(f.keyword);
+    categoryMatched = category;
+    // 1) 名称/评语直接命中任一展开词
+    const textConds = terms.map(
+      (t) => sql`(${factories.name} LIKE ${"%" + t + "%"} OR ${factories.review} LIKE ${"%" + t + "%"})`
     );
+    // 2) 类目命中：通过 factory_categories 子查询
+    if (category) {
+      textConds.push(
+        sql`${factories.id} IN (SELECT factory_id FROM factory_categories WHERE category = ${category})`
+      );
+    }
+    conds.push(sql`(${sql.join(textConds, sql` OR `)})`);
   }
 
   const page = Math.max(1, f.page ?? 1);
   const pageSize = Math.min(60, Math.max(1, f.pageSize ?? 20));
   const where = conds.length ? and(...conds) : undefined;
 
+  // 有搜索词时：名称/评语直接命中的排前面，其余按评分
+  const orderBy: SQL[] = [];
+  if (f.keyword) {
+    orderBy.push(
+      sql`(${factories.name} LIKE ${"%" + f.keyword + "%"} OR ${factories.review} LIKE ${"%" + f.keyword + "%"}) DESC`
+    );
+  }
+  orderBy.push(desc(factories.score));
+
   const [rows, cnt] = await Promise.all([
     db
       .select()
       .from(factories)
       .where(where)
-      .orderBy(desc(factories.score))
+      .orderBy(...orderBy)
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db
@@ -48,7 +69,7 @@ export async function findFactories(f: FactoryFilter) {
       .from(factories)
       .where(where),
   ]);
-  return { rows, total: cnt[0]?.c ?? 0, page, pageSize };
+  return { rows, total: cnt[0]?.c ?? 0, page, pageSize, category: categoryMatched };
 }
 
 function eq2(col: any, val: any) {

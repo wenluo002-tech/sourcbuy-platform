@@ -51,10 +51,10 @@ export default function Home() {
         </form>
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
-            to="/factories"
+            to="/buyer"
             className="rounded-lg bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-emerald-950 transition-colors hover:bg-emerald-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
-            进入严选工厂库
+            和 AI 买手聊聊
           </Link>
           <Link
             to="/calculator"

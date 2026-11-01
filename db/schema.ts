@@ -82,6 +82,22 @@ export const factoryScores = mysqlTable(
 );
 
 // 品类风险档（佣金引擎输入，蓝图 v2 §1.3）
+export const factoryCategories = mysqlTable(
+  "factory_categories",
+  {
+    id: serial("id").primaryKey(),
+    factoryId: bigint("factory_id", { mode: "number", unsigned: true })
+      .notNull()
+      .references(() => factories.id),
+    category: varchar("category", { length: 32 }).notNull(),
+    source: varchar("source", { length: 32 }).notNull().default("lexicon_v1"),
+  },
+  (t) => [
+    index("ix_fc_factory").on(t.factoryId),
+    index("ix_fc_category").on(t.category),
+  ]
+);
+
 export const categoryRiskTiers = mysqlTable(
   "category_risk_tiers",
   {

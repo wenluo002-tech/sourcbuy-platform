@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from "react-router";
 
 const NAV = [
   { to: "/", label: "首页" },
+  { to: "/buyer", label: "AI 买手" },
   { to: "/factories", label: "严选工厂库" },
   { to: "/calculator", label: "到手价试算" },
 ];

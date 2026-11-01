@@ -7,6 +7,8 @@ import {
   calcLandedPrice,
   matchFactories,
 } from "./queries/factories";
+import { sourcingChat } from "./queries/aiSourcing";
+import { classifyAiError, AiUnavailable } from "./lib/ai-client";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -62,6 +64,34 @@ export const appRouter = createRouter({
         })
       )
       .query(({ input }) => calcLandedPrice(input)),
+  }),
+  ai: createRouter({
+    chat: publicQuery
+      .input(
+        z.object({
+          message: z.string().min(1).max(2000),
+          history: z
+            .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() }))
+            .max(20),
+        })
+      )
+      .mutation(async ({ input }) => {
+        try {
+          return await sourcingChat(input.message, input.history);
+        } catch (err) {
+          const classified = classifyAiError(err);
+          if (classified instanceof AiUnavailable) {
+            return {
+              reply: "AI 采购助手暂时不可用（服务额度已用尽），请稍后再试，或先用上方搜索框按品类查找工厂。",
+              understood: false,
+              intent: { product: null, quantity: null },
+              factories: [],
+              degraded: true,
+            };
+          }
+          throw err;
+        }
+      }),
   }),
 });
 
