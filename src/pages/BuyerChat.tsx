@@ -18,10 +18,30 @@ interface MatchedFactory {
   evidence: string[];
 }
 
+interface LinkedProduct {
+  offer: {
+    offerId: string;
+    title: string;
+    categoryName: string | null;
+    unit: string | null;
+    images: string[];
+    priceTiers: { minQty: number; price: number }[];
+    shopName: string | null;
+    shopUrl: string | null;
+  };
+  factory: {
+    id: number;
+    name: string;
+    tier: string | null;
+    score: string | null;
+  } | null;
+}
+
 interface Turn {
   role: "user" | "assistant";
   content: string;
   factories?: MatchedFactory[];
+  product?: LinkedProduct | null;
 }
 
 const SUGGESTIONS = [
@@ -58,7 +78,12 @@ export default function BuyerChat() {
         onSuccess: (res) =>
           setTurns((ts) => [
             ...ts,
-            { role: "assistant", content: res.reply, factories: res.factories },
+            {
+              role: "assistant",
+              content: res.reply,
+              factories: res.factories,
+              product: (res as any).product ?? null,
+            },
           ]),
         onError: () =>
           setTurns((ts) => [
@@ -85,9 +110,63 @@ export default function BuyerChat() {
             </div>
           ) : (
             <div key={i} className="space-y-3">
-              <div className="max-w-[92%] border-l-2 border-[#064013]/70 pl-4 text-sm leading-relaxed text-stone-800">
+              <div className="max-w-[92%] border-l-2 border-[#064013]/70 pl-4 text-sm leading-relaxed whitespace-pre-wrap text-stone-800">
                 {t.content}
               </div>
+              {t.product && (
+                <div className="rounded-lg border border-[#e2ddc8] bg-white p-3.5">
+                  <div className="flex gap-3">
+                    {t.product.offer.images[0] && (
+                      <img
+                        src={t.product.offer.images[0]}
+                        alt=""
+                        className="h-20 w-20 shrink-0 rounded-md object-cover"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-sm font-semibold text-stone-900">
+                        {t.product.offer.title}
+                      </p>
+                      <p className="mt-0.5 text-xs text-stone-500">
+                        {[t.product.offer.categoryName, t.product.offer.shopName]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      {t.product.offer.priceTiers.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                          {t.product.offer.priceTiers.map((p, i) => (
+                            <span key={i} className="text-xs">
+                              <span className="font-semibold text-[#064013]">¥{p.price}</span>
+                              <span className="text-stone-400"> / {p.minQty}
+                                {t.product?.offer.unit ?? "件"}起</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 border-t border-stone-100 pt-2">
+                    {t.product.factory ? (
+                      <Link
+                        to={`/factories/${t.product.factory.id}`}
+                        className="text-xs font-medium text-emerald-800 hover:underline"
+                      >
+                        背后工厂在严选库：{t.product.factory.name}（{t.product.factory.tier} · {t.product.factory.score} 分）→
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-amber-700">
+                        该店铺不在我们的严选库，下单前建议验厂
+                      </span>
+                    )}
+                    <Link
+                      to="/calculator"
+                      className="shrink-0 rounded-md bg-[#064013] px-2.5 py-1 text-xs font-medium text-[#f5f2e6] hover:bg-emerald-800"
+                    >
+                      算到手价
+                    </Link>
+                  </div>
+                </div>
+              )}
               {t.factories && t.factories.length > 0 && (
                 <div className="grid gap-2.5 sm:grid-cols-2">
                   {t.factories.map((f) => (
@@ -208,7 +287,7 @@ export default function BuyerChat() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="说出你要的品，如：500 件卫衣发美国…"
+          placeholder="说出你要的品，或直接粘贴 1688 商品链接…"
           className="h-11 flex-1 rounded-lg border border-[#c9c4ae] bg-white px-4 text-sm focus-visible:outline-2 focus-visible:outline-[#064013]"
         />
         <button

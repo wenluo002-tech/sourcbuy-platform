@@ -8,6 +8,7 @@ import {
   matchFactories,
 } from "./queries/factories";
 import { sourcingChat } from "./queries/aiSourcing";
+import { offerWithFactory } from "./queries/products";
 import { classifyAiError, AiUnavailable } from "./lib/ai-client";
 
 export const appRouter = createRouter({
@@ -65,8 +66,18 @@ export const appRouter = createRouter({
       )
       .query(({ input }) => calcLandedPrice(input)),
   }),
-  ai: createRouter({
-    chat: publicQuery
+  products: createRouter({
+    // 粘贴 1688 链接/货号 → 真实商品详情 + 背后的严选工厂（若在我们的库中）
+    detail: publicQuery
+      .input(z.object({ offerId: z.string().min(6).max(20) }))
+      .query(async ({ input }) => {
+        const { offer, factory } = await offerWithFactory(input.offerId);
+        if (!offer) throw new Error("未能获取该商品，请确认货号或链接有效");
+        return { offer, factory };
+      }),
+  }),
+
+  ai: createRouter({chat: publicQuery
       .input(
         z.object({
           message: z.string().min(1).max(2000),

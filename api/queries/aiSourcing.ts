@@ -3,6 +3,8 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
 import { listModels } from "../lib/ai-client";
 import { matchFactories } from "./factories";
+import { extractOfferId, offerWithFactory } from "./products";
+import { expandQuery } from "../../contracts/lexicon";
 
 const kimiGw = createOpenAICompatible({
   name: "kimi-gw",
@@ -45,6 +47,7 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 5. 回复简短口语化，不说教，不堆术语。买家是海外小 B 卖家。
 6. 纯文本输出：不要用任何 Markdown 语法（不用 ** 加粗、不用 # 标题、不用 - 列表符），换行分段即可。
 7. 不要暴露内部术语（如 relaxedThreshold）；如果系统放宽了评分门槛，用"我把评分门槛放宽了些"这样的口语表达。
+8. 如果系统事实里有 linkedProduct：这是用户贴的 1688 商品的真实数据。要点评这个货——阶梯价什么水平、起订量合不合理；factoryInOurDb 非空时说明"这家厂就在我们严选库里"并给出评级，为空时提醒"这家店不在我们严选库，下单前建议验厂"。若 linkedProduct.fetchFailed=true，说明商品没拉到，让用户检查链接或货号。
 6. 平台铁律：只代表买家，不收工厂返点；推荐按评分中立排序，评分算法公开（七维加权），工厂不可付费影响排名。`;
 
 export interface ChatMsg {
@@ -67,27 +70,43 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
     schema: intentSchema,
   });
 
-  // 纯闲聊：直接回，不查库
-  if (intent.isGreeting && !intent.product) {
+  // 阶段一·五：用户贴了 1688 链接/货号 → 实时拉取真实商品 + 背后工厂
+  const offerId = extractOfferId(message);
+  let productInfo: Awaited<ReturnType<typeof offerWithFactory>> | null = null;
+  let productFetchFailed = false;
+  if (offerId) {
+    try {
+      const r = await offerWithFactory(offerId);
+      if (r.offer) productInfo = r;
+      else productFetchFailed = true;
+    } catch {
+      productFetchFailed = true; // 聚合 API 失败时降级：话术里说明，不阻塞对话
+    }
+  }
+
+  // 纯闲聊（且没带 1688 链接）：直接回，不查库
+  if (intent.isGreeting && !intent.product && !productInfo) {
     const { text } = await generateText({
       model: kimiGw(defaultModelId),
       system: REPLY_SYSTEM,
       prompt: `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
     });
-    return { reply: text, understood: false, intent, factories: [] };
+    return { reply: text, understood: false, intent, factories: [], product: null };
   }
 
   // 阶段二：真实匹配（先按 85 分门槛，不足 3 家放宽门槛补齐）
+  // 品类词来源：意图抽取优先；用户贴了商品链接时，从真实商品标题/类目兜底
+  let keyword = intent.product;
+  if (!keyword && productInfo?.offer) {
+    const titleHit = expandQuery(productInfo.offer.title);
+    if (titleHit.category) keyword = productInfo.offer.title;
+  }
   let factories: Awaited<ReturnType<typeof matchFactories>> = [];
   let relaxed = false;
-  if (intent.product) {
-    factories = await matchFactories({ keyword: intent.product, limit: 6 });
+  if (keyword) {
+    factories = await matchFactories({ keyword, limit: 6 });
     if (factories.length < 3) {
-      const more = await matchFactories({
-        keyword: intent.product,
-        minScore: 0,
-        limit: 6,
-      });
+      const more = await matchFactories({ keyword, minScore: 0, limit: 6 });
       if (more.length > factories.length) {
         factories = more;
         relaxed = true;
@@ -100,6 +119,25 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
     intent,
     factoryCount: factories.length,
     relaxedThreshold: relaxed,
+    linkedProduct: productInfo
+      ? {
+          offerId: productInfo.offer!.offerId,
+          title: productInfo.offer!.title,
+          categoryName: productInfo.offer!.categoryName,
+          priceTiers: productInfo.offer!.priceTiers,
+          unit: productInfo.offer!.unit,
+          shopName: productInfo.offer!.shopName,
+          factoryInOurDb: productInfo.factory
+            ? {
+                name: productInfo.factory.name,
+                tier: productInfo.factory.tier,
+                score: productInfo.factory.score,
+              }
+            : null,
+        }
+      : productFetchFailed
+        ? { fetchFailed: true }
+        : null,
     factories: factories.map((f) => ({
       name: f.name,
       tier: f.tier,
@@ -122,8 +160,11 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
 
   return {
     reply,
-    understood: factories.length > 0,
+    understood: factories.length > 0 || !!productInfo,
     intent: { product: intent.product, quantity: intent.quantity },
     factories,
+    product: productInfo
+      ? { offer: productInfo.offer, factory: productInfo.factory }
+      : null,
   };
 }
