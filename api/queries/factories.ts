@@ -189,15 +189,32 @@ function r2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-// ============ AI 选厂推荐（骨架：规则引擎版，LLM 层后续接入）============
+// ============ AI 选厂推荐（含可解释性：类目排名 + 子分 + 证据）============
+
+export interface MatchedFactory {
+  id: number;
+  name: string;
+  tier: string | null;
+  score: number | null;
+  years: number | null;
+  location: string | null;
+  cert: string | null;
+  repurchaseRate: number | null;
+  mainImage: string | null;
+  reason: string;
+  subScores: Record<string, number | null> | null;
+  categoryRank: { category: string; rank: number; total: number } | null;
+  evidence: string[];
+}
 
 export async function matchFactories(intent: {
   keyword?: string;
   location?: string;
   minScore?: number;
   limit?: number;
-}) {
+}): Promise<MatchedFactory[]> {
   // 推荐中立条款（费率矩阵 v1.0 §3.3）：排序仅依据评分与经营指标，工厂不可付费影响
+  const category = intent.keyword ? expandQuery(intent.keyword).category : null;
   const res = await findFactories({
     keyword: intent.keyword,
     location: intent.location,
@@ -205,18 +222,87 @@ export async function matchFactories(intent: {
     page: 1,
     pageSize: Math.min(6, Math.max(3, intent.limit ?? 6)),
   });
-  return res.rows.map((f) => ({
-    id: f.id,
-    name: f.name,
-    tier: f.tier,
-    score: f.score ? Number(f.score) : null,
-    years: f.years ? Number(f.years) : null,
-    location: f.location,
-    cert: f.cert,
-    repurchaseRate: f.repurchaseRate ? Number(f.repurchaseRate) : null,
-    mainImage: f.mainImage,
-    reason: buildReason(f),
-  }));
+
+  const ids = res.rows.map((f) => f.id);
+  const db = getDb();
+
+  // 子分明细（7 维）
+  const scoreRows = ids.length
+    ? await db
+        .select()
+        .from(factoryScores)
+        .where(sql`${factoryScores.factoryId} IN (${sql.join(ids.map((i) => sql`${i}`), sql`,`)})`)
+    : [];
+  const scoreMap = new Map<number, Record<string, number | null>>(
+    scoreRows.map((r) => [
+      r.factoryId,
+      {
+        qualityCert: r.qualityCert != null ? Number(r.qualityCert) : null,
+        factoryPower: r.factoryPower != null ? Number(r.factoryPower) : null,
+        trustYears: r.trustYears != null ? Number(r.trustYears) : null,
+        repurchase: r.repurchase != null ? Number(r.repurchase) : null,
+        production: r.production != null ? Number(r.production) : null,
+        service: r.service != null ? Number(r.service) : null,
+        sales: r.sales != null ? Number(r.sales) : null,
+      },
+    ])
+  );
+
+  // 类目内排名：一次窗口函数算全类目，再在内存里取这 6 家
+  let rankMap = new Map<number, { rank: number; total: number }>();
+  if (category) {
+    const [rankRows]: any = await db.execute(
+      sql`SELECT f.id, RANK() OVER (ORDER BY f.score DESC) AS rnk, COUNT(*) OVER () AS total
+          FROM factories f JOIN factory_categories c ON c.factory_id = f.id
+          WHERE c.category = ${category}`
+    );
+    for (const r of rankRows as any[]) {
+      if (ids.includes(Number(r.id)))
+        rankMap.set(Number(r.id), { rank: Number(r.rnk), total: Number(r.total) });
+    }
+  }
+
+  return res.rows.map((f) => {
+    const sub = scoreMap.get(f.id) ?? null;
+    const rk = rankMap.get(f.id) ?? null;
+    return {
+      id: f.id,
+      name: f.name,
+      tier: f.tier,
+      score: f.score ? Number(f.score) : null,
+      years: f.years ? Number(f.years) : null,
+      location: f.location,
+      cert: f.cert,
+      repurchaseRate: f.repurchaseRate ? Number(f.repurchaseRate) : null,
+      mainImage: f.mainImage,
+      reason: buildReason(f),
+      subScores: sub,
+      categoryRank: rk && category ? { category, rank: rk.rank, total: rk.total } : null,
+      evidence: buildEvidence(f, sub, rk, category),
+    };
+  });
+}
+
+// 推荐证据：每一条都是可核验的事实，不写形容词空话
+function buildEvidence(
+  f: typeof factories.$inferSelect,
+  sub: Record<string, number | null> | null,
+  rk: { rank: number; total: number } | null,
+  category: string | null
+): string[] {
+  const ev: string[] = [];
+  if (rk && category)
+    ev.push(`在「${category}」类目 ${rk.total} 家严选厂中综合排第 ${rk.rank}（前 ${Math.max(1, Math.round((rk.rank / rk.total) * 100))}%）`);
+  if (f.score) ev.push(`严选综合评分 ${Number(f.score).toFixed(1)} 分（七维加权，算法公开）`);
+  if (f.years && Number(f.years) >= 10) ev.push(`${Number(f.years)} 年持续经营，穿越过多个行业周期`);
+  if (f.repurchaseRate && Number(f.repurchaseRate) >= 60)
+    ev.push(`老买家复购率 ${Number(f.repurchaseRate)}%，回头客用订单投票`);
+  if (f.replyRate && Number(f.replyRate) >= 90) ev.push(`询盘回复率 ${Number(f.replyRate)}%，沟通顺畅`);
+  if (f.cert) ev.push(`持第三方认证：${f.cert}`);
+  if (f.isSuper) ev.push(`1688 超级工厂（平台实地验厂）`);
+  if (sub?.repurchase != null && sub.repurchase >= 90) ev.push(`复购维度子分 ${sub.repurchase}/100，客户粘性极强`);
+  if (sub?.qualityCert != null && sub.qualityCert >= 30) ev.push(`质量认证子分满分档`);
+  return ev;
 }
 
 function buildReason(f: typeof factories.$inferSelect): string {

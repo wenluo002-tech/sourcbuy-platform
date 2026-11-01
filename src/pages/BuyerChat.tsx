@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
+import { SCORING_FORMULA } from "@contracts/scoring";
 
 interface MatchedFactory {
   id: number;
@@ -12,6 +13,9 @@ interface MatchedFactory {
   cert: string | null;
   repurchaseRate: number | null;
   reason: string;
+  subScores: Record<string, number | null> | null;
+  categoryRank: { category: string; rank: number; total: number } | null;
+  evidence: string[];
 }
 
 interface Turn {
@@ -110,6 +114,47 @@ export default function BuyerChat() {
                       <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-stone-600">
                         {f.reason}
                       </p>
+                      {f.categoryRank && (
+                        <p className="mt-1.5 text-xs font-medium text-emerald-900">
+                          {f.categoryRank.category}类目第 {f.categoryRank.rank} / {f.categoryRank.total} 家
+                        </p>
+                      )}
+                      {f.evidence.length > 0 && (
+                        <details className="mt-2 text-xs">
+                          <summary className="cursor-pointer select-none font-medium text-[#064013] hover:underline">
+                            为什么推荐它？（{f.evidence.length} 条证据）
+                          </summary>
+                          <ul className="mt-1.5 list-disc space-y-1 pl-4 leading-relaxed text-stone-600">
+                            {f.evidence.map((e, j) => (
+                              <li key={j}>{e}</li>
+                            ))}
+                          </ul>
+                          {f.subScores && (
+                            <div className="mt-2 space-y-1">
+                              {SCORING_FORMULA.dimensions.map((d) => {
+                                const v = f.subScores?.[d.key];
+                                if (v == null) return null;
+                                return (
+                                  <div key={d.key} className="flex items-center gap-1.5">
+                                    <span className="w-14 shrink-0 text-[10px] text-stone-500">
+                                      {d.label}
+                                    </span>
+                                    <div className="h-1.5 flex-1 rounded-full bg-stone-100">
+                                      <div
+                                        className="h-1.5 rounded-full bg-[#064013]/70"
+                                        style={{ width: `${Math.min(100, v)}%` }}
+                                      />
+                                    </div>
+                                    <span className="w-7 shrink-0 text-right text-[10px] text-stone-500">
+                                      {v}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </details>
+                      )}
                       <div className="mt-2.5 flex gap-2">
                         <Link
                           to={`/factories/${f.id}`}

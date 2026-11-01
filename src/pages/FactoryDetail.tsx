@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router";
 import { trpc } from "@/providers/trpc";
+import { SCORING_FORMULA } from "@contracts/scoring";
 
 const SCORE_LABELS: Array<[string, string]> = [
   ["qualityCert", "资质认证"],
@@ -99,15 +100,27 @@ export default function FactoryDetail() {
 
       {f.scores && (
         <div className="rounded-xl border border-stone-200 bg-white p-6">
-          <h2 className="mb-4 font-semibold">评分明细</h2>
+          <h2 className="mb-1 font-semibold">评分明细</h2>
+          <p className="mb-4 text-xs leading-relaxed text-stone-500">
+            综合评分 = 七维加权 + 基础分。权重公开、工厂不可付费调分：
+            质量认证 15% · 工厂实力 15% · 诚信年限 12% · 复购率 12% · 生产产能 10% · 服务响应 10% · 销售表现 13%。
+          </p>
           <div className="space-y-3">
             {SCORE_LABELS.map(([key, label]) => {
               const v = (f.scores as any)[key];
               const n = v != null ? Number(v) : null;
               if (n == null) return null;
+              const dim = SCORING_FORMULA.dimensions.find((d) => d.key === key);
               return (
                 <div key={key} className="flex items-center gap-3">
-                  <span className="w-20 shrink-0 text-xs text-stone-500">{label}</span>
+                  <span className="w-20 shrink-0 text-xs text-stone-500" title={dim?.desc}>
+                    {label}
+                    {dim && (
+                      <span className="ml-1 text-[10px] text-stone-400">
+                        {Math.round(dim.weight * 100)}%
+                      </span>
+                    )}
+                  </span>
                   <div className="h-2 flex-1 rounded-full bg-stone-100">
                     <div
                       className="h-2 rounded-full bg-emerald-600"
@@ -119,6 +132,21 @@ export default function FactoryDetail() {
               );
             })}
           </div>
+          <details className="mt-4 text-xs text-stone-500">
+            <summary className="cursor-pointer select-none font-medium text-[#064013] hover:underline">
+              每个维度看什么？
+            </summary>
+            <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed">
+              {SCORING_FORMULA.dimensions.map((d) => (
+                <li key={d.key}>
+                  <span className="font-medium text-stone-700">{d.label}</span>（{Math.round(d.weight * 100)}%）：{d.desc}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2">
+              算法已对 {SCORING_FORMULA.verifiedOn} 家有完整子分的工厂回归验证，拟合误差 ≤{SCORING_FORMULA.maxError} 分。
+            </p>
+          </details>
         </div>
       )}
     </div>
