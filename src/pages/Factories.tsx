@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 
 const TIERS = ["金标", "银标", "铜标", "优选", "培育"];
@@ -11,7 +11,8 @@ const CERTS = [
 ];
 
 export default function Factories() {
-  const [keyword, setKeyword] = useState("");
+  const [params] = useSearchParams();
+  const [keyword, setKeyword] = useState(params.get("keyword") ?? "");
   const [tier, setTier] = useState("");
   const [cert, setCert] = useState("");
   const [location, setLocation] = useState("");
@@ -72,6 +73,22 @@ export default function Factories() {
       <p className="text-sm text-stone-500">
         {q.isLoading ? "加载中…" : `共 ${q.data?.total ?? 0} 家，按严选评分排序`}
       </p>
+
+      {!q.isLoading && q.data?.total === 0 && (
+        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-8 text-center">
+          <p className="font-medium text-stone-700">没有直接匹配的工厂</p>
+          <p className="mt-2 text-sm text-stone-500">
+            试试更宽泛的词（如"服饰"代替"卫衣"），或清空筛选条件。
+            找不到的品可以提交给 AI 买手人工补源——我们的工厂库每周都在扩充。
+          </p>
+          <button
+            onClick={() => { setKeyword(""); setTier(""); setCert(""); setLocation(""); setPage(1); }}
+            className="mt-4 rounded-lg border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100"
+          >
+            清空筛选，查看全部
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {(q.data?.rows ?? []).map((f) => (

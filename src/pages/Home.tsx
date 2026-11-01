@@ -1,4 +1,5 @@
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
+import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 
 const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
@@ -6,6 +7,8 @@ const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
 export default function Home() {
   const stats = trpc.factories.stats.useQuery();
   const featured = trpc.factories.match.useQuery({ minScore: 90, limit: 6 });
+  const [kw, setKw] = useState("");
+  const navigate = useNavigate();
 
   const tierCount = (t: string) =>
     stats.data?.byTier.find((x) => x.tier === t)?.c ?? 0;
@@ -26,7 +29,27 @@ export default function Home() {
           不是工厂黄页，是一个替你算清账、替你承担风险的采购代理。
           货不对板、运输损毁、海关扣件——平台先赔，再追偿。
         </p>
-        <div className="mt-8 flex flex-wrap gap-3">
+        <form
+          className="mt-6 flex max-w-xl gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            navigate(kw.trim() ? `/factories?keyword=${encodeURIComponent(kw.trim())}` : "/factories");
+          }}
+        >
+          <input
+            value={kw}
+            onChange={(e) => setKw(e.target.value)}
+            placeholder="输入你要找的品，如：宠物垫、卫衣、蓝牙耳机…"
+            className="h-11 flex-1 rounded-lg border border-emerald-400/30 bg-white/10 px-4 text-sm text-white placeholder:text-emerald-200/50 focus-visible:outline-2 focus-visible:outline-emerald-300"
+          />
+          <button
+            type="submit"
+            className="h-11 shrink-0 rounded-lg bg-emerald-400 px-5 text-sm font-semibold text-emerald-950 transition-colors hover:bg-emerald-300"
+          >
+            找工厂
+          </button>
+        </form>
+        <div className="mt-5 flex flex-wrap gap-3">
           <Link
             to="/factories"
             className="rounded-lg bg-emerald-400 px-5 py-2.5 text-sm font-semibold text-emerald-950 transition-colors hover:bg-emerald-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"

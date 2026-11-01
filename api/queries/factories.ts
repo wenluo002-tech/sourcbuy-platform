@@ -25,7 +25,11 @@ export async function findFactories(f: FactoryFilter) {
     conds.push(gte(factories.score, String(f.minScore)));
   if (f.minYears != null)
     conds.push(gte(factories.years, String(f.minYears)));
-  if (f.keyword) conds.push(like(factories.name, `%${f.keyword}%`));
+  if (f.keyword) {
+    conds.push(
+      sql`(${factories.name} LIKE ${"%" + f.keyword + "%"} OR ${factories.review} LIKE ${"%" + f.keyword + "%"} OR ${factories.productionType} LIKE ${"%" + f.keyword + "%"} OR ${factories.oemMode} LIKE ${"%" + f.keyword + "%"})`
+    );
+  }
 
   const page = Math.max(1, f.page ?? 1);
   const pageSize = Math.min(60, Math.max(1, f.pageSize ?? 20));

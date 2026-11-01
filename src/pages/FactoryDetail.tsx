@@ -77,16 +77,24 @@ export default function FactoryDetail() {
             ))}
         </dl>
 
-        {f.home && (
-          <a
-            href={f.home}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-5 inline-block rounded-lg border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100"
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link
+            to="/calculator"
+            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
           >
-            查看 1688 店铺 ↗
-          </a>
-        )}
+            用这家工厂算到手价 →
+          </Link>
+          {f.home && (
+            <a
+              href={f.home}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100"
+            >
+              查看 1688 店铺 ↗
+            </a>
+          )}
+        </div>
       </div>
 
       {f.scores && (

@@ -14,14 +14,14 @@ export default function Layout() {
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <Link to="/" className="flex items-baseline gap-2">
             <span className="text-lg font-bold tracking-tight">SourcBuy</span>
-            <span className="text-xs text-stone-500">AI 采购代理</span>
+            <span className="hidden text-xs text-stone-500 sm:inline">AI 采购代理</span>
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-0.5 sm:gap-1">
             {NAV.map((n) => (
               <Link
                 key={n.to}
                 to={n.to}
-                className={`rounded-md px-3 py-2 text-sm transition-colors hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+                className={`rounded-md px-2 py-2 text-xs transition-colors hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 sm:px-3 sm:text-sm ${
                   pathname === n.to
                     ? "font-semibold text-emerald-800"
                     : "text-stone-600"
