@@ -53,19 +53,15 @@ const SUGGESTIONS = [
 ];
 
 /* 作业状态流：每一行对应后端真实在做的事，只陈述过程、不虚报结果 */
-const STAGES: { label: string; detail: (total?: number) => string }[] = [
-  { label: "解析采购需求", detail: () => "品类 · 数量 · 目的地 · 认证要求" },
-  {
-    label: "检索严选工厂库",
-    detail: (t) => (t ? `${t.toLocaleString()} 家在册工厂中匹配` : "在册工厂全量匹配"),
-  },
-  { label: "交叉核验资质", detail: () => "评分 · 认证 · 履约记录" },
-  { label: "撰写采购建议", detail: () => "推荐理由与风险提示" },
+const STAGES: { label: string; detail: string }[] = [
+  { label: "解析采购需求", detail: "品类 · 数量 · 目的地 · 认证要求" },
+  { label: "检索严选工厂库", detail: "数千家源头工厂同步比对" },
+  { label: "交叉核验资质", detail: "评分 · 认证 · 履约记录" },
+  { label: "撰写采购建议", detail: "推荐理由与风险提示" },
 ];
 const STAGE_DELAYS = [900, 1900, 3000];
 
 function SourcingStatus() {
-  const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
   const [step, setStep] = useState(0);
 
   useEffect(() => {
@@ -74,8 +70,6 @@ function SourcingStatus() {
     );
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, []);
-
-  const total = stats.data?.total;
 
   return (
     <div className="space-y-2">
@@ -107,7 +101,7 @@ function SourcingStatus() {
                   {s.label}
                 </span>
                 <span className="text-[11px] tabular-nums text-[var(--sb-ink-40)]">
-                  {s.detail(total)}
+                  {s.detail}
                 </span>
               </li>
             );
@@ -123,7 +117,7 @@ export default function BuyerChat() {
     {
       role: "assistant",
       content:
-        "你好，我是你的 AI 采购买手，干这行十几年了。说说你要什么品、多少量、发往哪里——我从 4,060 家严选工厂里挑 3-6 家靠谱的给你，每一家为什么推荐、到手价多少，都摆证据说清楚。需求不靠谱我也会直说。",
+        "你好，我是你的 AI 采购买手，干这行十几年了。说说你要什么品、多少量、发往哪里——我从几千家严选工厂里挑 3-6 家靠谱的给你，每一家为什么推荐、到手价多少，都摆证据说清楚。需求不靠谱我也会直说。",
     },
   ]);
   const [input, setInput] = useState("");
