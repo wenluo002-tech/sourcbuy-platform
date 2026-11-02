@@ -52,6 +52,72 @@ const SUGGESTIONS = [
   "蓝牙耳机，先寄样品看看质量",
 ];
 
+/* 作业状态流：每一行对应后端真实在做的事，只陈述过程、不虚报结果 */
+const STAGES: { label: string; detail: (total?: number) => string }[] = [
+  { label: "解析采购需求", detail: () => "品类 · 数量 · 目的地 · 认证要求" },
+  {
+    label: "检索严选工厂库",
+    detail: (t) => (t ? `${t.toLocaleString()} 家在册工厂中匹配` : "在册工厂全量匹配"),
+  },
+  { label: "交叉核验资质", detail: () => "评分 · 认证 · 履约记录" },
+  { label: "撰写采购建议", detail: () => "推荐理由与风险提示" },
+];
+const STAGE_DELAYS = [900, 1900, 3000];
+
+function SourcingStatus() {
+  const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const timers = STAGE_DELAYS.map((ms, i) =>
+      window.setTimeout(() => setStep(i + 1), ms)
+    );
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, []);
+
+  const total = stats.data?.total;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 leading-none">
+        <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-ink-40)]">
+          AI Buyer
+        </span>
+        <span className="text-[11px] font-medium text-[var(--sb-teal)]">老采购</span>
+        <span className="text-[10px] text-[var(--sb-ink-40)]">· 作业中</span>
+      </div>
+      <div className="border-l-2 border-[var(--sb-teal)]/60 pl-4">
+        <ul className="space-y-1.5 py-0.5">
+          {STAGES.slice(0, step + 1).map((s, i) => {
+            const active = i === step;
+            return (
+              <li key={s.label} className="sb-stage flex items-baseline gap-2.5">
+                {active ? (
+                  <span className="sb-dot-live h-1.5 w-1.5 shrink-0 translate-y-[-1px] self-center rounded-full bg-[var(--sb-teal)]" />
+                ) : (
+                  <span className="self-center text-[11px] leading-none text-[var(--sb-teal)]">
+                    ✓
+                  </span>
+                )}
+                <span
+                  className={`text-[13px] font-medium ${
+                    active ? "text-[var(--sb-ink)]" : "text-[var(--sb-ink-40)]"
+                  }`}
+                >
+                  {s.label}
+                </span>
+                <span className="text-[11px] tabular-nums text-[var(--sb-ink-40)]">
+                  {s.detail(total)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function BuyerChat() {
   const [turns, setTurns] = useState<Turn[]>([
     {
@@ -316,19 +382,7 @@ export default function BuyerChat() {
             </div>
           )
         )}
-        {chat.isPending && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 leading-none">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-ink-40)]">
-                AI Buyer
-              </span>
-              <span className="text-[11px] font-medium text-[var(--sb-teal)]">老采购</span>
-            </div>
-            <div className="border-l-2 border-[var(--sb-teal)]/60 pl-4 text-sm text-[var(--sb-ink-40)]">
-              正在翻厂库、对评分…
-            </div>
-          </div>
-        )}
+        {chat.isPending && <SourcingStatus />}
         <div ref={bottomRef} />
       </div>
 
