@@ -61,6 +61,7 @@ export const appRouter = createRouter({
             .optional(),
           riskTier: z.enum(["A", "B", "C"]),
           channel: z.enum(["express", "line", "sea"]),
+          destinationCode: z.string().max(2).optional(),
           exchangeRate: z.number().positive().optional(),
         })
       )

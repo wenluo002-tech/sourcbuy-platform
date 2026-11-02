@@ -2,6 +2,14 @@ import { getDb } from "./connection";
 import { factories, factoryScores, factoryCategories, commissionRules } from "../../db/schema";
 import { eq, and, desc, like, gte, lte, sql, type SQL } from "drizzle-orm";
 import { expandQuery } from "../../contracts/lexicon";
+import {
+  volumetricRule,
+  findDestination,
+  recommendChannel,
+  CHANNEL_RATE_PER_KG,
+  CHANNEL_TRANSIT,
+  CHANNEL_LABEL,
+} from "../../contracts/freight";
 
 export interface FactoryFilter {
   tier?: string;
@@ -208,43 +216,82 @@ export interface LandedPriceInput {
   dimCm?: { l: number; w: number; h: number }; // 单件尺寸
   riskTier: "A" | "B" | "C";
   channel: "express" | "line" | "sea"; // 快递/专线/海运
+  destinationCode?: string; // 目的地国家 ISO 码（影响体积重规则与文案）
   exchangeRate?: number; // USD/CNY，默认 7.1
+}
+
+const DOMESTIC_FEE = 12; // 国内段集货均价（USD/票）
+const dutyOf = () => 0; // 关税预估默认 0，按目的国规则扩展
+
+function channelChargeable(
+  channel: "express" | "line" | "sea",
+  input: LandedPriceInput,
+  hasDims: boolean
+) {
+  const rule = volumetricRule(channel, input.destinationCode);
+  const actualTotal = input.weightKg * input.quantity;
+  let volTotal: number | null = null;
+  let rawVolTotal: number | null = null;
+  if (hasDims) {
+    const v =
+      ((input.dimCm!.l * input.dimCm!.w * input.dimCm!.h) / rule.divisor) *
+      input.quantity;
+    rawVolTotal = v;
+    // 台/新/马/日专线普货：体积重与实重取平均（协议原文）
+    volTotal = rule.avgWithActual ? (v + actualTotal) / 2 : v;
+  }
+  const chargeable = Math.max(actualTotal, volTotal ?? 0);
+  return { rule, actualTotal, volTotal, rawVolTotal, chargeable };
+}
+
+function channelTotal(
+  channel: "express" | "line" | "sea",
+  chargeable: number,
+  fixed: { purchaseUsd: number; commissionFee: number }
+) {
+  const freight = chargeable * CHANNEL_RATE_PER_KG[channel];
+  const lastMile = channel === "sea" ? 35 : 21;
+  return {
+    freight: r2(freight),
+    lastMile,
+    total: r2(fixed.purchaseUsd + DOMESTIC_FEE + fixed.commissionFee + freight + dutyOf() + lastMile),
+  };
 }
 
 export async function calcLandedPrice(input: LandedPriceInput) {
   const rate = input.exchangeRate ?? 7.1;
   const purchaseCny = input.unitPriceCny * input.quantity;
   const purchaseUsd = purchaseCny / rate;
+  const dest = findDestination(input.destinationCode);
 
-  // 体积重规则（蓝图 §3）：快递 ÷5000，专线 ÷6000
   // 铁律：没填尺寸就不许编尺寸。未提供 dimCm 时按实重计费，并明确标注；
-  // 提供后按实重/体积重取大者，两行口径都摆出来。
-  const volDivisor = input.channel === "express" ? 5000 : 6000;
-  const actualTotal = input.weightKg * input.quantity;
+  // 提供后按实重/体积重取大者（台新马日专线为协议特殊平均规则）。
   const hasDims =
     !!input.dimCm && input.dimCm.l > 0 && input.dimCm.w > 0 && input.dimCm.h > 0;
-  const volTotal = hasDims
-    ? ((input.dimCm!.l * input.dimCm!.w * input.dimCm!.h) / volDivisor) *
-      input.quantity
-    : null;
-  const chargeableWeight = Math.max(actualTotal, volTotal ?? 0);
 
-  // 国际运费单价（USD/kg，渠道均价，后续接 freight_rates 价格表）
-  const freightRatePerKg = { express: 8.5, line: 5.2, sea: 1.8 }[input.channel];
-  const intlFreight = chargeableWeight * freightRatePerKg;
+  const cur = channelChargeable(input.channel, input, hasDims);
+  const chargeableWeight = cur.chargeable;
+  const intlFreight = chargeableWeight * CHANNEL_RATE_PER_KG[input.channel];
 
-  const domestic = 12; // 国内段集货均价（USD/票）
-  const lastMile = input.channel === "sea" ? 35 : 21; // 尾程派送
-  const duty = 0; // 关税预估默认 0，按目的国规则扩展
+  const domestic = DOMESTIC_FEE;
+  const lastMile = input.channel === "sea" ? 35 : 21;
+  const duty = dutyOf();
 
   const commission = await calcCommission(purchaseUsd, input.riskTier);
 
-  const freightLabel = hasDims
-    ? `国际运费（计费重 ${r2(chargeableWeight)}kg：实重 ${r2(actualTotal)} / 体积重 ${r2(volTotal!)}，取大者）`
-    : `国际运费（按实重 ${r2(actualTotal)}kg，未填尺寸）`;
+  const destZh = dest ? `发${dest.zh}` : "";
+  const freightLabel = !hasDims
+    ? `国际运费${destZh}（按实重 ${r2(cur.actualTotal)}kg，未填尺寸）`
+    : cur.rule.avgWithActual
+      ? `国际运费${destZh}（计费重 ${r2(chargeableWeight)}kg = 体积重 ${r2(cur.rawVolTotal!)} 与实重 ${r2(cur.actualTotal)} 取平均）`
+      : `国际运费${destZh}（计费重 ${r2(chargeableWeight)}kg：实重 ${r2(cur.actualTotal)} / 体积重 ${r2(cur.volTotal!)}，取大者）`;
 
   const lines = [
-    { key: "factory", label: "出厂价（工厂原始报价）", amount: r2(purchaseUsd) },
+    {
+      key: "factory",
+      label: `出厂价（工厂原始报价 ¥${r2(purchaseCny).toLocaleString("zh-CN")}）`,
+      amount: r2(purchaseUsd),
+    },
     { key: "domestic", label: "国内段运费（工厂→集货仓）", amount: r2(domestic) },
     { key: "commission", label: `履约佣金（${input.riskTier} 档 ${(commission.rate * 100).toFixed(1)}%）`, amount: commission.fee },
     { key: "freight", label: freightLabel, amount: r2(intlFreight) },
@@ -252,17 +299,51 @@ export async function calcLandedPrice(input: LandedPriceInput) {
     { key: "lastMile", label: "尾程派送", amount: r2(lastMile) },
   ];
   const total = r2(lines.reduce((s, l) => s + l.amount, 0));
+
+  // 老采购渠道建议：三渠道同口径对比 + 推荐（按计费重档位与差价校验）
+  const fixed = { purchaseUsd, commissionFee: commission.fee };
+  const channels = (["express", "line", "sea"] as const).map((c) => {
+    const cc = channelChargeable(c, input, hasDims);
+    const t = channelTotal(c, cc.chargeable, fixed);
+    return {
+      channel: c,
+      label: CHANNEL_LABEL[c],
+      chargeableKg: r2(cc.chargeable),
+      freight: t.freight,
+      total: t.total,
+      transit: CHANNEL_TRANSIT[c],
+    };
+  });
+  const totalsMap = Object.fromEntries(channels.map((c) => [c.channel, c.total])) as Record<
+    "express" | "line" | "sea",
+    number
+  >;
+  const neutralKg = Math.max(...channels.map((c) => c.chargeableKg));
+  const rec = recommendChannel(neutralKg, totalsMap);
+
   return {
     lines,
     total,
+    totalCny: r2(total * rate),
     perUnit: r2(total / input.quantity),
+    perUnitCny: r2((total * rate) / input.quantity),
     currency: "USD",
+    exchangeRate: rate,
+    destination: dest ? { code: dest.code, zh: dest.zh } : null,
+    volumetricNote: cur.rule.note,
     chargeableWeight: r2(chargeableWeight),
     chargeableBasis: hasDims
-      ? volTotal! > actualTotal
+      ? cur.volTotal! > cur.actualTotal
         ? ("volumetric" as const)
         : ("actual" as const)
       : ("actual_unsized" as const),
+    channelAdvice: {
+      recommended: rec.channel,
+      recommendedLabel: CHANNEL_LABEL[rec.channel],
+      reason: rec.reason,
+      compare: channels,
+      isCurrentRecommended: rec.channel === input.channel,
+    },
     commissionMeta: commission,
   };
 }
