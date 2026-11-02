@@ -117,7 +117,7 @@ export default function BuyerChat() {
     {
       role: "assistant",
       content:
-        "你好，我是你的 AI 采购买手，干这行十几年了。说说你要什么品、多少量、发往哪里——我从几千家严选工厂里挑 3-6 家靠谱的给你，每一家为什么推荐、到手价多少，都摆证据说清楚。需求不靠谱我也会直说。",
+        "你好，我是你的 AI 采购买手，干这行十几年了。你要什么货、多少量、发往哪里，告诉我就行——我帮你找源头好货和好价，背后的工厂我都验过底。每一单为什么推荐、到手价多少，摆证据说清楚；需求不靠谱我也会直说。",
     },
   ]);
   const [input, setInput] = useState("");
@@ -199,7 +199,7 @@ export default function BuyerChat() {
                 {t.content}
               </div>
 
-              {/* 1688 商品卡 */}
+              {/* 商品卡 */}
               {t.product && (
                 <div className="rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] p-4">
                   <div className="flex gap-3">
@@ -207,6 +207,10 @@ export default function BuyerChat() {
                       <img
                         src={t.product.offer.images[0]}
                         alt=""
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
                         className="h-20 w-20 shrink-0 rounded-lg object-cover"
                       />
                     )}
@@ -277,6 +281,10 @@ export default function BuyerChat() {
                               src={src}
                               alt=""
                               loading="lazy"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
                               className="h-16 w-16 rounded-lg border border-[var(--sb-line)] object-cover"
                             />
                           ))}
@@ -407,7 +415,7 @@ export default function BuyerChat() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="说出你要的品，或直接粘贴 1688 商品链接…"
+            placeholder="说出你要的品，或直接粘贴商品链接…"
             className="h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
           />
           <button

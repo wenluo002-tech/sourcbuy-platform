@@ -320,8 +320,8 @@ function buildEvidence(
   if (f.serviceCapability) ev.push(`服务能力：${f.serviceCapability}`);
   if (f.monthlyBuyers) ev.push(`月采购买家 ${f.monthlyBuyers} 家，出货活跃`);
   if (f.cert) ev.push(`持第三方认证：${f.cert}`);
-  if (f.medal) ev.push(`1688 ${f.medal}${f.medalLevel ? ` ${f.medalLevel}` : ""}`);
-  if (f.isSuper) ev.push(`1688 超级工厂（平台实地验厂）`);
+  if (f.medal) ev.push(`平台勋章「${f.medal}${f.medalLevel ? ` ${f.medalLevel}` : ""}」`);
+  if (f.isSuper) ev.push(`平台超级工厂（实地验厂）`);
   if (sub?.repurchase != null && sub.repurchase >= 90) ev.push(`复购维度子分 ${sub.repurchase}/100，客户粘性极强`);
   if (sub?.qualityCert != null && sub.qualityCert >= 30) ev.push(`质量认证子分满分档`);
   return ev;

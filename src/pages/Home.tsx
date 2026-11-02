@@ -4,6 +4,14 @@ import { trpc } from "@/providers/trpc";
 
 const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
 
+const TIER_DESC: Record<string, string> = {
+  金标: "金字塔尖，大单放心托付",
+  银标: "主力供货梯队，稳定可靠",
+  铜标: "表现扎实，性价比之选",
+  优选: "成长型供应商，潜力可期",
+  培育: "新晋入驻，考察期内",
+};
+
 const EXAMPLES = [
   "瑜伽裤 500 条，发德国汉堡",
   "定制保温杯 3,000 个，要 LOGO",
@@ -31,13 +39,14 @@ export default function Home() {
       <section className="sb-rise rounded-[20px] bg-[var(--sb-mist)] px-6 py-12 md:px-14 md:py-16">
         <span className="sb-eyebrow">AI Sourcing Agent · 只代表买方</span>
         <h1 className="mt-3 max-w-2xl text-3xl font-bold leading-[1.15] tracking-tight md:text-[44px]">
-          说出你要采购的，
+          说出你的采购需求，
           <br />
-          剩下的交给我把关。
+          源头好货与底价，一次给齐。
         </h1>
         <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-[var(--sb-ink-60)] md:text-base">
-          不是工厂黄页。描述产品、数量和交付地，我像老采购一样替你筛厂——
-          不靠谱的需求会直接顶回去，每一家的推荐理由都带证据，到手价当场算清。
+          背后是数千家严选源头工厂和一套公开的评分体系。描述产品、数量和目的地，AI
+          采购顾问即刻为你锁定 3–6
+          家匹配工厂——推荐理由逐条可核验，从出厂价到到手价逐行列清，全程只站你这边。
         </p>
 
         <form
@@ -93,14 +102,20 @@ export default function Home() {
             <div className="text-3xl font-bold tracking-tight">
               {stats.data ? stats.data.total.toLocaleString() : "…"}
             </div>
-            <div className="mt-1 text-xs text-[var(--sb-ink-60)]">严选源头工厂</div>
+            <div className="mt-1 text-xs font-medium text-[var(--sb-ink)]">严选源头工厂</div>
+            <div className="mt-0.5 text-[11px] leading-snug text-[var(--sb-ink-40)]">
+              资质 · 产能 · 履约三重筛查
+            </div>
           </div>
           {TIER_ORDER.map((t) => (
             <div key={t}>
               <div className="text-3xl font-bold tracking-tight">
                 {stats.data ? tierCount(t).toLocaleString() : "…"}
               </div>
-              <div className="mt-1 text-xs text-[var(--sb-ink-60)]">{t}工厂</div>
+              <div className="mt-1 text-xs font-medium text-[var(--sb-ink)]">{t}工厂</div>
+              <div className="mt-0.5 text-[11px] leading-snug text-[var(--sb-ink-40)]">
+                {TIER_DESC[t]}
+              </div>
             </div>
           ))}
         </div>
@@ -114,7 +129,7 @@ export default function Home() {
         <div className="mt-4 border-t border-[var(--sb-line)]">
           {[
             ["说清楚需求", "产品、数量、目的地，用大白话说就行。需求不靠谱我会直说，不浪费你的时间。"],
-            ["筛厂给证据", "从 4,060 家严选工厂里挑 3-6 家，每家给出评分、类目排名和推荐理由——评分公式公开，工厂买不通。"],
+            ["筛厂给证据", "从数千家严选工厂里锁定 3-6 家，每家给出评分、类目排名和推荐理由——评分公式公开，工厂买不通。"],
             ["算清到手价再下单", "出厂价、运费、关税、服务费逐行列明。佣金按类目 3.5%–11% 分档，最低 $50，没有隐藏差价。"],
           ].map(([title, desc], i) => (
             <div

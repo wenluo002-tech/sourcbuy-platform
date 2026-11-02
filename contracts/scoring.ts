@@ -17,7 +17,7 @@ export const SCORING_FORMULA: {
   dimensions: [
     { key: "qualityCert", label: "质量认证", weight: 0.15, desc: "第三方验厂与质量认证（SGS / Intertek 等）" },
     { key: "factoryPower", label: "工厂实力", weight: 0.15, desc: "厂房、设备、员工规模等硬实力" },
-    { key: "trustYears", label: "诚信年限", weight: 0.12, desc: "1688 诚信通年限与持续经营历史" },
+    { key: "trustYears", label: "诚信年限", weight: 0.12, desc: "平台诚信年限与持续经营历史" },
     { key: "repurchase", label: "复购率", weight: 0.12, desc: "老买家用订单投票——最真实的质量信号" },
     { key: "production", label: "生产产能", weight: 0.1, desc: "产能规模与交付稳定性" },
     { key: "service", label: "服务响应", weight: 0.1, desc: "询盘响应速度、售后与纠纷处理" },

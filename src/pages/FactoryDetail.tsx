@@ -85,16 +85,6 @@ export default function FactoryDetail() {
           >
             用这家工厂算到手价 →
           </Link>
-          {f.home && (
-            <a
-              href={f.home}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100"
-            >
-              查看 1688 店铺 ↗
-            </a>
-          )}
         </div>
       </div>
 
@@ -130,6 +120,10 @@ export default function FactoryDetail() {
                           src={src}
                           alt={label}
                           loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
                           className="h-24 w-24 rounded-lg border border-stone-100 object-cover md:h-28 md:w-28"
                         />
                       ))}
