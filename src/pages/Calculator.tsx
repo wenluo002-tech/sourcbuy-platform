@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 
 export default function Calculator() {
-  const [unitPriceCny, setUnitPriceCny] = useState("8");
-  const [quantity, setQuantity] = useState("500");
+  const [searchParams] = useSearchParams();
+  const fromProduct = Number(searchParams.get("price")) > 0;
+  const [unitPriceCny, setUnitPriceCny] = useState(
+    fromProduct ? searchParams.get("price")! : "8"
+  );
+  const [quantity, setQuantity] = useState(searchParams.get("qty") ?? "500");
   const [weightKg, setWeightKg] = useState("0.3");
   const [riskTier, setRiskTier] = useState<"A" | "B" | "C">("B");
   const [channel, setChannel] = useState<"express" | "line" | "sea">("line");
@@ -13,6 +18,21 @@ export default function Calculator() {
   }>(null);
 
   const q = trpc.pricing.landed.useQuery(submitted!, { enabled: !!submitted });
+
+  // 从商品卡带入了出厂价：直接先算一笔，参数可再调
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current || !fromProduct) return;
+    autoRan.current = true;
+    setSubmitted({
+      unitPriceCny: Number(searchParams.get("price")),
+      quantity: Number(searchParams.get("qty")) || 500,
+      weightKg: 0.3,
+      riskTier: "B",
+      channel: "line",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const input =
     "w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-[var(--sb-brand)]";
@@ -24,6 +44,12 @@ export default function Calculator() {
         <p className="mt-1 text-sm text-stone-500">
           出厂价 + 国内段 + 国际运费 + 关税 + 尾程 + 履约佣金，逐行列示，没有隐藏费用。
         </p>
+        {fromProduct && (
+          <p className="mt-2 rounded-md bg-[var(--sb-brand-soft)] px-3 py-1.5 text-xs text-[var(--sb-brand)]">
+            已从商品卡带入出厂单价{searchParams.get("qty") ? "和数量" : ""}
+            ，重量与渠道按常用默认值先试算，可直接调整。
+          </p>
+        )}
       </div>
 
       <form

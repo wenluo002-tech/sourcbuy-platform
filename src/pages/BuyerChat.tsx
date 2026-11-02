@@ -30,6 +30,7 @@ interface LinkedProduct {
     priceTiers: { minQty: number; price: number }[];
     shopName: string | null;
     shopUrl: string | null;
+    amountOnSale: number | null;
   };
   factory: {
     id: number;
@@ -44,6 +45,7 @@ interface Turn {
   content: string;
   factories?: MatchedFactory[];
   product?: LinkedProduct | null;
+  quantity?: string | null;
 }
 
 const SUGGESTIONS = [
@@ -112,6 +114,120 @@ function SourcingStatus() {
   );
 }
 
+const REF_RATE = 7.1; // 与到手价引擎一致的参考汇率（USD/CNY）
+
+/* 商品卡：产品优先 —— 图/标题/在售信号 + 出厂价主展示 + 阶梯档 + 工厂背书 + 到手价入口 */
+function ProductCard({
+  product,
+  quantity,
+}: {
+  product: LinkedProduct;
+  quantity?: string | null;
+}) {
+  const offer = product.offer;
+  const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
+  const tiers = [...offer.priceTiers].sort((a, b) => a.minQty - b.minQty);
+  // 按采购数量选价档：够得着的最低单价；没给数量则用首档
+  const main =
+    qty > 0
+      ? [...tiers].reverse().find((p) => qty >= p.minQty) ?? tiers[0]
+      : tiers[0];
+  const calcUrl = `/calculator?price=${main?.price ?? ""}${qty ? `&qty=${qty}` : ""}`;
+
+  return (
+    <div className="rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] p-4">
+      <div className="flex gap-3.5">
+        {offer.images[0] && (
+          <img
+            src={offer.images[0]}
+            alt=""
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+            className="h-24 w-24 shrink-0 rounded-lg object-cover"
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-sm font-semibold">{offer.title}</p>
+          <p className="mt-0.5 text-xs text-[var(--sb-ink-40)]">
+            {[offer.categoryName, offer.shopName].filter(Boolean).join(" · ")}
+          </p>
+          {offer.amountOnSale != null && offer.amountOnSale > 0 && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--sb-ink-60)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+              在售 · 可售 {offer.amountOnSale.toLocaleString()}{" "}
+              {offer.unit ?? "件"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {main && (
+        <div className="mt-3 rounded-lg border border-[var(--sb-line)] bg-white px-3.5 py-3">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-xl font-bold tracking-tight">
+              ¥{main.price}
+            </span>
+            <span className="text-xs text-[var(--sb-ink-40)]">
+              / {offer.unit ?? "件"} · 出厂价
+            </span>
+            <span className="text-xs tabular-nums text-[var(--sb-ink-40)]">
+              ≈ US${(main.price / REF_RATE).toFixed(2)}
+            </span>
+            {qty > 0 && (
+              <span className="rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--sb-brand)]">
+                按 {qty.toLocaleString()} {offer.unit ?? "件"}档
+              </span>
+            )}
+          </div>
+          {tiers.length > 1 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {tiers.map((p, j) => (
+                <span
+                  key={j}
+                  className={`rounded-md border px-2 py-1 text-[11px] tabular-nums ${
+                    p === main
+                      ? "border-[var(--sb-brand)]/40 bg-[var(--sb-brand-soft)] font-medium text-[var(--sb-brand)]"
+                      : "border-[var(--sb-line)] text-[var(--sb-ink-60)]"
+                  }`}
+                >
+                  ≥{p.minQty} · ¥{p.price}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="mt-2 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
+            按参考汇率 {REF_RATE} 折算；到手价 = 出厂价 + 运费 + 关税 + 履约佣金，点「算到手价」逐行试算
+          </p>
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--sb-line)] pt-2.5">
+        {product.factory ? (
+          <Link
+            to={`/factories/${product.factory.id}`}
+            className="text-xs font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
+          >
+            背后工厂在严选库：{product.factory.name}（{product.factory.tier} ·{" "}
+            {product.factory.score} 分）→
+          </Link>
+        ) : (
+          <span className="sb-note rounded-md px-2 py-1 text-xs">
+            该店铺不在严选库，下单前建议验厂
+          </span>
+        )}
+        <Link
+          to={calcUrl}
+          className="shrink-0 text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
+        >
+          算到手价 →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function BuyerChat() {
   const [turns, setTurns] = useState<Turn[]>([
     {
@@ -147,6 +263,7 @@ export default function BuyerChat() {
               content: res.reply,
               factories: res.factories,
               product: (res as any).product ?? null,
+              quantity: (res as any).intent?.quantity ?? null,
             },
           ]),
         onError: () =>
@@ -199,70 +316,9 @@ export default function BuyerChat() {
                 {t.content}
               </div>
 
-              {/* 商品卡 */}
+              {/* 商品卡：产品优先，到手价入口 */}
               {t.product && (
-                <div className="rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] p-4">
-                  <div className="flex gap-3">
-                    {t.product.offer.images[0] && (
-                      <img
-                        src={t.product.offer.images[0]}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                        }}
-                        className="h-20 w-20 shrink-0 rounded-lg object-cover"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <p className="line-clamp-2 text-sm font-semibold">
-                        {t.product.offer.title}
-                      </p>
-                      <p className="mt-0.5 text-xs text-[var(--sb-ink-40)]">
-                        {[t.product.offer.categoryName, t.product.offer.shopName]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                      {t.product.offer.priceTiers.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
-                          {t.product.offer.priceTiers.map((p, j) => (
-                            <span key={j} className="text-xs">
-                              <span className="font-semibold text-[var(--sb-brand)]">
-                                ¥{p.price}
-                              </span>
-                              <span className="text-[var(--sb-ink-40)]">
-                                {" "}
-                                / {p.minQty}
-                                {t.product?.offer.unit ?? "件"}起
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--sb-line)] pt-2.5">
-                    {t.product.factory ? (
-                      <Link
-                        to={`/factories/${t.product.factory.id}`}
-                        className="text-xs font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
-                      >
-                        背后工厂在严选库：{t.product.factory.name}（
-                        {t.product.factory.tier} · {t.product.factory.score} 分）→
-                      </Link>
-                    ) : (
-                      <span className="sb-note rounded-md px-2 py-1 text-xs">
-                        该店铺不在严选库，下单前建议验厂
-                      </span>
-                    )}
-                    <Link
-                      to="/calculator"
-                      className="shrink-0 text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
-                    >
-                      算到手价 →
-                    </Link>
-                  </div>
-                </div>
+                <ProductCard product={t.product} quantity={t.quantity} />
               )}
 
               {/* 工厂卡 */}
