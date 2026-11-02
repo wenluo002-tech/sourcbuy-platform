@@ -148,6 +148,9 @@ export default function FactoryDetail() {
               const n = v != null ? Number(v) : null;
               if (n == null) return null;
               const dim = SCORING_FORMULA.dimensions.find((d) => d.key === key);
+              const medRaw = (f as any).categoryMedians?.[key];
+              const med = medRaw != null ? Number(medRaw) : null;
+              const delta = med != null ? n - med : null;
               return (
                 <div key={key} className="flex items-center gap-3">
                   <span className="w-20 shrink-0 text-xs text-stone-500" title={dim?.desc}>
@@ -158,17 +161,46 @@ export default function FactoryDetail() {
                       </span>
                     )}
                   </span>
-                  <div className="h-2 flex-1 rounded-full bg-stone-100">
+                  <div className="relative h-2 flex-1 rounded-full bg-stone-100">
                     <div
                       className="h-2 rounded-full bg-[var(--sb-brand)]"
                       style={{ width: `${Math.min(100, n)}%` }}
                     />
+                    {med != null && (
+                      <div
+                        className="absolute -top-1 h-4 w-0.5 bg-[var(--sb-warn)]"
+                        style={{ left: `calc(${Math.min(100, med)}% - 1px)` }}
+                        title={`同类目中位数 ${med.toFixed(1)}`}
+                      />
+                    )}
                   </div>
                   <span className="w-10 text-right text-xs font-medium">{n}</span>
+                  {delta != null && (
+                    <span
+                      className={`w-14 shrink-0 text-right text-[10px] font-medium ${
+                        Math.abs(delta) < 0.05
+                          ? "text-stone-400"
+                          : delta > 0
+                            ? "text-emerald-700"
+                            : "text-[var(--sb-warn)]"
+                      }`}
+                      title={`同类目中位数 ${med!.toFixed(1)}`}
+                    >
+                      {Math.abs(delta) < 0.05
+                        ? "持平"
+                        : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`}
+                    </span>
+                  )}
                 </div>
               );
             })}
           </div>
+          {(f as any).categoryMedians && (
+            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-stone-500">
+              <span className="inline-block h-3 w-0.5 bg-[var(--sb-warn)]" />
+              竖线 = 「{(f as any).category}」类目工厂中位数，右侧数字为该厂与中位数的差值；刻度按类目内有该维度评分数据的工厂计算，样本不足的维度不显示
+            </p>
+          )}
           <details className="mt-4 text-xs text-stone-500">
             <summary className="cursor-pointer select-none font-medium text-[var(--sb-brand)] hover:underline">
               每个维度看什么？

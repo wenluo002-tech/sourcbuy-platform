@@ -1,5 +1,5 @@
 import { getDb } from "./connection";
-import { factories, factoryScores, commissionRules } from "../../db/schema";
+import { factories, factoryScores, factoryCategories, commissionRules } from "../../db/schema";
 import { eq, and, desc, like, gte, lte, sql, type SQL } from "drizzle-orm";
 import { expandQuery } from "../../contracts/lexicon";
 
@@ -76,6 +76,24 @@ function eq2(col: any, val: any) {
   return eq(col, val);
 }
 
+const SCORE_DIMS = [
+  "qualityCert",
+  "factoryPower",
+  "trustYears",
+  "repurchase",
+  "production",
+  "service",
+  "sales",
+] as const;
+type ScoreDim = (typeof SCORE_DIMS)[number];
+
+function median(nums: number[]): number | null {
+  if (!nums.length) return null;
+  const s = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
 export async function findFactoryById(id: number) {
   const db = getDb();
   const rows = await db.select().from(factories).where(eq(factories.id, id)).limit(1);
@@ -85,7 +103,55 @@ export async function findFactoryById(id: number) {
     .from(factoryScores)
     .where(eq(factoryScores.factoryId, id))
     .limit(1);
-  return { ...rows[0], scores: scores[0] ?? null };
+
+  // 类目中位数：该厂所属类目下、所有有子分的工厂，逐维取中位数（作为刻度线）
+  const catRows = await db
+    .select({ category: factoryCategories.category })
+    .from(factoryCategories)
+    .where(eq(factoryCategories.factoryId, id))
+    .limit(1);
+  const category = catRows[0]?.category ?? null;
+  let categoryMedians: Record<ScoreDim, number | null> | null = null;
+  let categoryScoredCount = 0;
+  if (category) {
+    const peers = await db
+      .select({
+        qualityCert: factoryScores.qualityCert,
+        factoryPower: factoryScores.factoryPower,
+        trustYears: factoryScores.trustYears,
+        repurchase: factoryScores.repurchase,
+        production: factoryScores.production,
+        service: factoryScores.service,
+        sales: factoryScores.sales,
+      })
+      .from(factoryScores)
+      .innerJoin(
+        factoryCategories,
+        eq(factoryCategories.factoryId, factoryScores.factoryId)
+      )
+      .where(eq(factoryCategories.category, category));
+    // 源数据大量行子分为 NULL：只统计至少有一维非空的工厂
+    const scored = peers.filter((p) =>
+      SCORE_DIMS.some((d) => p[d] != null)
+    );
+    categoryScoredCount = scored.length;
+    // 单维样本太少（<5）不出中位线，避免误导
+    categoryMedians = Object.fromEntries(
+      SCORE_DIMS.map((d) => {
+        const vals = scored
+          .map((p) => (p[d] != null ? Number(p[d]) : null))
+          .filter((v): v is number => v != null);
+        return [d, vals.length >= 5 ? median(vals) : null];
+      })
+    ) as Record<ScoreDim, number | null>;
+  }
+  return {
+    ...rows[0],
+    scores: scores[0] ?? null,
+    category,
+    categoryMedians,
+    categoryScoredCount,
+  };
 }
 
 export async function factoryStats() {
