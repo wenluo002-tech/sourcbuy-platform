@@ -10,6 +10,7 @@ import {
 import { sourcingChat } from "./queries/aiSourcing";
 import { offerWithFactory } from "./queries/products";
 import { classifyAiError, AiUnavailable } from "./lib/ai-client";
+import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } from "../contracts/freightRates";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -50,6 +51,25 @@ export const appRouter = createRouter({
   }),
 
   pricing: createRouter({
+    // 目的地 → 可用真实渠道 + 货物属性 + 加拿大交仓区域（前端动态表单数据源）
+    channels: publicQuery
+      .input(z.object({ destinationCode: z.string().max(2).optional() }))
+      .query(({ input }) => ({
+        channels: channelsForCountry(input.destinationCode ?? "").map((c) => ({
+          id: c.id,
+          name: c.name,
+          mode: c.mode,
+          ddp: c.ddp,
+          transitNote: c.transitNote,
+          minShipmentKg: c.minShipmentKg,
+          needsZip: c.country.includes("US") || c.country.includes("AU"),
+          needsCaRegion: c.id.startsWith("ca_sea_"),
+        })),
+        cargoTypes: CARGO_TYPES,
+        caRegions: CA_SEA_REGIONS,
+        suspended: SUSPENDED_CHANNELS,
+        priceVersion: "2026-10-15 价卡",
+      })),
     landed: publicQuery
       .input(
         z.object({
@@ -60,8 +80,12 @@ export const appRouter = createRouter({
             .object({ l: z.number(), w: z.number(), h: z.number() })
             .optional(),
           riskTier: z.enum(["A", "B", "C"]),
-          channel: z.enum(["express", "line", "sea"]),
+          channel: z.string(), // 真实渠道 id（freightRates）或通用估算 express/line/sea
           destinationCode: z.string().max(2).optional(),
+          zip: z.string().max(12).optional(),
+          caRegion: z.string().max(8).optional(),
+          cargoType: z.string().max(32).optional(),
+          residential: z.boolean().optional(),
           exchangeRate: z.number().positive().optional(),
         })
       )

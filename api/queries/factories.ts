@@ -10,6 +10,8 @@ import {
   CHANNEL_TRANSIT,
   CHANNEL_LABEL,
 } from "../../contracts/freight";
+import { quoteFreight } from "./freightQuote";
+import { findRealChannel, channelsForCountry } from "../../contracts/freightRates";
 
 export interface FactoryFilter {
   tier?: string;
@@ -215,8 +217,12 @@ export interface LandedPriceInput {
   weightKg: number; // 单件实重
   dimCm?: { l: number; w: number; h: number }; // 单件尺寸
   riskTier: "A" | "B" | "C";
-  channel: "express" | "line" | "sea"; // 快递/专线/海运
-  destinationCode?: string; // 目的地国家 ISO 码（影响体积重规则与文案）
+  channel: string; // 真实渠道 id（freightRates）或 generic: express/line/sea
+  destinationCode?: string; // 目的地国家 ISO 码
+  zip?: string; // 邮编（美国 5 位 / 澳洲 4 位，分区报价用）
+  caRegion?: string; // 加拿大海运派送区域
+  cargoType?: string; // 货物属性（触发品类附加费/黑名单）
+  residential?: boolean; // 私人住宅地址
   exchangeRate?: number; // USD/CNY，默认 7.1
 }
 
@@ -263,21 +269,121 @@ export async function calcLandedPrice(input: LandedPriceInput) {
   const purchaseCny = input.unitPriceCny * input.quantity;
   const purchaseUsd = purchaseCny / rate;
   const dest = findDestination(input.destinationCode);
+  const cargoType = input.cargoType ?? "general";
+  const commission = await calcCommission(purchaseUsd, input.riskTier);
+  const toUsd = (cny: number) => r2(cny / rate);
 
-  // 铁律：没填尺寸就不许编尺寸。未提供 dimCm 时按实重计费，并明确标注；
-  // 提供后按实重/体积重取大者（台新马日专线为协议特殊平均规则）。
+  // ============ 真实报价渠道（2026-10-15 价卡，CNY 计费折算 USD）============
+  const realCh = findRealChannel(input.channel);
+  if (realCh) {
+    const q = quoteFreight({
+      channelId: realCh.id,
+      destinationCode: input.destinationCode ?? "",
+      zip: input.zip,
+      caRegion: input.caRegion,
+      cargoType,
+      residential: input.residential,
+      quantity: input.quantity,
+      weightKg: input.weightKg,
+      dimCm: input.dimCm,
+    });
+    if (!q.ok) {
+      throw new Error(q.manualOnly ? `人工单询：${q.error}` : q.error ?? "该渠道暂不可报价");
+    }
+
+    const freightUsd = toUsd(q.freightCny);
+    const lines = [
+      {
+        key: "factory",
+        label: `出厂价（工厂原始报价 ¥${r2(purchaseCny).toLocaleString("zh-CN")}）`,
+        amount: r2(purchaseUsd),
+      },
+      { key: "domestic", label: "国内段运费（工厂→集货仓）", amount: r2(DOMESTIC_FEE) },
+      { key: "commission", label: `履约佣金（${input.riskTier} 档 ${(commission.rate * 100).toFixed(1)}%）`, amount: commission.fee },
+      {
+        key: "freight",
+        label: `国际运费 · ${q.channelName}（${q.pricePerKgCny != null ? `¥${q.pricePerKgCny}/kg × ${q.chargeableKg}kg` : "首续重计费"}）`,
+        amount: freightUsd,
+      },
+      ...q.surcharges.map((s, i) => ({
+        key: `surcharge_${i}`,
+        label: s.label,
+        amount: toUsd(s.amountCny),
+      })),
+      { key: "duty", label: q.ddp ? "关税（DDP 渠道包税）" : "关税预估", amount: 0 },
+      { key: "lastMile", label: q.ddp ? "尾程派送（DDP 渠道含派送）" : "尾程派送", amount: q.ddp ? 0 : 21 },
+    ];
+    const total = r2(lines.reduce((s, l) => s + l.amount, 0));
+
+    // 同目的地所有真实渠道对比（同口径：货值+佣金都相同，只差物流段）
+    const fixedUsd = r2(purchaseUsd + DOMESTIC_FEE + commission.fee);
+    const compare = channelsForCountry(input.destinationCode ?? "")
+      .map((c) => {
+        const cq = quoteFreight({
+          channelId: c.id, destinationCode: input.destinationCode ?? "",
+          zip: input.zip, caRegion: input.caRegion, cargoType,
+          residential: input.residential, quantity: input.quantity,
+          weightKg: input.weightKg, dimCm: input.dimCm,
+        });
+        if (!cq.ok) return { channelId: c.id, channelName: c.name, ok: false as const, reason: cq.error ?? "不可报价", manualOnly: !!cq.manualOnly, mode: c.mode, transitNote: c.transitNote };
+        const totalUsd = r2(fixedUsd + toUsd(cq.totalCny));
+        return { channelId: c.id, channelName: c.name, ok: true as const, mode: c.mode, transitNote: c.transitNote, chargeableKg: cq.chargeableKg, freightUsd: toUsd(cq.freightCny), totalUsd };
+      });
+    const quotable = compare.filter((c) => c.ok);
+    const cheapest = quotable.length ? quotable.reduce((a, b) => (a.totalUsd <= b.totalUsd ? a : b)) : null;
+    const fastestAir = quotable.filter((c) => c.mode === "air").sort((a, b) => a.totalUsd - b.totalUsd)[0] ?? null;
+    let adviceReason = "";
+    if (cheapest) {
+      adviceReason = `到手价最低的是${cheapest.channelName}（$${cheapest.totalUsd.toFixed(2)}）`;
+      if (fastestAir && fastestAir.channelId !== cheapest.channelId) {
+        adviceReason += `；要快选${fastestAir.channelName}（$${fastestAir.totalUsd.toFixed(2)}，${fastestAir.transitNote}），贵 $${(fastestAir.totalUsd - cheapest.totalUsd).toFixed(0)}`;
+      }
+    }
+
+    return {
+      lines,
+      total,
+      totalCny: r2(total * rate),
+      perUnit: r2(total / input.quantity),
+      perUnitCny: r2((total * rate) / input.quantity),
+      currency: "USD",
+      exchangeRate: rate,
+      destination: dest ? { code: dest.code, zh: dest.zh } : null,
+      volumetricNote: q.basisNote,
+      chargeableWeight: q.chargeableKg,
+      chargeableBasis: "real_channel" as const,
+      realChannel: {
+        id: q.channelId, name: q.channelName, ddp: q.ddp, transitNote: q.transitNote,
+        pricePerKgCny: q.pricePerKgCny, priceVersion: "2026-10-15 价卡",
+      },
+      freightWarnings: q.warnings,
+      channelAdvice: {
+        recommended: cheapest?.channelId ?? q.channelId,
+        recommendedLabel: cheapest?.channelName ?? q.channelName,
+        reason: adviceReason,
+        isCurrentRecommended: cheapest?.channelId === q.channelId,
+        compare: quotable.map((c) => ({
+          channel: c.channelId, label: c.channelName, chargeableKg: c.chargeableKg,
+          freight: c.freightUsd, total: c.totalUsd, transit: c.transitNote,
+        })),
+        unavailable: compare.filter((c) => !c.ok).map((c) => ({ label: c.channelName, reason: c.reason })),
+      },
+      commissionMeta: commission,
+    };
+  }
+
+  // ============ 通用估算渠道（未接入真实价卡的国家）============
+  const genericChannel = (["express", "line", "sea"].includes(input.channel) ? input.channel : "line") as "express" | "line" | "sea";
   const hasDims =
     !!input.dimCm && input.dimCm.l > 0 && input.dimCm.w > 0 && input.dimCm.h > 0;
 
-  const cur = channelChargeable(input.channel, input, hasDims);
+  const cur = channelChargeable(genericChannel, input, hasDims);
   const chargeableWeight = cur.chargeable;
-  const intlFreight = chargeableWeight * CHANNEL_RATE_PER_KG[input.channel];
+  const intlFreight = chargeableWeight * CHANNEL_RATE_PER_KG[genericChannel];
 
   const domestic = DOMESTIC_FEE;
-  const lastMile = input.channel === "sea" ? 35 : 21;
+  const lastMile = genericChannel === "sea" ? 35 : 21;
   const duty = dutyOf();
-
-  const commission = await calcCommission(purchaseUsd, input.riskTier);
 
   const destZh = dest ? `发${dest.zh}` : "";
   const freightLabel = !hasDims
@@ -337,12 +443,15 @@ export async function calcLandedPrice(input: LandedPriceInput) {
         ? ("volumetric" as const)
         : ("actual" as const)
       : ("actual_unsized" as const),
+    realChannel: null,
+    freightWarnings: [] as string[],
     channelAdvice: {
       recommended: rec.channel,
       recommendedLabel: CHANNEL_LABEL[rec.channel],
       reason: rec.reason,
+      isCurrentRecommended: rec.channel === genericChannel,
       compare: channels,
-      isCurrentRecommended: rec.channel === input.channel,
+      unavailable: [] as Array<{ label: string; reason: string }>,
     },
     commissionMeta: commission,
   };
