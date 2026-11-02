@@ -1,4 +1,6 @@
 import { Link, Outlet, useLocation } from "react-router";
+import logoHorizontal from "@/assets/logo-horizontal.png";
+import logoMark from "@/assets/logo-mark.png";
 
 const NAV = [
   { to: "/buyer", zh: "开始采购", en: "SOURCING" },
@@ -12,12 +14,16 @@ export default function Layout() {
     <div className="min-h-dvh bg-[var(--sb-paper)] text-[var(--sb-ink)]">
       <header className="sticky top-0 z-40 border-b border-[var(--sb-line)] bg-[var(--sb-paper)]/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Link to="/" className="group flex flex-col leading-none">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--sb-teal)]">
-              Buyer-side Agent
-            </span>
-            <span className="mt-1 text-lg font-bold tracking-tight">
-              SourcBuy
+          <Link to="/" className="group flex items-center gap-2.5">
+            <img
+              src={logoHorizontal}
+              alt="SourcBuy"
+              className="h-8 w-auto sm:h-9"
+            />
+            <span className="hidden border-l border-[var(--sb-line)] pl-2.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.22em] text-[var(--sb-teal)] md:block">
+              Buyer-side
+              <br />
+              Agent
             </span>
           </Link>
           <nav className="flex items-center gap-1 sm:gap-2">
@@ -54,9 +60,10 @@ export default function Layout() {
         <Outlet />
       </main>
       <footer className="border-t border-[var(--sb-line)] py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-4 text-center">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-2.5 px-4 text-center">
+          <img src={logoMark} alt="" className="h-7 w-auto opacity-80" />
           <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--sb-ink-40)]">
-            SourcBuy · Buyer-side Only
+            Buyer-side Only
           </span>
           <p className="text-xs text-[var(--sb-ink-60)]">
             只代表买家立场 — 不收工厂返点 · 不加隐藏差价 · 佣金费率公开 · 损失先行赔付
