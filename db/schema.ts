@@ -47,6 +47,7 @@ export const factories = mysqlTable(
     productCount: int("product_count"),
     home: text("home"), // 1688 店铺链接
     mainImage: text("main_image"), // 主图（本地化后换对象存储 key）
+    images: json("images").$type<Record<string, string[]>>(), // 实拍图集：gate/workshop/product/warehouse/equipment/catalog
     review: text("review"), // AI 评语
     tags: json("tags").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),

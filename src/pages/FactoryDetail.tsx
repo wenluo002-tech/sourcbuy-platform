@@ -98,6 +98,49 @@ export default function FactoryDetail() {
         </div>
       </div>
 
+      {/* 实拍图集：产品/车间/设备/仓库/大门/产品册 */}
+      {f.images &&
+        (["product", "workshop", "equipment", "warehouse", "gate", "catalog"] as const).some(
+          (k) => (f.images as Record<string, string[]>)[k]?.length
+        ) && (
+          <div className="rounded-xl border border-stone-200 bg-white p-6">
+            <h2 className="mb-4 font-semibold">工厂实拍</h2>
+            <div className="space-y-4">
+              {(
+                [
+                  ["product", "产品实拍"],
+                  ["workshop", "生产车间"],
+                  ["equipment", "生产设备"],
+                  ["warehouse", "仓储"],
+                  ["gate", "厂区"],
+                  ["catalog", "产品册"],
+                ] as const
+              ).map(([k, label]) => {
+                const list = ((f.images as Record<string, string[]>)?.[k] ?? [])
+                  .filter((u) => /^https?:\/\//i.test(u))
+                  .slice(0, 6);
+                if (!list.length) return null;
+                return (
+                  <div key={k}>
+                    <p className="mb-1.5 text-xs font-medium text-stone-500">{label}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {list.map((src, i) => (
+                        <img
+                          key={i}
+                          src={src}
+                          alt={label}
+                          loading="lazy"
+                          className="h-24 w-24 rounded-lg border border-stone-100 object-cover md:h-28 md:w-28"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
       {f.scores && (
         <div className="rounded-xl border border-stone-200 bg-white p-6">
           <h2 className="mb-1 font-semibold">评分明细</h2>

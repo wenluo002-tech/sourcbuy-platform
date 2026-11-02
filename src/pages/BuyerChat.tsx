@@ -13,6 +13,8 @@ interface MatchedFactory {
   cert: string | null;
   repurchaseRate: number | null;
   reason: string;
+  productImages: string[];
+  tags: string[];
   subScores: Record<string, number | null> | null;
   categoryRank: { category: string; rank: number; total: number } | null;
   evidence: string[];
@@ -174,6 +176,19 @@ export default function BuyerChat() {
                       key={f.id}
                       className="rounded-lg border border-[#e2ddc8] bg-white p-3.5"
                     >
+                      {f.productImages && f.productImages.length > 0 && (
+                        <div className="mb-2.5 flex gap-1.5">
+                          {f.productImages.map((src, j) => (
+                            <img
+                              key={j}
+                              src={src}
+                              alt=""
+                              loading="lazy"
+                              className="h-16 w-16 rounded-md border border-stone-100 object-cover"
+                            />
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-start justify-between gap-2">
                         <Link
                           to={`/factories/${f.id}`}
@@ -193,6 +208,18 @@ export default function BuyerChat() {
                       <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-stone-600">
                         {f.reason}
                       </p>
+                      {f.tags && f.tags.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {f.tags.slice(0, 4).map((t) => (
+                            <span
+                              key={t}
+                              className="rounded bg-[#f5f2e6] px-1.5 py-0.5 text-[10px] text-stone-600"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {f.categoryRank && (
                         <p className="mt-1.5 text-xs font-medium text-emerald-900">
                           {f.categoryRank.category}类目第 {f.categoryRank.rank} / {f.categoryRank.total} 家

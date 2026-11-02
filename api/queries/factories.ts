@@ -201,6 +201,8 @@ export interface MatchedFactory {
   cert: string | null;
   repurchaseRate: number | null;
   mainImage: string | null;
+  productImages: string[]; // 产品实拍图（买家先看到货）
+  tags: string[];
   reason: string;
   subScores: Record<string, number | null> | null;
   categoryRank: { category: string; rank: number; total: number } | null;
@@ -265,6 +267,16 @@ export async function matchFactories(intent: {
   return res.rows.map((f) => {
     const sub = scoreMap.get(f.id) ?? null;
     const rk = rankMap.get(f.id) ?? null;
+    const imgs = (f.images as Record<string, string[]> | null) ?? {};
+    // 产品实拍优先；没有产品图的用店铺主图兜底。只保留 http(s) 绝对地址——
+    // 源数据里的相对路径图片是原系统本地文件，已随对方服务器丢失
+    const abs = (u: string) => /^https?:\/\//i.test(u);
+    const productImages = (imgs.product ?? []).filter(abs).slice(0, 3);
+    const fallback = productImages.length
+      ? productImages
+      : f.mainImage && abs(f.mainImage)
+        ? [f.mainImage]
+        : [];
     return {
       id: f.id,
       name: f.name,
@@ -275,6 +287,8 @@ export async function matchFactories(intent: {
       cert: f.cert,
       repurchaseRate: f.repurchaseRate ? Number(f.repurchaseRate) : null,
       mainImage: f.mainImage,
+      productImages: fallback,
+      tags: (f.tags as string[] | null) ?? [],
       reason: buildReason(f),
       subScores: sub,
       categoryRank: rk && category ? { category, rank: rk.rank, total: rk.total } : null,
@@ -298,7 +312,15 @@ function buildEvidence(
   if (f.repurchaseRate && Number(f.repurchaseRate) >= 60)
     ev.push(`老买家复购率 ${Number(f.repurchaseRate)}%，回头客用订单投票`);
   if (f.replyRate && Number(f.replyRate) >= 90) ev.push(`询盘回复率 ${Number(f.replyRate)}%，沟通顺畅`);
+  if (f.employeeCount && f.areaSqm)
+    ev.push(`自有厂区 ${f.areaSqm.toLocaleString()}㎡、${f.employeeCount} 名员工`);
+  else if (f.employeeCount) ev.push(`${f.employeeCount} 名员工`);
+  if (f.productCount) ev.push(`在售产品 ${f.productCount} 款，产品线稳定`);
+  if (f.oemMode) ev.push(`支持 ${f.oemMode}${f.productionType ? `（${f.productionType}）` : ""}`);
+  if (f.serviceCapability) ev.push(`服务能力：${f.serviceCapability}`);
+  if (f.monthlyBuyers) ev.push(`月采购买家 ${f.monthlyBuyers} 家，出货活跃`);
   if (f.cert) ev.push(`持第三方认证：${f.cert}`);
+  if (f.medal) ev.push(`1688 ${f.medal}${f.medalLevel ? ` ${f.medalLevel}` : ""}`);
   if (f.isSuper) ev.push(`1688 超级工厂（平台实地验厂）`);
   if (sub?.repurchase != null && sub.repurchase >= 90) ev.push(`复购维度子分 ${sub.repurchase}/100，客户粘性极强`);
   if (sub?.qualityCert != null && sub.qualityCert >= 30) ev.push(`质量认证子分满分档`);
