@@ -36,7 +36,7 @@ export default function FactoryDetail() {
 
   return (
     <div className="space-y-6">
-      <Link to="/factories" className="text-sm text-emerald-700 hover:underline">
+      <Link to="/factories" className="text-sm text-[var(--sb-brand)] hover:underline">
         ← 返回工厂库
       </Link>
 
@@ -46,7 +46,7 @@ export default function FactoryDetail() {
             <h1 className="text-2xl font-bold">{f.name}</h1>
             <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
               {f.tier && <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-800">{f.tier}</span>}
-              {f.isSuper && <span className="rounded bg-emerald-100 px-2 py-0.5 text-emerald-800">超级工厂</span>}
+              {f.isSuper && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-[var(--sb-brand)]">超级工厂</span>}
               {f.medal && f.medal !== "无牌工厂" && (
                 <span className="rounded bg-stone-100 px-2 py-0.5 text-stone-600">{f.medal}{f.medalLevel ?? ""}</span>
               )}
@@ -56,7 +56,7 @@ export default function FactoryDetail() {
             </div>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold text-emerald-800">{f.score}</div>
+            <div className="text-3xl font-bold text-[var(--sb-brand)]">{f.score}</div>
             <div className="text-xs text-stone-500">严选评分</div>
           </div>
         </div>
@@ -81,7 +81,7 @@ export default function FactoryDetail() {
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
             to="/calculator"
-            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
+            className="rounded-lg bg-[var(--sb-brand)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--sb-brand-hover)]"
           >
             用这家工厂算到手价 →
           </Link>
@@ -166,7 +166,7 @@ export default function FactoryDetail() {
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-stone-100">
                     <div
-                      className="h-2 rounded-full bg-emerald-600"
+                      className="h-2 rounded-full bg-[var(--sb-brand)]"
                       style={{ width: `${Math.min(100, n)}%` }}
                     />
                   </div>
@@ -176,7 +176,7 @@ export default function FactoryDetail() {
             })}
           </div>
           <details className="mt-4 text-xs text-stone-500">
-            <summary className="cursor-pointer select-none font-medium text-[#064013] hover:underline">
+            <summary className="cursor-pointer select-none font-medium text-[var(--sb-brand)] hover:underline">
               每个维度看什么？
             </summary>
             <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed">

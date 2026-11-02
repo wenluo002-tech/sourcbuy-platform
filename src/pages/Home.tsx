@@ -56,7 +56,7 @@ export default function Home() {
             />
             <button
               type="submit"
-              className="h-11 shrink-0 rounded-xl bg-[var(--sb-teal)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-teal-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-teal)]"
+              className="h-11 shrink-0 rounded-xl bg-[var(--sb-brand)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)]"
             >
               开始采购
             </button>
@@ -68,7 +68,7 @@ export default function Home() {
             <button
               key={s}
               onClick={() => goChat(s)}
-              className="rounded-full border border-[var(--sb-line)] bg-white/60 px-3.5 py-1.5 text-xs text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-teal)] hover:text-[var(--sb-teal)]"
+              className="rounded-full border border-[var(--sb-line)] bg-white/60 px-3.5 py-1.5 text-xs text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
             >
               {s} →
             </button>
@@ -83,7 +83,7 @@ export default function Home() {
       {/* ===== 实时数字 ===== */}
       <section className="sb-rise" style={{ ["--sb-delay" as string]: "80ms" }}>
         <div className="flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-teal)]">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
             Live from our database
           </h2>
           <span className="text-xs text-[var(--sb-ink-40)]">实时统计自工厂数据库</span>
@@ -108,7 +108,7 @@ export default function Home() {
 
       {/* ===== 服务方式（叙事三步） ===== */}
       <section className="sb-rise" style={{ ["--sb-delay" as string]: "120ms" }}>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-teal)]">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
           How it works · 服务如何进行
         </h2>
         <div className="mt-4 border-t border-[var(--sb-line)]">
@@ -133,7 +133,7 @@ export default function Home() {
 
       {/* ===== 三不承诺 ===== */}
       <section className="sb-rise" style={{ ["--sb-delay" as string]: "160ms" }}>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-teal)]">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
           Our promise · 三条铁律
         </h2>
         <div className="mt-4 border-t border-[var(--sb-line)]">
@@ -157,12 +157,12 @@ export default function Home() {
       {/* ===== 头部工厂 ===== */}
       <section className="sb-rise" style={{ ["--sb-delay" as string]: "200ms" }}>
         <div className="flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-teal)]">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
             Top rated · 头部严选工厂
           </h2>
           <Link
             to="/factories"
-            className="text-sm font-medium text-[var(--sb-teal)] underline-offset-4 hover:underline"
+            className="text-sm font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
           >
             查看全部 →
           </Link>
@@ -172,13 +172,13 @@ export default function Home() {
             <Link
               key={f.id}
               to={`/factories/${f.id}`}
-              className="group rounded-xl border border-[var(--sb-line)] bg-white p-4 transition-all hover:border-[var(--sb-teal)]/40 hover:shadow-[0_2px_8px_rgba(11,11,11,0.06)]"
+              className="group rounded-xl border border-[var(--sb-line)] bg-white p-4 transition-all hover:border-[var(--sb-brand)]/40 hover:shadow-[0_2px_8px_rgba(11,11,11,0.06)]"
             >
               <div className="flex items-start justify-between gap-2">
-                <h3 className="line-clamp-1 text-sm font-semibold group-hover:text-[var(--sb-teal)]">
+                <h3 className="line-clamp-1 text-sm font-semibold group-hover:text-[var(--sb-brand)]">
                   {f.name}
                 </h3>
-                <span className="shrink-0 rounded bg-[var(--sb-teal-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--sb-teal)]">
+                <span className="shrink-0 rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
                   {f.tier} {f.score}
                 </span>
               </div>

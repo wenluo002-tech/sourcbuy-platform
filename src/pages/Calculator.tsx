@@ -15,7 +15,7 @@ export default function Calculator() {
   const q = trpc.pricing.landed.useQuery(submitted!, { enabled: !!submitted });
 
   const input =
-    "w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-emerald-700";
+    "w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-[var(--sb-brand)]";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -72,7 +72,7 @@ export default function Calculator() {
         </label>
         <button
           type="submit"
-          className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 sm:col-span-2"
+          className="rounded-lg bg-[var(--sb-brand)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--sb-brand-hover)] sm:col-span-2"
         >
           算一笔到手价
         </button>
@@ -91,7 +91,7 @@ export default function Calculator() {
             ))}
             <div className="flex justify-between pt-2 text-base font-bold">
               <span>到手价合计</span>
-              <span className="text-emerald-800">${q.data.total.toFixed(2)}</span>
+              <span className="text-[var(--sb-brand)]">${q.data.total.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm text-stone-500">
               <span>单件到手价</span>

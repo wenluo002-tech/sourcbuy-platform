@@ -76,7 +76,7 @@
 
 /* ============ SourcBuy 设计系统 ============ */
 :root {
-  /* 色板：浅蓝灰绿氛围（冷静、可信赖的贸易感） */
+  /* 色板：浅蓝灰氛围 + SourcBuy 品牌蓝（取自 logo 字标） */
   --sb-paper: #eef4f5;      /* 页面底 */
   --sb-mist: #c4dbe0;       /* 主氛围区 */
   --sb-mist-light: #ddedf0; /* 次级氛围区 */
@@ -84,9 +84,9 @@
   --sb-ink-60: rgba(11, 11, 11, 0.6);
   --sb-ink-40: rgba(11, 11, 11, 0.4);
   --sb-line: rgba(11, 11, 11, 0.12);
-  --sb-teal: #0e4f52;       /* 唯一主行动色 */
-  --sb-teal-hover: #0a3d40;
-  --sb-teal-soft: rgba(14, 79, 82, 0.08);
+  --sb-brand: #1f4a94;       /* 唯一主行动色 = logo 蓝 */
+  --sb-brand-hover: #173a78;
+  --sb-brand-soft: rgba(31, 74, 148, 0.08);
   --sb-warn: #92610f;       /* 老采购提醒 */
   --sb-warn-bg: #fdf6e7;
   --sb-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -106,7 +106,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--sb-teal);
+  color: var(--sb-brand);
 }
 
 /* 老采购便签：虚线框 */

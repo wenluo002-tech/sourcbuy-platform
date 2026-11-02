@@ -20,7 +20,7 @@ export default function Layout() {
               alt="SourcBuy"
               className="h-8 w-auto sm:h-9"
             />
-            <span className="hidden border-l border-[var(--sb-line)] pl-2.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.22em] text-[var(--sb-teal)] md:block">
+            <span className="hidden border-l border-[var(--sb-line)] pl-2.5 text-[10px] font-semibold uppercase leading-tight tracking-[0.22em] text-[var(--sb-brand)] md:block">
               Buyer-side
               <br />
               Agent
@@ -34,17 +34,17 @@ export default function Layout() {
                 <Link
                   key={n.to}
                   to={n.to}
-                  className={`group whitespace-nowrap rounded-md px-2 py-2 leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-teal)] sm:px-3.5 ${
-                    active ? "bg-[var(--sb-teal-soft)]" : "hover:bg-[var(--sb-teal-soft)]"
+                  className={`group whitespace-nowrap rounded-md px-2 py-2 leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)] sm:px-3.5 ${
+                    active ? "bg-[var(--sb-brand-soft)]" : "hover:bg-[var(--sb-brand-soft)]"
                   }`}
                 >
-                  <span className="hidden text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)] group-hover:text-[var(--sb-teal)] sm:block">
+                  <span className="hidden text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)] group-hover:text-[var(--sb-brand)] sm:block">
                     {n.en}
                   </span>
                   <span
                     className={`mt-1 block text-xs sm:text-sm ${
                       active
-                        ? "font-semibold text-[var(--sb-teal)]"
+                        ? "font-semibold text-[var(--sb-brand)]"
                         : "text-[var(--sb-ink-60)] group-hover:text-[var(--sb-ink)]"
                     }`}
                   >

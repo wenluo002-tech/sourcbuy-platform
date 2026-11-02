@@ -77,19 +77,19 @@ function SourcingStatus() {
         <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-ink-40)]">
           AI Buyer
         </span>
-        <span className="text-[11px] font-medium text-[var(--sb-teal)]">老采购</span>
+        <span className="text-[11px] font-medium text-[var(--sb-brand)]">老采购</span>
         <span className="text-[10px] text-[var(--sb-ink-40)]">· 作业中</span>
       </div>
-      <div className="border-l-2 border-[var(--sb-teal)]/60 pl-4">
+      <div className="border-l-2 border-[var(--sb-brand)]/60 pl-4">
         <ul className="space-y-1.5 py-0.5">
           {STAGES.slice(0, step + 1).map((s, i) => {
             const active = i === step;
             return (
               <li key={s.label} className="sb-stage flex items-baseline gap-2.5">
                 {active ? (
-                  <span className="sb-dot-live h-1.5 w-1.5 shrink-0 translate-y-[-1px] self-center rounded-full bg-[var(--sb-teal)]" />
+                  <span className="sb-dot-live h-1.5 w-1.5 shrink-0 translate-y-[-1px] self-center rounded-full bg-[var(--sb-brand)]" />
                 ) : (
-                  <span className="self-center text-[11px] leading-none text-[var(--sb-teal)]">
+                  <span className="self-center text-[11px] leading-none text-[var(--sb-brand)]">
                     ✓
                   </span>
                 )}
@@ -180,7 +180,7 @@ export default function BuyerChat() {
         {turns.map((t, i) =>
           t.role === "user" ? (
             <div key={i} className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--sb-teal)] px-4 py-2.5 text-sm leading-relaxed text-[#eef4f5]">
+              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--sb-brand)] px-4 py-2.5 text-sm leading-relaxed text-[#eef4f5]">
                 {t.content}
               </div>
             </div>
@@ -191,11 +191,11 @@ export default function BuyerChat() {
                 <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-ink-40)]">
                   AI Buyer
                 </span>
-                <span className="text-[11px] font-medium text-[var(--sb-teal)]">
+                <span className="text-[11px] font-medium text-[var(--sb-brand)]">
                   老采购
                 </span>
               </div>
-              <div className="max-w-[94%] border-l-2 border-[var(--sb-teal)]/60 pl-4 text-sm leading-[1.75] whitespace-pre-wrap text-[var(--sb-ink)]">
+              <div className="max-w-[94%] border-l-2 border-[var(--sb-brand)]/60 pl-4 text-sm leading-[1.75] whitespace-pre-wrap text-[var(--sb-ink)]">
                 {t.content}
               </div>
 
@@ -223,7 +223,7 @@ export default function BuyerChat() {
                         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
                           {t.product.offer.priceTiers.map((p, j) => (
                             <span key={j} className="text-xs">
-                              <span className="font-semibold text-[var(--sb-teal)]">
+                              <span className="font-semibold text-[var(--sb-brand)]">
                                 ¥{p.price}
                               </span>
                               <span className="text-[var(--sb-ink-40)]">
@@ -241,7 +241,7 @@ export default function BuyerChat() {
                     {t.product.factory ? (
                       <Link
                         to={`/factories/${t.product.factory.id}`}
-                        className="text-xs font-medium text-[var(--sb-teal)] underline-offset-4 hover:underline"
+                        className="text-xs font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
                       >
                         背后工厂在严选库：{t.product.factory.name}（
                         {t.product.factory.tier} · {t.product.factory.score} 分）→
@@ -253,7 +253,7 @@ export default function BuyerChat() {
                     )}
                     <Link
                       to="/calculator"
-                      className="shrink-0 text-xs font-semibold text-[var(--sb-teal)] underline-offset-4 hover:underline"
+                      className="shrink-0 text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
                     >
                       算到手价 →
                     </Link>
@@ -285,11 +285,11 @@ export default function BuyerChat() {
                       <div className="flex items-start justify-between gap-2">
                         <Link
                           to={`/factories/${f.id}`}
-                          className="line-clamp-1 text-sm font-semibold hover:text-[var(--sb-teal)]"
+                          className="line-clamp-1 text-sm font-semibold hover:text-[var(--sb-brand)]"
                         >
                           {f.name}
                         </Link>
-                        <span className="shrink-0 rounded bg-[var(--sb-teal-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--sb-teal)]">
+                        <span className="shrink-0 rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
                           {f.score}
                         </span>
                       </div>
@@ -314,14 +314,14 @@ export default function BuyerChat() {
                         </div>
                       )}
                       {f.categoryRank && (
-                        <p className="mt-2 text-xs font-semibold text-[var(--sb-teal)]">
+                        <p className="mt-2 text-xs font-semibold text-[var(--sb-brand)]">
                           {f.categoryRank.category}类目第 {f.categoryRank.rank} /{" "}
                           {f.categoryRank.total} 家
                         </p>
                       )}
                       {f.evidence.length > 0 && (
                         <details className="mt-2.5 text-xs">
-                          <summary className="cursor-pointer select-none font-medium text-[var(--sb-teal)] underline-offset-4 hover:underline">
+                          <summary className="cursor-pointer select-none font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline">
                             为什么推荐它？（{f.evidence.length} 条证据）
                           </summary>
                           <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed text-[var(--sb-ink-60)]">
@@ -341,7 +341,7 @@ export default function BuyerChat() {
                                     </span>
                                     <div className="h-1.5 flex-1 rounded-full bg-[var(--sb-paper)]">
                                       <div
-                                        className="h-1.5 rounded-full bg-[var(--sb-teal)]/70"
+                                        className="h-1.5 rounded-full bg-[var(--sb-brand)]/70"
                                         style={{ width: `${Math.min(100, v)}%` }}
                                       />
                                     </div>
@@ -358,13 +358,13 @@ export default function BuyerChat() {
                       <div className="mt-3 flex items-center gap-3 border-t border-[var(--sb-line)] pt-2.5">
                         <Link
                           to={`/factories/${f.id}`}
-                          className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-teal)] hover:underline"
+                          className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
                         >
                           工厂档案 →
                         </Link>
                         <Link
                           to="/calculator"
-                          className="text-xs font-semibold text-[var(--sb-teal)] underline-offset-4 hover:underline"
+                          className="text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
                         >
                           算到手价 →
                         </Link>
@@ -387,7 +387,7 @@ export default function BuyerChat() {
             <button
               key={s}
               onClick={() => send(s)}
-              className="rounded-full border border-[var(--sb-line)] bg-white px-3.5 py-1.5 text-xs text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-teal)] hover:text-[var(--sb-teal)]"
+              className="rounded-full border border-[var(--sb-line)] bg-white px-3.5 py-1.5 text-xs text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
             >
               {s} →
             </button>
@@ -413,7 +413,7 @@ export default function BuyerChat() {
           <button
             type="submit"
             disabled={chat.isPending || !input.trim()}
-            className="h-11 shrink-0 rounded-xl bg-[var(--sb-teal)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-teal-hover)] disabled:opacity-40"
+            className="h-11 shrink-0 rounded-xl bg-[var(--sb-brand)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
           >
             发送
           </button>

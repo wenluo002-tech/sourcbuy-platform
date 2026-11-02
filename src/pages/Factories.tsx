@@ -29,7 +29,7 @@ export default function Factories() {
 
   const totalPages = q.data ? Math.ceil(q.data.total / 20) : 1;
   const sel =
-    "rounded-md border border-stone-300 bg-white px-2.5 py-2 text-sm focus-visible:outline-2 focus-visible:outline-emerald-700";
+    "rounded-md border border-stone-300 bg-white px-2.5 py-2 text-sm focus-visible:outline-2 focus-visible:outline-[var(--sb-brand)]";
 
   return (
     <div className="space-y-5">
@@ -98,7 +98,7 @@ export default function Factories() {
             className="group flex flex-col rounded-xl border border-stone-200 bg-white p-4 transition-shadow hover:shadow-md"
           >
             <div className="flex items-start justify-between gap-2">
-              <h3 className="line-clamp-1 font-semibold group-hover:text-emerald-800">
+              <h3 className="line-clamp-1 font-semibold group-hover:text-[var(--sb-brand)]">
                 {f.name}
               </h3>
               <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
@@ -110,7 +110,7 @@ export default function Factories() {
                 <span className="rounded bg-stone-100 px-1.5 py-0.5 text-stone-600">{f.tier}</span>
               )}
               {f.isSuper && (
-                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-800">超级工厂</span>
+                <span className="rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-[var(--sb-brand)]">超级工厂</span>
               )}
               {f.medal && f.medal !== "无牌工厂" && (
                 <span className="rounded bg-stone-100 px-1.5 py-0.5 text-stone-600">
