@@ -10,12 +10,22 @@ export default function Calculator() {
   );
   const [quantity, setQuantity] = useState(searchParams.get("qty") ?? "500");
   const [weightKg, setWeightKg] = useState("0.3");
+  const [dimL, setDimL] = useState("");
+  const [dimW, setDimW] = useState("");
+  const [dimH, setDimH] = useState("");
   const [riskTier, setRiskTier] = useState<"A" | "B" | "C">("B");
   const [channel, setChannel] = useState<"express" | "line" | "sea">("line");
   const [submitted, setSubmitted] = useState<null | {
     unitPriceCny: number; quantity: number; weightKg: number;
+    dimCm?: { l: number; w: number; h: number };
     riskTier: "A" | "B" | "C"; channel: "express" | "line" | "sea";
   }>(null);
+
+  // 三个尺寸都填了才传，缺任何一个都按实重计费——不编尺寸
+  const dims = () => {
+    const l = Number(dimL), w = Number(dimW), h = Number(dimH);
+    return l > 0 && w > 0 && h > 0 ? { l, w, h } : undefined;
+  };
 
   const q = trpc.pricing.landed.useQuery(submitted!, { enabled: !!submitted });
 
@@ -47,7 +57,7 @@ export default function Calculator() {
         {fromProduct && (
           <p className="mt-2 rounded-md bg-[var(--sb-brand-soft)] px-3 py-1.5 text-xs text-[var(--sb-brand)]">
             已从商品卡带入出厂单价{searchParams.get("qty") ? "和数量" : ""}
-            ，重量与渠道按常用默认值先试算，可直接调整。
+            ，重量与渠道按常用默认值先试算，可直接调整；未填尺寸按实重计费，抛货请补尺寸。
           </p>
         )}
       </div>
@@ -60,6 +70,7 @@ export default function Calculator() {
             unitPriceCny: Number(unitPriceCny),
             quantity: Number(quantity),
             weightKg: Number(weightKg),
+            dimCm: dims(),
             riskTier,
             channel,
           });
@@ -80,6 +91,22 @@ export default function Calculator() {
           <input required type="number" step="0.01" min="0.01" value={weightKg}
             onChange={(e) => setWeightKg(e.target.value)} className={input} />
         </label>
+        <div className="text-sm sm:col-span-2">
+          <span className="mb-1 block text-stone-600">
+            单件尺寸 长×宽×高（cm，选填）
+            <span className="ml-1 text-xs text-stone-400">
+              不填按实重计费；抛货填了更准，体积重与实重取大者
+            </span>
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            <input type="number" step="0.1" min="0" placeholder="长" value={dimL}
+              onChange={(e) => setDimL(e.target.value)} className={input} />
+            <input type="number" step="0.1" min="0" placeholder="宽" value={dimW}
+              onChange={(e) => setDimW(e.target.value)} className={input} />
+            <input type="number" step="0.1" min="0" placeholder="高" value={dimH}
+              onChange={(e) => setDimH(e.target.value)} className={input} />
+          </div>
+        </div>
         <label className="text-sm">
           <span className="mb-1 block text-stone-600">品类风险档</span>
           <select value={riskTier} onChange={(e) => setRiskTier(e.target.value as any)} className={input}>
@@ -131,7 +158,9 @@ export default function Calculator() {
           )}
           <p className="mt-3 text-xs text-stone-400">
             费率表版本 {q.data.commissionMeta.ruleVersion} · 佣金基数为出厂价合计（不含运费）·
-            运费按计费重 {q.data.chargeableWeight} kg 估算
+            {q.data.chargeableBasis === "actual_unsized"
+              ? ` 运费按实重 ${q.data.chargeableWeight} kg 估算；如果是抛货，填尺寸后按体积重取大者`
+              : ` 运费按计费重 ${q.data.chargeableWeight} kg（实重/体积重取大者）估算`}
           </p>
         </div>
       )}

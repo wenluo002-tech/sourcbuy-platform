@@ -217,10 +217,17 @@ export async function calcLandedPrice(input: LandedPriceInput) {
   const purchaseUsd = purchaseCny / rate;
 
   // 体积重规则（蓝图 §3）：快递 ÷5000，专线 ÷6000
+  // 铁律：没填尺寸就不许编尺寸。未提供 dimCm 时按实重计费，并明确标注；
+  // 提供后按实重/体积重取大者，两行口径都摆出来。
   const volDivisor = input.channel === "express" ? 5000 : 6000;
-  const dim = input.dimCm ?? { l: 30, w: 20, h: 10 };
-  const volWeight = (dim.l * dim.w * dim.h) / volDivisor;
-  const chargeableWeight = Math.max(input.weightKg, volWeight) * input.quantity;
+  const actualTotal = input.weightKg * input.quantity;
+  const hasDims =
+    !!input.dimCm && input.dimCm.l > 0 && input.dimCm.w > 0 && input.dimCm.h > 0;
+  const volTotal = hasDims
+    ? ((input.dimCm!.l * input.dimCm!.w * input.dimCm!.h) / volDivisor) *
+      input.quantity
+    : null;
+  const chargeableWeight = Math.max(actualTotal, volTotal ?? 0);
 
   // 国际运费单价（USD/kg，渠道均价，后续接 freight_rates 价格表）
   const freightRatePerKg = { express: 8.5, line: 5.2, sea: 1.8 }[input.channel];
@@ -232,11 +239,15 @@ export async function calcLandedPrice(input: LandedPriceInput) {
 
   const commission = await calcCommission(purchaseUsd, input.riskTier);
 
+  const freightLabel = hasDims
+    ? `国际运费（计费重 ${r2(chargeableWeight)}kg：实重 ${r2(actualTotal)} / 体积重 ${r2(volTotal!)}，取大者）`
+    : `国际运费（按实重 ${r2(actualTotal)}kg，未填尺寸）`;
+
   const lines = [
     { key: "factory", label: "出厂价（工厂原始报价）", amount: r2(purchaseUsd) },
     { key: "domestic", label: "国内段运费（工厂→集货仓）", amount: r2(domestic) },
     { key: "commission", label: `履约佣金（${input.riskTier} 档 ${(commission.rate * 100).toFixed(1)}%）`, amount: commission.fee },
-    { key: "freight", label: `国际运费（${chargeableWeight.toFixed(1)}kg 计费重）`, amount: r2(intlFreight) },
+    { key: "freight", label: freightLabel, amount: r2(intlFreight) },
     { key: "duty", label: "关税预估", amount: r2(duty) },
     { key: "lastMile", label: "尾程派送", amount: r2(lastMile) },
   ];
@@ -247,6 +258,11 @@ export async function calcLandedPrice(input: LandedPriceInput) {
     perUnit: r2(total / input.quantity),
     currency: "USD",
     chargeableWeight: r2(chargeableWeight),
+    chargeableBasis: hasDims
+      ? volTotal! > actualTotal
+        ? ("volumetric" as const)
+        : ("actual" as const)
+      : ("actual_unsized" as const),
     commissionMeta: commission,
   };
 }
