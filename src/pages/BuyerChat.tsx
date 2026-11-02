@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
 
@@ -47,7 +47,7 @@ interface Turn {
 }
 
 const SUGGESTIONS = [
-  "我想采购宠物降温垫，500 件，发美国",
+  "瑜伽裤 500 条，发德国",
   "找做连帽卫衣的工厂，预算到手价 $4 以内",
   "蓝牙耳机，先寄样品看看质量",
 ];
@@ -57,12 +57,14 @@ export default function BuyerChat() {
     {
       role: "assistant",
       content:
-        "你好，我是你的 AI 采购买手。说说你要什么品、大概多少量、发往哪里——我从 4,060 家严选工厂里给你挑 3-6 家靠谱的，到手价当场算给你看。",
+        "你好，我是你的 AI 采购买手，干这行十几年了。说说你要什么品、多少量、发往哪里——我从 4,060 家严选工厂里挑 3-6 家靠谱的给你，每一家为什么推荐、到手价多少，都摆证据说清楚。需求不靠谱我也会直说。",
     },
   ]);
   const [input, setInput] = useState("");
   const chat = trpc.ai.chat.useMutation();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [params, setParams] = useSearchParams();
+  const prefilled = useRef(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -93,98 +95,129 @@ export default function BuyerChat() {
             {
               role: "assistant",
               content:
-                "刚才网络抖了一下，没收到回复。你再说一次？如果反复失败，也可以直接用工厂库搜索。",
+                "刚才网络抖了一下，没收到回复。你再说一次？如果反复失败，也可以直接去工厂库搜。",
             },
           ]),
       }
     );
   }
 
+  // 从首页带过来的第一句话，自动发出
+  useEffect(() => {
+    const pre = params.get("prefill");
+    if (pre && !prefilled.current) {
+      prefilled.current = true;
+      setParams({}, { replace: true });
+      send(pre);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div className="mx-auto flex h-[calc(100dvh-8.5rem)] max-w-3xl flex-col">
-      <div className="flex-1 space-y-5 overflow-y-auto rounded-xl border border-[#e2ddc8] bg-[#f5f2e6] p-4 md:p-6">
+    <div className="mx-auto flex h-[calc(100dvh-10rem)] max-w-3xl flex-col">
+      {/* 对话区 */}
+      <div className="sb-scroll flex-1 space-y-6 overflow-y-auto rounded-[20px] border border-[var(--sb-line)] bg-white p-4 md:p-7">
         {turns.map((t, i) =>
           t.role === "user" ? (
             <div key={i} className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[#064013] px-4 py-2.5 text-sm leading-relaxed text-[#f5f2e6]">
+              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--sb-teal)] px-4 py-2.5 text-sm leading-relaxed text-[#eef4f5]">
                 {t.content}
               </div>
             </div>
           ) : (
             <div key={i} className="space-y-3">
-              <div className="max-w-[92%] border-l-2 border-[#064013]/70 pl-4 text-sm leading-relaxed whitespace-pre-wrap text-stone-800">
+              {/* 老采购身份签 */}
+              <div className="flex items-center gap-2 leading-none">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-ink-40)]">
+                  AI Buyer
+                </span>
+                <span className="text-[11px] font-medium text-[var(--sb-teal)]">
+                  老采购
+                </span>
+              </div>
+              <div className="max-w-[94%] border-l-2 border-[var(--sb-teal)]/60 pl-4 text-sm leading-[1.75] whitespace-pre-wrap text-[var(--sb-ink)]">
                 {t.content}
               </div>
+
+              {/* 1688 商品卡 */}
               {t.product && (
-                <div className="rounded-lg border border-[#e2ddc8] bg-white p-3.5">
+                <div className="rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] p-4">
                   <div className="flex gap-3">
                     {t.product.offer.images[0] && (
                       <img
                         src={t.product.offer.images[0]}
                         alt=""
-                        className="h-20 w-20 shrink-0 rounded-md object-cover"
+                        className="h-20 w-20 shrink-0 rounded-lg object-cover"
                       />
                     )}
                     <div className="min-w-0">
-                      <p className="line-clamp-2 text-sm font-semibold text-stone-900">
+                      <p className="line-clamp-2 text-sm font-semibold">
                         {t.product.offer.title}
                       </p>
-                      <p className="mt-0.5 text-xs text-stone-500">
+                      <p className="mt-0.5 text-xs text-[var(--sb-ink-40)]">
                         {[t.product.offer.categoryName, t.product.offer.shopName]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
                       {t.product.offer.priceTiers.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
-                          {t.product.offer.priceTiers.map((p, i) => (
-                            <span key={i} className="text-xs">
-                              <span className="font-semibold text-[#064013]">¥{p.price}</span>
-                              <span className="text-stone-400"> / {p.minQty}
-                                {t.product?.offer.unit ?? "件"}起</span>
+                          {t.product.offer.priceTiers.map((p, j) => (
+                            <span key={j} className="text-xs">
+                              <span className="font-semibold text-[var(--sb-teal)]">
+                                ¥{p.price}
+                              </span>
+                              <span className="text-[var(--sb-ink-40)]">
+                                {" "}
+                                / {p.minQty}
+                                {t.product?.offer.unit ?? "件"}起
+                              </span>
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2 border-t border-stone-100 pt-2">
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--sb-line)] pt-2.5">
                     {t.product.factory ? (
                       <Link
                         to={`/factories/${t.product.factory.id}`}
-                        className="text-xs font-medium text-emerald-800 hover:underline"
+                        className="text-xs font-medium text-[var(--sb-teal)] underline-offset-4 hover:underline"
                       >
-                        背后工厂在严选库：{t.product.factory.name}（{t.product.factory.tier} · {t.product.factory.score} 分）→
+                        背后工厂在严选库：{t.product.factory.name}（
+                        {t.product.factory.tier} · {t.product.factory.score} 分）→
                       </Link>
                     ) : (
-                      <span className="text-xs text-amber-700">
-                        该店铺不在我们的严选库，下单前建议验厂
+                      <span className="sb-note rounded-md px-2 py-1 text-xs">
+                        该店铺不在严选库，下单前建议验厂
                       </span>
                     )}
                     <Link
                       to="/calculator"
-                      className="shrink-0 rounded-md bg-[#064013] px-2.5 py-1 text-xs font-medium text-[#f5f2e6] hover:bg-emerald-800"
+                      className="shrink-0 text-xs font-semibold text-[var(--sb-teal)] underline-offset-4 hover:underline"
                     >
-                      算到手价
+                      算到手价 →
                     </Link>
                   </div>
                 </div>
               )}
+
+              {/* 工厂卡 */}
               {t.factories && t.factories.length > 0 && (
-                <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {t.factories.map((f) => (
                     <div
                       key={f.id}
-                      className="rounded-lg border border-[#e2ddc8] bg-white p-3.5"
+                      className="rounded-xl border border-[var(--sb-line)] bg-white p-4 transition-shadow hover:shadow-[0_2px_8px_rgba(11,11,11,0.06)]"
                     >
                       {f.productImages && f.productImages.length > 0 && (
-                        <div className="mb-2.5 flex gap-1.5">
+                        <div className="mb-3 flex gap-1.5">
                           {f.productImages.map((src, j) => (
                             <img
                               key={j}
                               src={src}
                               alt=""
                               loading="lazy"
-                              className="h-16 w-16 rounded-md border border-stone-100 object-cover"
+                              className="h-16 w-16 rounded-lg border border-[var(--sb-line)] object-cover"
                             />
                           ))}
                         </div>
@@ -192,66 +225,67 @@ export default function BuyerChat() {
                       <div className="flex items-start justify-between gap-2">
                         <Link
                           to={`/factories/${f.id}`}
-                          className="line-clamp-1 text-sm font-semibold text-stone-900 hover:text-emerald-800"
+                          className="line-clamp-1 text-sm font-semibold hover:text-[var(--sb-teal)]"
                         >
                           {f.name}
                         </Link>
-                        <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                        <span className="shrink-0 rounded bg-[var(--sb-teal-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--sb-teal)]">
                           {f.score}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-stone-500">
+                      <p className="mt-1 text-xs text-[var(--sb-ink-40)]">
                         {[f.tier, f.location, f.years ? `${f.years} 年` : null]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
-                      <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-stone-600">
+                      <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
                         {f.reason}
                       </p>
                       {f.tags && f.tags.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap gap-1">
-                          {f.tags.slice(0, 4).map((t) => (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {f.tags.slice(0, 4).map((tg) => (
                             <span
-                              key={t}
-                              className="rounded bg-[#f5f2e6] px-1.5 py-0.5 text-[10px] text-stone-600"
+                              key={tg}
+                              className="rounded-full border border-[var(--sb-line)] px-2 py-0.5 text-[10px] text-[var(--sb-ink-60)]"
                             >
-                              {t}
+                              {tg}
                             </span>
                           ))}
                         </div>
                       )}
                       {f.categoryRank && (
-                        <p className="mt-1.5 text-xs font-medium text-emerald-900">
-                          {f.categoryRank.category}类目第 {f.categoryRank.rank} / {f.categoryRank.total} 家
+                        <p className="mt-2 text-xs font-semibold text-[var(--sb-teal)]">
+                          {f.categoryRank.category}类目第 {f.categoryRank.rank} /{" "}
+                          {f.categoryRank.total} 家
                         </p>
                       )}
                       {f.evidence.length > 0 && (
-                        <details className="mt-2 text-xs">
-                          <summary className="cursor-pointer select-none font-medium text-[#064013] hover:underline">
+                        <details className="mt-2.5 text-xs">
+                          <summary className="cursor-pointer select-none font-medium text-[var(--sb-teal)] underline-offset-4 hover:underline">
                             为什么推荐它？（{f.evidence.length} 条证据）
                           </summary>
-                          <ul className="mt-1.5 list-disc space-y-1 pl-4 leading-relaxed text-stone-600">
+                          <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed text-[var(--sb-ink-60)]">
                             {f.evidence.map((e, j) => (
                               <li key={j}>{e}</li>
                             ))}
                           </ul>
                           {f.subScores && (
-                            <div className="mt-2 space-y-1">
+                            <div className="mt-2.5 space-y-1">
                               {SCORING_FORMULA.dimensions.map((d) => {
                                 const v = f.subScores?.[d.key];
                                 if (v == null) return null;
                                 return (
                                   <div key={d.key} className="flex items-center gap-1.5">
-                                    <span className="w-14 shrink-0 text-[10px] text-stone-500">
+                                    <span className="w-14 shrink-0 text-[10px] text-[var(--sb-ink-40)]">
                                       {d.label}
                                     </span>
-                                    <div className="h-1.5 flex-1 rounded-full bg-stone-100">
+                                    <div className="h-1.5 flex-1 rounded-full bg-[var(--sb-paper)]">
                                       <div
-                                        className="h-1.5 rounded-full bg-[#064013]/70"
+                                        className="h-1.5 rounded-full bg-[var(--sb-teal)]/70"
                                         style={{ width: `${Math.min(100, v)}%` }}
                                       />
                                     </div>
-                                    <span className="w-7 shrink-0 text-right text-[10px] text-stone-500">
+                                    <span className="w-7 shrink-0 text-right text-[10px] text-[var(--sb-ink-40)]">
                                       {v}
                                     </span>
                                   </div>
@@ -261,18 +295,18 @@ export default function BuyerChat() {
                           )}
                         </details>
                       )}
-                      <div className="mt-2.5 flex gap-2">
+                      <div className="mt-3 flex items-center gap-3 border-t border-[var(--sb-line)] pt-2.5">
                         <Link
                           to={`/factories/${f.id}`}
-                          className="rounded-md border border-stone-300 px-2.5 py-1 text-xs hover:bg-stone-100"
+                          className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-teal)] hover:underline"
                         >
-                          看详情
+                          工厂档案 →
                         </Link>
                         <Link
                           to="/calculator"
-                          className="rounded-md bg-[#064013] px-2.5 py-1 text-xs font-medium text-[#f5f2e6] hover:bg-emerald-800"
+                          className="text-xs font-semibold text-[var(--sb-teal)] underline-offset-4 hover:underline"
                         >
-                          算到手价
+                          算到手价 →
                         </Link>
                       </div>
                     </div>
@@ -283,47 +317,59 @@ export default function BuyerChat() {
           )
         )}
         {chat.isPending && (
-          <div className="border-l-2 border-[#064013]/70 pl-4 text-sm text-stone-500">
-            正在为你筛厂…
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 leading-none">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-ink-40)]">
+                AI Buyer
+              </span>
+              <span className="text-[11px] font-medium text-[var(--sb-teal)]">老采购</span>
+            </div>
+            <div className="border-l-2 border-[var(--sb-teal)]/60 pl-4 text-sm text-[var(--sb-ink-40)]">
+              正在翻厂库、对评分…
+            </div>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
+      {/* 建议问题（仅首轮展示） */}
       {turns.length <= 1 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
               onClick={() => send(s)}
-              className="rounded-full border border-[#c9c3ab] bg-white px-3.5 py-1.5 text-xs text-stone-600 transition-colors hover:border-[#064013] hover:text-[#064013]"
+              className="rounded-full border border-[var(--sb-line)] bg-white px-3.5 py-1.5 text-xs text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-teal)] hover:text-[var(--sb-teal)]"
             >
-              {s}
+              {s} →
             </button>
           ))}
         </div>
       )}
 
+      {/* 输入框 */}
       <form
-        className="mt-3 flex gap-2"
+        className="mt-3"
         onSubmit={(e) => {
           e.preventDefault();
           send(input);
         }}
       >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="说出你要的品，或直接粘贴 1688 商品链接…"
-          className="h-11 flex-1 rounded-lg border border-[#c9c4ae] bg-white px-4 text-sm focus-visible:outline-2 focus-visible:outline-[#064013]"
-        />
-        <button
-          type="submit"
-          disabled={chat.isPending || !input.trim()}
-          className="h-11 shrink-0 rounded-lg bg-[#064013] px-5 text-sm font-semibold text-[#f5f2e6] transition-colors hover:bg-emerald-800 disabled:opacity-40"
-        >
-          发送
-        </button>
+        <div className="flex items-center gap-2 rounded-2xl border border-[var(--sb-line)] bg-white p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05)]">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="说出你要的品，或直接粘贴 1688 商品链接…"
+            className="h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={chat.isPending || !input.trim()}
+            className="h-11 shrink-0 rounded-xl bg-[var(--sb-teal)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-teal-hover)] disabled:opacity-40"
+          >
+            发送
+          </button>
+        </div>
       </form>
     </div>
   );

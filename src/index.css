@@ -73,3 +73,67 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ============ SourcBuy 设计系统 ============ */
+:root {
+  /* 色板：浅蓝灰绿氛围（冷静、可信赖的贸易感） */
+  --sb-paper: #eef4f5;      /* 页面底 */
+  --sb-mist: #c4dbe0;       /* 主氛围区 */
+  --sb-mist-light: #ddedf0; /* 次级氛围区 */
+  --sb-ink: #0b0b0b;        /* 近黑正文 */
+  --sb-ink-60: rgba(11, 11, 11, 0.6);
+  --sb-ink-40: rgba(11, 11, 11, 0.4);
+  --sb-line: rgba(11, 11, 11, 0.12);
+  --sb-teal: #0e4f52;       /* 唯一主行动色 */
+  --sb-teal-hover: #0a3d40;
+  --sb-teal-soft: rgba(14, 79, 82, 0.08);
+  --sb-warn: #92610f;       /* 老采购提醒 */
+  --sb-warn-bg: #fdf6e7;
+  --sb-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body {
+  font-family:
+    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 双语堆叠标签签名：英文大写小字在上，中文在下 */
+.sb-eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sb-teal);
+}
+
+/* 老采购便签：虚线框 */
+.sb-note {
+  border: 1px dashed rgba(146, 97, 15, 0.45);
+  background: var(--sb-warn-bg);
+  color: #6b4a0e;
+}
+
+/* 入场动效：fade-in-up + 阶梯延迟 */
+@keyframes sb-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.sb-rise {
+  animation: sb-rise 0.5s var(--sb-ease) both;
+  animation-delay: var(--sb-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-rise { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+
+/* 对话滚动区细滚动条 */
+.sb-scroll::-webkit-scrollbar { width: 6px; }
+.sb-scroll::-webkit-scrollbar-thumb {
+  background: rgba(11, 11, 11, 0.15);
+  border-radius: 3px;
+}
