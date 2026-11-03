@@ -179,3 +179,61 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .sb-stage, .sb-dot-live { animation: none; }
 }
+
+/* ============ 首页视觉系统（v25） ============ */
+:root {
+  /* 签名缓动：入场 / 悬停 */
+  --sb-ease-in: cubic-bezier(0.37, 0.16, 0.12, 1);
+  --sb-ease-hover: cubic-bezier(0.52, 0.08, 0.18, 1);
+}
+
+/* 遮罩行揭示：overflow-hidden 行容器 + 内部行 translateY 升起 */
+.sb-line-mask {
+  display: block;
+  overflow: hidden;
+}
+.sb-line-mask > span {
+  display: block;
+  transform: translateY(112%);
+  animation: sb-line-up 0.9s var(--sb-ease-in) forwards;
+  animation-delay: var(--sb-delay, 0ms);
+}
+@keyframes sb-line-up {
+  to { transform: translateY(0); }
+}
+
+/* 滚动揭示：进入视口时升起，阶梯延迟由 --sb-delay 控制 */
+.sb-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.9s var(--sb-ease-in),
+    transform 0.9s var(--sb-ease-in);
+  transition-delay: var(--sb-delay, 0ms);
+}
+.sb-reveal.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 工程刻度十字：hero 面板四角的 blueprint 标记 */
+.sb-tick {
+  position: absolute;
+  width: 17px;
+  height: 17px;
+  color: rgba(31, 74, 148, 0.45);
+  pointer-events: none;
+}
+.sb-tick::before,
+.sb-tick::after {
+  content: "";
+  position: absolute;
+  background: currentColor;
+}
+.sb-tick::before { left: 8px; top: 0; width: 1px; height: 17px; }
+.sb-tick::after { left: 0; top: 8px; width: 17px; height: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-line-mask > span { animation: none; transform: none; }
+  .sb-reveal { opacity: 1; transform: none; transition: none; }
+}
