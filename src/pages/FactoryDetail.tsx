@@ -16,8 +16,8 @@ export default function FactoryDetail() {
   const { id } = useParams<{ id: string }>();
   const q = trpc.factories.detail.useQuery({ id: Number(id) });
 
-  if (q.isLoading) return <p className="text-stone-500">加载中…</p>;
-  if (!q.data) return <p className="text-stone-500">工厂不存在。</p>;
+  if (q.isLoading) return <p className="text-black/45">加载中…</p>;
+  if (!q.data) return <p className="text-black/45">工厂不存在。</p>;
   const f = q.data;
 
   const facts: Array<[string, string | null]> = [
@@ -40,29 +40,29 @@ export default function FactoryDetail() {
         ← 返回工厂库
       </Link>
 
-      <div className="rounded-xl border border-stone-200 bg-white p-6">
+      <div className="rounded-xl border border-black/10 bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">{f.name}</h1>
             <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-              {f.tier && <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-800">{f.tier}</span>}
+              {f.tier && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 font-medium text-[var(--sb-brand)]">{f.tier}</span>}
               {f.isSuper && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-[var(--sb-brand)]">超级工厂</span>}
               {f.medal && f.medal !== "无牌工厂" && (
-                <span className="rounded bg-stone-100 px-2 py-0.5 text-stone-600">{f.medal}{f.medalLevel ?? ""}</span>
+                <span className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{f.medal}{f.medalLevel ?? ""}</span>
               )}
               {(f.tags ?? []).map((t) => (
-                <span key={t} className="rounded bg-stone-100 px-2 py-0.5 text-stone-600">{t}</span>
+                <span key={t} className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{t}</span>
               ))}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold text-[var(--sb-brand)]">{f.score}</div>
-            <div className="text-xs text-stone-500">严选评分</div>
+            <div className="sb-num text-3xl font-bold text-[var(--sb-brand)]">{f.score}</div>
+            <div className="text-xs text-black/45">严选评分</div>
           </div>
         </div>
 
         {f.review && (
-          <p className="mt-4 rounded-lg bg-stone-50 p-4 text-sm leading-relaxed text-stone-700">
+          <p className="mt-4 rounded-lg bg-black/[0.03] p-4 text-sm leading-relaxed text-black/70">
             {f.review}
           </p>
         )}
@@ -72,8 +72,8 @@ export default function FactoryDetail() {
             .filter(([, v]) => v)
             .map(([k, v]) => (
               <div key={k}>
-                <dt className="text-xs text-stone-400">{k}</dt>
-                <dd className="mt-0.5 text-stone-800">{v}</dd>
+                <dt className="text-xs text-black/35">{k}</dt>
+                <dd className="mt-0.5 text-black/80">{v}</dd>
               </div>
             ))}
         </dl>
@@ -81,7 +81,7 @@ export default function FactoryDetail() {
         <div className="mt-5 flex flex-wrap gap-3">
           <Link
             to="/calculator"
-            className="rounded-lg bg-[var(--sb-brand)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--sb-brand-hover)]"
+            className="sb-pill bg-[var(--sb-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--sb-brand-hover)]"
           >
             用这家工厂算到手价 →
           </Link>
@@ -93,7 +93,7 @@ export default function FactoryDetail() {
         (["product", "workshop", "equipment", "warehouse", "gate", "catalog"] as const).some(
           (k) => (f.images as Record<string, string[]>)[k]?.length
         ) && (
-          <div className="rounded-xl border border-stone-200 bg-white p-6">
+          <div className="rounded-xl border border-black/10 bg-white p-6">
             <h2 className="mb-4 font-semibold">工厂实拍</h2>
             <div className="space-y-4">
               {(
@@ -112,7 +112,7 @@ export default function FactoryDetail() {
                 if (!list.length) return null;
                 return (
                   <div key={k}>
-                    <p className="mb-1.5 text-xs font-medium text-stone-500">{label}</p>
+                    <p className="mb-1.5 text-xs font-medium text-black/45">{label}</p>
                     <div className="flex flex-wrap gap-2">
                       {list.map((src, i) => (
                         <img
@@ -124,7 +124,7 @@ export default function FactoryDetail() {
                           onError={(e) => {
                             e.currentTarget.style.display = "none";
                           }}
-                          className="h-24 w-24 rounded-lg border border-stone-100 object-cover md:h-28 md:w-28"
+                          className="h-24 w-24 rounded-lg border border-black/5 object-cover md:h-28 md:w-28"
                         />
                       ))}
                     </div>
@@ -136,9 +136,9 @@ export default function FactoryDetail() {
         )}
 
       {f.scores && (
-        <div className="rounded-xl border border-stone-200 bg-white p-6">
+        <div className="rounded-xl border border-black/10 bg-white p-6">
           <h2 className="mb-1 font-semibold">评分明细</h2>
-          <p className="mb-4 text-xs leading-relaxed text-stone-500">
+          <p className="mb-4 text-xs leading-relaxed text-black/45">
             综合评分 = 七维加权 + 基础分。权重公开、工厂不可付费调分：
             质量认证 15% · 工厂实力 15% · 诚信年限 12% · 复购率 12% · 生产产能 10% · 服务响应 10% · 销售表现 13%。
           </p>
@@ -153,15 +153,15 @@ export default function FactoryDetail() {
               const delta = med != null ? n - med : null;
               return (
                 <div key={key} className="flex items-center gap-3">
-                  <span className="w-20 shrink-0 text-xs text-stone-500" title={dim?.desc}>
+                  <span className="w-20 shrink-0 text-xs text-black/45" title={dim?.desc}>
                     {label}
                     {dim && (
-                      <span className="ml-1 text-[10px] text-stone-400">
+                      <span className="ml-1 text-[10px] text-black/35">
                         {Math.round(dim.weight * 100)}%
                       </span>
                     )}
                   </span>
-                  <div className="relative h-2 flex-1 rounded-full bg-stone-100">
+                  <div className="relative h-2 flex-1 rounded-full bg-black/[0.05]">
                     <div
                       className="h-2 rounded-full bg-[var(--sb-brand)]"
                       style={{ width: `${Math.min(100, n)}%` }}
@@ -179,7 +179,7 @@ export default function FactoryDetail() {
                     <span
                       className={`w-14 shrink-0 text-right text-[10px] font-medium ${
                         Math.abs(delta) < 0.05
-                          ? "text-stone-400"
+                          ? "text-black/35"
                           : delta > 0
                             ? "text-emerald-700"
                             : "text-[var(--sb-warn)]"
@@ -196,19 +196,19 @@ export default function FactoryDetail() {
             })}
           </div>
           {(f as any).categoryMedians && (
-            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-stone-500">
+            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-black/45">
               <span className="inline-block h-3 w-0.5 bg-[var(--sb-warn)]" />
               竖线 = 「{(f as any).category}」类目工厂中位数，右侧数字为该厂与中位数的差值；刻度按类目内有该维度评分数据的工厂计算，样本不足的维度不显示
             </p>
           )}
-          <details className="mt-4 text-xs text-stone-500">
+          <details className="mt-4 text-xs text-black/45">
             <summary className="cursor-pointer select-none font-medium text-[var(--sb-brand)] hover:underline">
               每个维度看什么？
             </summary>
             <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed">
               {SCORING_FORMULA.dimensions.map((d) => (
                 <li key={d.key}>
-                  <span className="font-medium text-stone-700">{d.label}</span>（{Math.round(d.weight * 100)}%）：{d.desc}
+                  <span className="font-medium text-black/70">{d.label}</span>（{Math.round(d.weight * 100)}%）：{d.desc}
                 </li>
               ))}
             </ul>

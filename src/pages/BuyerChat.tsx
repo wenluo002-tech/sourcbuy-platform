@@ -240,11 +240,14 @@ export default function BuyerChat() {
   const [input, setInput] = useState("");
   const chat = trpc.ai.chat.useMutation();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [params, setParams] = useSearchParams();
   const prefilled = useRef(false);
 
+  // 只滚动聊天容器本身；scrollIntoView 会带着整页滚动，导致吸顶导航压住内容
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [turns, chat.isPending]);
 
   function send(text: string) {
@@ -292,9 +295,9 @@ export default function BuyerChat() {
   }, []);
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-10rem)] max-w-3xl flex-col">
+    <div className="mx-auto flex h-[calc(100dvh-12rem)] max-w-3xl flex-col">
       {/* 对话区 */}
-      <div className="sb-scroll flex-1 space-y-6 overflow-y-auto rounded-[20px] border border-[var(--sb-line)] bg-white p-4 md:p-7">
+      <div ref={scrollRef} className="sb-scroll flex-1 space-y-6 overflow-y-auto rounded-[20px] border border-[var(--sb-line)] bg-white p-4 md:p-7">
         {turns.map((t, i) =>
           t.role === "user" ? (
             <div key={i} className="flex justify-end">

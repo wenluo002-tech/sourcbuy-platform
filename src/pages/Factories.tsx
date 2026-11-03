@@ -28,13 +28,22 @@ export default function Factories() {
   });
 
   const totalPages = q.data ? Math.ceil(q.data.total / 20) : 1;
+  // 与试算器同一套表单控件语言：1px 细边、6px 圆角、焦点品牌蓝
   const sel =
-    "rounded-md border border-stone-300 bg-white px-2.5 py-2 text-sm focus-visible:outline-2 focus-visible:outline-[var(--sb-brand)]";
+    "rounded-md border border-black/10 bg-white px-3 py-2.5 text-sm transition-colors duration-150 placeholder:text-black/30 hover:border-black/20 focus-visible:outline-2 focus-visible:outline-[var(--sb-brand)]";
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-2xl font-bold">严选工厂库</h1>
+    <div className="space-y-6">
+      {/* 页头 */}
+      <div>
+        <span className="sb-eyebrow">Vetted Factory Index</span>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">严选工厂库</h1>
+        <p className="mt-2 max-w-xl text-sm leading-relaxed text-black/55">
+          每一家都验过资质、产能、履约记录。评分公式公开，工厂花钱买不到名次。
+        </p>
+      </div>
 
+      {/* 筛选 */}
       <div className="flex flex-wrap gap-2">
         <input
           value={keyword}
@@ -70,20 +79,20 @@ export default function Factories() {
         />
       </div>
 
-      <p className="text-sm text-stone-500">
-        {q.isLoading ? "加载中…" : `共 ${q.data?.total ?? 0} 家，按严选评分排序`}
+      <p className="text-xs text-black/45">
+        {q.isLoading ? "加载中…" : `共 ${q.data?.total ?? 0} 家，按严选评分从高到低`}
       </p>
 
       {!q.isLoading && q.data?.total === 0 && (
-        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-8 text-center">
-          <p className="font-medium text-stone-700">没有直接匹配的工厂</p>
-          <p className="mt-2 text-sm text-stone-500">
+        <div className="rounded-xl border border-dashed border-black/15 bg-white p-8 text-center">
+          <p className="font-medium">没有直接匹配的工厂</p>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-black/55">
             试试更宽泛的词（如"服饰"代替"卫衣"），或清空筛选条件。
-            找不到的品可以提交给 AI 买手人工补源——我们的工厂库每周都在扩充。
+            找不到的品可以交给 AI 买手人工补源——工厂库每周都在扩充。
           </p>
           <button
             onClick={() => { setKeyword(""); setTier(""); setCert(""); setLocation(""); setPage(1); }}
-            className="mt-4 rounded-lg border border-stone-300 px-4 py-2 text-sm hover:bg-stone-100"
+            className="sb-pill mt-5 border border-black/15 px-5 py-2 text-sm hover:bg-black/[0.03]"
           >
             清空筛选，查看全部
           </button>
@@ -95,31 +104,31 @@ export default function Factories() {
           <Link
             key={f.id}
             to={`/factories/${f.id}`}
-            className="group flex flex-col rounded-xl border border-stone-200 bg-white p-4 transition-shadow hover:shadow-md"
+            className="group flex flex-col rounded-xl border border-black/10 bg-white p-5 transition-all duration-150 hover:border-black/20 hover:shadow-[0_8px_24px_-12px_rgba(31,74,148,0.18)]"
           >
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="line-clamp-1 font-semibold group-hover:text-[var(--sb-brand)]">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="line-clamp-1 font-semibold tracking-tight group-hover:text-[var(--sb-brand)]">
                 {f.name}
               </h3>
-              <span className="shrink-0 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              <span className="sb-num shrink-0 text-lg font-bold leading-none text-[var(--sb-brand)]">
                 {f.score}
               </span>
             </div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
               {f.tier && (
-                <span className="rounded bg-stone-100 px-1.5 py-0.5 text-stone-600">{f.tier}</span>
+                <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-black/60">{f.tier}</span>
               )}
               {f.isSuper && (
                 <span className="rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-[var(--sb-brand)]">超级工厂</span>
               )}
               {f.medal && f.medal !== "无牌工厂" && (
-                <span className="rounded bg-stone-100 px-1.5 py-0.5 text-stone-600">
+                <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-black/60">
                   {f.medal}
                   {f.medalLevel ?? ""}
                 </span>
               )}
             </div>
-            <p className="mt-2 text-xs text-stone-500">
+            <p className="sb-num mt-2.5 text-xs text-black/45">
               {[f.location, f.years ? `${Number(f.years)} 年` : null, f.repurchaseRate ? `复购 ${Number(f.repurchaseRate)}%` : null]
                 .filter(Boolean)
                 .join(" · ")}
@@ -133,17 +142,17 @@ export default function Factories() {
           <button
             disabled={page <= 1}
             onClick={() => setPage(page - 1)}
-            className="rounded-md border border-stone-300 px-4 py-2 text-sm disabled:opacity-40 hover:bg-stone-100"
+            className="sb-pill border border-black/15 px-5 py-2 text-sm hover:bg-black/[0.03] disabled:opacity-40"
           >
             上一页
           </button>
-          <span className="text-sm text-stone-500">
+          <span className="sb-num text-sm text-black/45">
             {page} / {totalPages}
           </span>
           <button
             disabled={page >= totalPages}
             onClick={() => setPage(page + 1)}
-            className="rounded-md border border-stone-300 px-4 py-2 text-sm disabled:opacity-40 hover:bg-stone-100"
+            className="sb-pill border border-black/15 px-5 py-2 text-sm hover:bg-black/[0.03] disabled:opacity-40"
           >
             下一页
           </button>

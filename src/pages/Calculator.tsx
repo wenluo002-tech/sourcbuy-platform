@@ -34,6 +34,7 @@ export default function Calculator() {
   const [cargoType, setCargoType] = useState("general");
   const [residential, setResidential] = useState(false);
   const [submitted, setSubmitted] = useState<Submitted | null>(null);
+  const [formError, setFormError] = useState("");
 
   const q = trpc.pricing.landed.useQuery(submitted!, { enabled: !!submitted });
 
@@ -153,6 +154,19 @@ export default function Calculator() {
         className="rounded-xl border border-black/10 bg-white p-6 sm:p-8"
         onSubmit={(e) => {
           e.preventDefault();
+          if (needsZip && !zip.trim()) {
+            setFormError(
+              destinationCode === "AU"
+                ? "澳洲渠道按邮编分区报价，麻烦填一下收件邮编（4 位，如 2000）——差一个区，运费可能差一截。"
+                : "美国渠道按邮编分区报价，麻烦填一下收件邮编（5 位，如 90001）——差一个区，运费可能差一截。"
+            );
+            return;
+          }
+          if (needsCaRegion && !caRegion) {
+            setFormError("加拿大海运按交仓区域报价，选一个区域再算——温哥华和多伦多价差不少。");
+            return;
+          }
+          setFormError("");
           setSubmitted(buildSubmit(channel));
         }}
       >
@@ -220,14 +234,14 @@ export default function Calculator() {
                   分区报价必需{destinationCode === "AU" ? "（4 位，如 2000）" : "（5 位，如 90001）"}
                 </span>
               </span>
-              <input required value={zip} onChange={(e) => setZip(e.target.value)}
+              <input value={zip} onChange={(e) => setZip(e.target.value)}
                 placeholder={destinationCode === "AU" ? "2000" : "90001"} className={`${input} sb-num`} />
             </label>
           )}
           {needsCaRegion && (
             <label>
               <span className={label}>派送区域（加拿大海运按区域定价）</span>
-              <select required value={caRegion} onChange={(e) => setCaRegion(e.target.value)} className={input}>
+              <select value={caRegion} onChange={(e) => setCaRegion(e.target.value)} className={input}>
                 <option value="">请选择交仓/派送区域</option>
                 {caRegionOptions.map((r) => (
                   <option key={r} value={r}>{r}</option>
@@ -303,6 +317,12 @@ export default function Calculator() {
               </span>
             )}
           </label>
+        )}
+
+        {formError && (
+          <p className="mt-6 rounded-md border border-[var(--sb-warn)]/30 bg-[var(--sb-warn-bg)] px-3.5 py-2.5 text-xs leading-relaxed text-[var(--sb-warn)]">
+            {formError}
+          </p>
         )}
 
         <button
