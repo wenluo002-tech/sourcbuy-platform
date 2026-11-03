@@ -29,6 +29,7 @@ export interface RealChannelDef {
   zhuhaiWarehouse: boolean; // 珠海仓交仓内陆费 +0.5 元/KG
   customsFeeCny: number | null; // 报关费/票（美加墨 350）
   transitNote: string; // 时效参考
+  speedTag?: "快船" | "普船"; // 海运子方案标签（供方案卡片分组展示）
 }
 
 // ---------------- 邮编分区 ----------------
@@ -109,27 +110,27 @@ export const REAL_CHANNELS: RealChannelDef[] = [
   {
     id: "us_sea_matson", name: "美国海派 · 美森限时（CLX）", country: ["US"], mode: "sea", ddp: true,
     splitHalf: false, rounding: 1, minShipmentKg: 12, divisor: 6000,
-    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "快船时效最稳",
+    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "快船时效最稳", speedTag: "快船",
   },
   {
     id: "us_sea_hede", name: "美国海派 · 合德快提（HEDE）", country: ["US"], mode: "sea", ddp: true,
     splitHalf: false, rounding: 1, minShipmentKg: 12, divisor: 6000,
-    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "快船",
+    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "快船", speedTag: "快船",
   },
   {
     id: "us_sea_zim", name: "美国海派 · 以星定提（ZIM）", country: ["US"], mode: "sea", ddp: true,
     splitHalf: false, rounding: 1, minShipmentKg: 12, divisor: 6000,
-    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "快船",
+    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "快船", speedTag: "快船",
   },
   {
     id: "us_sea_cosco", name: "美国海派 · 盐田定提（COSCO）", country: ["US"], mode: "sea", ddp: true,
     splitHalf: false, rounding: 1, minShipmentKg: 12, divisor: 6000,
-    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "普船偏快",
+    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "普船偏快", speedTag: "普船",
   },
   {
     id: "us_sea_cul", name: "美国海派 · 普船统配（CUL）", country: ["US"], mode: "sea", ddp: true,
     splitHalf: false, rounding: 1, minShipmentKg: 12, divisor: 6000,
-    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "普船，价最低",
+    zhuhaiWarehouse: true, customsFeeCny: 200, transitNote: "普船，价最低", speedTag: "普船",
   },
   // —— 墨西哥空派 ——
   {

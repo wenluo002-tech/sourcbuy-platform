@@ -12,6 +12,7 @@ import {
 } from "../../contracts/freight";
 import { quoteFreight } from "./freightQuote";
 import { findRealChannel, channelsForCountry } from "../../contracts/freightRates";
+import { FX_SETTLEMENT } from "../../contracts/fx";
 
 export interface FactoryFilter {
   tier?: string;
@@ -223,7 +224,7 @@ export interface LandedPriceInput {
   caRegion?: string; // 加拿大海运派送区域
   cargoType?: string; // 货物属性（触发品类附加费/黑名单）
   residential?: boolean; // 私人住宅地址
-  exchangeRate?: number; // USD/CNY，默认 7.1
+  exchangeRate?: number; // USD/CNY 结汇汇率，默认 FX_SETTLEMENT（牌价−0.3，见 contracts/fx.ts）
 }
 
 const DOMESTIC_FEE = 12; // 国内段集货均价（USD/票）
@@ -265,7 +266,7 @@ function channelTotal(
 }
 
 export async function calcLandedPrice(input: LandedPriceInput) {
-  const rate = input.exchangeRate ?? 7.1;
+  const rate = input.exchangeRate ?? FX_SETTLEMENT;
   const purchaseCny = input.unitPriceCny * input.quantity;
   const purchaseUsd = purchaseCny / rate;
   const dest = findDestination(input.destinationCode);
@@ -273,8 +274,36 @@ export async function calcLandedPrice(input: LandedPriceInput) {
   const commission = await calcCommission(purchaseUsd, input.riskTier);
   const toUsd = (cny: number) => r2(cny / rate);
 
+  // 自动模式：用户不分渠道，同国全部真实渠道同口径对比，直接落到最便宜的一条；
+  // 全部不可报价时不静默降级，把第一条的拦截原因抛出来（如黑名单/人工单询）
+  let channelId = input.channel;
+  if (channelId === "auto" && input.destinationCode) {
+    const candidates = channelsForCountry(input.destinationCode);
+    let bestId: string | null = null;
+    let bestTotal = Infinity;
+    let firstError: string | null = null;
+    let firstManual = false;
+    for (const c of candidates) {
+      const cq = quoteFreight({
+        channelId: c.id, destinationCode: input.destinationCode,
+        zip: input.zip, caRegion: input.caRegion, cargoType,
+        residential: input.residential, quantity: input.quantity,
+        weightKg: input.weightKg, dimCm: input.dimCm,
+      });
+      if (cq.ok) {
+        if (cq.totalCny < bestTotal) { bestTotal = cq.totalCny; bestId = c.id; }
+      } else if (!firstError) {
+        firstError = cq.error ?? "不可报价";
+        firstManual = !!cq.manualOnly;
+      }
+    }
+    if (bestId) channelId = bestId;
+    else if (firstError) throw new Error(firstManual ? `人工单询：${firstError}` : firstError);
+    else channelId = "line"; // 该国无真实价卡，走通用估算
+  }
+
   // ============ 真实报价渠道（2026-10-15 价卡，CNY 计费折算 USD）============
-  const realCh = findRealChannel(input.channel);
+  const realCh = findRealChannel(channelId);
   if (realCh) {
     const q = quoteFreight({
       channelId: realCh.id,
@@ -325,9 +354,9 @@ export async function calcLandedPrice(input: LandedPriceInput) {
           residential: input.residential, quantity: input.quantity,
           weightKg: input.weightKg, dimCm: input.dimCm,
         });
-        if (!cq.ok) return { channelId: c.id, channelName: c.name, ok: false as const, reason: cq.error ?? "不可报价", manualOnly: !!cq.manualOnly, mode: c.mode, transitNote: c.transitNote };
+        if (!cq.ok) return { channelId: c.id, channelName: c.name, ok: false as const, reason: cq.error ?? "不可报价", manualOnly: !!cq.manualOnly, mode: c.mode, speedTag: c.speedTag ?? null, transitNote: c.transitNote };
         const totalUsd = r2(fixedUsd + toUsd(cq.totalCny));
-        return { channelId: c.id, channelName: c.name, ok: true as const, mode: c.mode, transitNote: c.transitNote, chargeableKg: cq.chargeableKg, freightUsd: toUsd(cq.freightCny), totalUsd };
+        return { channelId: c.id, channelName: c.name, ok: true as const, mode: c.mode, speedTag: c.speedTag ?? null, transitNote: c.transitNote, chargeableKg: cq.chargeableKg, freightUsd: toUsd(cq.freightCny), totalUsd };
       });
     const quotable = compare.filter((c) => c.ok);
     const cheapest = quotable.length ? quotable.reduce((a, b) => (a.totalUsd <= b.totalUsd ? a : b)) : null;
@@ -365,6 +394,7 @@ export async function calcLandedPrice(input: LandedPriceInput) {
         compare: quotable.map((c) => ({
           channel: c.channelId, label: c.channelName, chargeableKg: c.chargeableKg,
           freight: c.freightUsd, total: c.totalUsd, transit: c.transitNote,
+          mode: c.mode, speedTag: c.speedTag,
         })),
         unavailable: compare.filter((c) => !c.ok).map((c) => ({ label: c.channelName, reason: c.reason })),
       },
@@ -418,6 +448,8 @@ export async function calcLandedPrice(input: LandedPriceInput) {
       freight: t.freight,
       total: t.total,
       transit: CHANNEL_TRANSIT[c],
+      mode: (c === "sea" ? "sea" : "air") as "air" | "sea",
+      speedTag: null as string | null,
     };
   });
   const totalsMap = Object.fromEntries(channels.map((c) => [c.channel, c.total])) as Record<

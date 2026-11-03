@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
+import { FX_SETTLEMENT } from "@contracts/fx";
 
 interface MatchedFactory {
   id: number;
@@ -114,7 +115,7 @@ function SourcingStatus() {
   );
 }
 
-const REF_RATE = 7.1; // 与到手价引擎一致的参考汇率（USD/CNY）
+const REF_RATE = FX_SETTLEMENT; // 与到手价引擎一致的结汇汇率（牌价 − 0.3，见 contracts/fx.ts）
 
 /* 商品卡：产品优先 —— 图/标题/在售信号 + 出厂价主展示 + 阶梯档 + 工厂背书 + 到手价入口 */
 function ProductCard({
@@ -198,7 +199,7 @@ function ProductCard({
             </div>
           )}
           <p className="mt-2 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
-            按参考汇率 {REF_RATE} 折算；到手价 = 出厂价 + 运费 + 关税 + 履约佣金，点「算到手价」逐行试算
+            按结汇汇率 {REF_RATE} 折算（当日牌价 − 0.3）；到手价 = 出厂价 + 运费 + 关税 + 履约佣金，点「算到手价」逐行试算
           </p>
         </div>
       )}

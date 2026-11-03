@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
-import { DESTINATIONS, CHANNEL_LABEL } from "@contracts/freight";
+import { DESTINATIONS } from "@contracts/freight";
+import { FX_LABEL } from "@contracts/fx";
 
 const DEST_GROUPS = [...new Set(DESTINATIONS.map((d) => d.group))];
-const GENERIC_CHANNELS = ["express", "line", "sea"];
+
+type Submitted = {
+  unitPriceCny: number; quantity: number; weightKg: number;
+  dimCm?: { l: number; w: number; h: number };
+  destinationCode?: string;
+  riskTier: "A" | "B" | "C"; channel: string; // "auto" = 老采购自动挑渠道
+  zip?: string; caRegion?: string; cargoType?: string; residential?: boolean;
+};
 
 export default function Calculator() {
   const [searchParams] = useSearchParams();
@@ -19,39 +27,47 @@ export default function Calculator() {
   const [dimH, setDimH] = useState("");
   const [destinationCode, setDestinationCode] = useState("");
   const [riskTier, setRiskTier] = useState<"A" | "B" | "C">("B");
-  const [channel, setChannel] = useState<string>("line");
+  const [channel, setChannel] = useState<string>("auto");
+  const [proMode, setProMode] = useState(false);
   const [zip, setZip] = useState("");
   const [caRegion, setCaRegion] = useState("");
   const [cargoType, setCargoType] = useState("general");
   const [residential, setResidential] = useState(false);
-  const [submitted, setSubmitted] = useState<null | {
-    unitPriceCny: number; quantity: number; weightKg: number;
-    dimCm?: { l: number; w: number; h: number };
-    destinationCode?: string;
-    riskTier: "A" | "B" | "C"; channel: string;
-    zip?: string; caRegion?: string; cargoType?: string; residential?: boolean;
-  }>(null);
+  const [submitted, setSubmitted] = useState<Submitted | null>(null);
 
   const q = trpc.pricing.landed.useQuery(submitted!, { enabled: !!submitted });
 
-  // 目的地 → 真实渠道清单（2026-10-15 价卡），前端表单由它驱动
+  // 目的地 → 真实渠道清单（2026-10-15 价卡），决定邮编/交仓区域等字段是否出现
   const channelsQ = trpc.pricing.channels.useQuery(
     { destinationCode: destinationCode || undefined },
     { staleTime: 5 * 60_000 }
   );
   const realChannels = channelsQ.data?.channels ?? [];
+  const hasReal = realChannels.length > 0;
   const selCh = realChannels.find((c) => c.id === channel);
-  const needsZip = !!selCh?.needsZip;
-  const needsCaRegion = !!selCh?.needsCaRegion;
-  const caRegionOptions =
-    (selCh && channelsQ.data?.caRegions?.[selCh.id as keyof typeof channelsQ.data.caRegions]) || [];
+  // 自动模式下按目的地判断必填项；行家模式按所选渠道判断
+  const needsZip =
+    hasReal &&
+    (destinationCode === "US" || destinationCode === "AU") &&
+    (!proMode || channel === "auto" || !!selCh?.needsZip);
+  const needsCaRegion =
+    hasReal &&
+    destinationCode === "CA" &&
+    (!proMode || channel === "auto" || !!selCh?.needsCaRegion);
+  const caRegionOptions = channelsQ.data
+    ? [
+        ...new Set(
+          Object.values(channelsQ.data.caRegions).flat()
+        ),
+      ]
+    : [];
 
-  // 目的地切换：有真实价卡渠道默认选第一条，否则回到通用估算
+  // 目的地切换：回到自动模式，清空分区字段
   const prevDest = useRef(destinationCode);
   useEffect(() => {
     if (!channelsQ.data || prevDest.current === destinationCode) return;
     prevDest.current = destinationCode;
-    setChannel(channelsQ.data.channels[0]?.id ?? "line");
+    setChannel("auto");
     setZip("");
     setCaRegion("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,7 +83,7 @@ export default function Calculator() {
       quantity: Number(searchParams.get("qty")) || 500,
       weightKg: 0.3,
       riskTier: "B",
-      channel: "line",
+      channel: "auto",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -78,8 +94,44 @@ export default function Calculator() {
     return l > 0 && w > 0 && h > 0 ? { l, w, h } : undefined;
   };
 
+  const buildSubmit = (ch: string): Submitted => ({
+    unitPriceCny: Number(unitPriceCny),
+    quantity: Number(quantity),
+    weightKg: Number(weightKg),
+    dimCm: dims(),
+    destinationCode: destinationCode || undefined,
+    riskTier,
+    channel: ch,
+    zip: needsZip && zip.trim() ? zip.trim() : undefined,
+    caRegion: needsCaRegion && caRegion ? caRegion : undefined,
+    cargoType: hasReal ? cargoType : undefined,
+    residential: hasReal ? residential : undefined,
+  });
+
+  // 方案卡片「改用此方案」：记住选择并重算
+  const switchTo = (ch: string) => {
+    setChannel(ch);
+    setSubmitted(buildSubmit(ch));
+  };
+
   const input =
     "w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-[var(--sb-brand)]";
+
+  // —— 方案卡片数据 ——
+  const compare = q.data?.channelAdvice.compare ?? [];
+  const budget = compare.length
+    ? compare.reduce((a, b) => (a.total <= b.total ? a : b))
+    : null;
+  const airs = compare.filter((c) => c.mode === "air");
+  const fastest = airs.length
+    ? airs.reduce((a, b) => (a.total <= b.total ? a : b))
+    : null;
+  const seas = compare
+    .filter((c) => c.mode === "sea")
+    .sort((a, b) => a.total - b.total);
+  const currentChannelId =
+    q.data?.realChannel?.id ?? (submitted && submitted.channel !== "auto" ? submitted.channel : null);
+  const isAuto = submitted?.channel === "auto";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -91,7 +143,7 @@ export default function Calculator() {
         {fromProduct && (
           <p className="mt-2 rounded-md bg-[var(--sb-brand-soft)] px-3 py-1.5 text-xs text-[var(--sb-brand)]">
             已从商品卡带入出厂单价{searchParams.get("qty") ? "和数量" : ""}
-            ，重量与渠道按常用默认值先试算，可直接调整；未填尺寸按实重计费，抛货请补尺寸。
+            ，重量按常用默认值先试算，可直接调整；未填尺寸按实重计费，抛货请补尺寸。
           </p>
         )}
       </div>
@@ -100,19 +152,7 @@ export default function Calculator() {
         className="grid gap-4 rounded-xl border border-stone-200 bg-white p-6 sm:grid-cols-2"
         onSubmit={(e) => {
           e.preventDefault();
-          setSubmitted({
-            unitPriceCny: Number(unitPriceCny),
-            quantity: Number(quantity),
-            weightKg: Number(weightKg),
-            dimCm: dims(),
-            destinationCode: destinationCode || undefined,
-            riskTier,
-            channel,
-            zip: needsZip && zip.trim() ? zip.trim() : undefined,
-            caRegion: needsCaRegion && caRegion ? caRegion : undefined,
-            cargoType: realChannels.length ? cargoType : undefined,
-            residential: realChannels.length ? residential : undefined,
-          });
+          setSubmitted(buildSubmit(channel));
         }}
       >
         <label className="text-sm">
@@ -169,37 +209,6 @@ export default function Calculator() {
             <option value="C">C 档 · 高风险（电子/化妆品/儿童用品）</option>
           </select>
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-stone-600">
-            运输渠道
-            {realChannels.length > 0 && (
-              <span className="ml-1 text-xs text-stone-400">
-                {channelsQ.data?.priceVersion} · 按分区精确报价
-              </span>
-            )}
-          </span>
-          <select value={channel} onChange={(e) => setChannel(e.target.value)} className={input}>
-            {realChannels.length > 0 && (
-              <optgroup label="真实协议价（按邮编/区域分区）">
-                {realChannels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.ddp ? "（包税）" : ""} · {c.transitNote}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            <optgroup label={realChannels.length ? "通用估算（非协议价）" : "渠道均价估算"}>
-              <option value="express">国际快递（体积重 ÷5000）</option>
-              <option value="line">空派专线（体积重 ÷6000，欧美日规则有别）</option>
-              <option value="sea">海运（体积重 ÷6000）</option>
-            </optgroup>
-          </select>
-          {selCh && selCh.minShipmentKg > 0 && (
-            <span className="mt-1 block text-xs text-stone-400">
-              该渠道整票最低计费 {selCh.minShipmentKg} kg
-            </span>
-          )}
-        </label>
         {needsZip && (
           <label className="text-sm">
             <span className="mb-1 block text-stone-600">
@@ -223,7 +232,7 @@ export default function Calculator() {
             </select>
           </label>
         )}
-        {realChannels.length > 0 && (
+        {hasReal && (
           <>
             <label className="text-sm">
               <span className="mb-1 block text-stone-600">
@@ -244,6 +253,56 @@ export default function Calculator() {
             </label>
           </>
         )}
+
+        {/* 渠道不用买家挑：默认自动推荐；行家可展开手选 */}
+        <div className="sm:col-span-2">
+          {hasReal && !proMode && (
+            <p className="rounded-md bg-[var(--sb-brand-soft)] px-3 py-2 text-xs leading-relaxed text-stone-600">
+              渠道不用你挑——我按协议价把发{channelsQ.data && destinationCode ? "该国" : "目的地"}的每条渠道都算一遍，
+              直接给你<strong className="text-[var(--sb-brand)]">最省钱</strong>和
+              <strong className="text-[var(--sb-brand)]">最快</strong>两个方案。
+              {channelsQ.data?.priceVersion && <span className="text-stone-400">（{channelsQ.data.priceVersion}）</span>}
+              <button type="button" onClick={() => setProMode(true)}
+                className="ml-1 text-[var(--sb-brand)] underline underline-offset-2">
+                我是行家，自己选渠道
+              </button>
+            </p>
+          )}
+          {proMode && (
+            <label className="mt-1 block text-sm">
+              <span className="mb-1 block text-stone-600">
+                运输渠道（行家模式）
+                <button type="button" onClick={() => { setProMode(false); setChannel("auto"); }}
+                  className="ml-2 text-xs text-[var(--sb-brand)] underline underline-offset-2">
+                  回到自动推荐
+                </button>
+              </span>
+              <select value={channel} onChange={(e) => setChannel(e.target.value)} className={input}>
+                <option value="auto">自动推荐（按到手价替你挑）</option>
+                {realChannels.length > 0 && (
+                  <optgroup label={`真实协议价（${channelsQ.data?.priceVersion}）`}>
+                    {realChannels.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}{c.ddp ? "（包税）" : ""} · {c.transitNote}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="通用估算（非协议价）">
+                  <option value="express">国际快递（体积重 ÷5000）</option>
+                  <option value="line">空派专线（体积重 ÷6000，欧美日规则有别）</option>
+                  <option value="sea">海运（体积重 ÷6000）</option>
+                </optgroup>
+              </select>
+              {selCh && selCh.minShipmentKg > 0 && (
+                <span className="mt-1 block text-xs text-stone-400">
+                  该渠道整票最低计费 {selCh.minShipmentKg} kg
+                </span>
+              )}
+            </label>
+          )}
+        </div>
+
         <button
           type="submit"
           className="rounded-lg bg-[var(--sb-brand)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--sb-brand-hover)] sm:col-span-2"
@@ -256,16 +315,106 @@ export default function Calculator() {
       {q.error && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold">
-            {q.error.message.includes("人工单询") ? "这票货需要人工核价" : "这个渠道报不了价"}
+            {q.error.message.includes("人工单询") ? "这票货需要人工核价" : "这票货现在报不了价"}
           </p>
           <p className="mt-1 leading-relaxed">{q.error.message}</p>
           <p className="mt-2 text-xs text-amber-700">
-            可以换个渠道再试，或把需求发给采购顾问，我们按协议价人工核给你。
+            可以调整货物属性或目的地再试，或把需求发给采购顾问，我们按协议价人工核给你。
           </p>
         </div>
       )}
+
       {q.data && (
         <>
+          {/* 方案卡片：买家只看这两张 */}
+          {budget && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className={`rounded-xl border-2 bg-white p-5 ${
+                currentChannelId === budget.channel || (isAuto && currentChannelId === budget.channel)
+                  ? "border-[var(--sb-brand)]"
+                  : "border-stone-200"
+              }`}>
+                <p className="text-[11px] font-medium tracking-[0.18em] text-stone-500">
+                  性价比之选 · 老采购推荐
+                </p>
+                <p className="mt-2 font-semibold">{budget.label}</p>
+                <p className="mt-1 text-xs text-stone-500">
+                  {budget.mode === "sea" ? "海运" : "空运"}{budget.speedTag ? ` · ${budget.speedTag}` : ""} · {budget.transit}
+                </p>
+                <p className="mt-3 text-2xl font-bold text-[var(--sb-brand)]">
+                  ${budget.total.toFixed(2)}
+                  <span className="ml-1 text-xs font-normal text-stone-400">到手价</span>
+                </p>
+                <p className="mt-1 text-xs text-stone-500">
+                  国际运费 ${budget.freight.toFixed(2)} · 计费重 {budget.chargeableKg} kg
+                </p>
+                {/* 海运子方案：普船/快船互换 */}
+                {budget.mode === "sea" && seas.length > 1 && (
+                  <div className="mt-3 space-y-1 border-t border-stone-100 pt-2">
+                    {seas.filter((s) => s.channel !== budget.channel).map((s) => (
+                      <button key={s.channel} type="button" onClick={() => switchTo(s.channel)}
+                        className="block w-full rounded px-2 py-1 text-left text-xs text-stone-600 hover:bg-stone-50">
+                        {s.speedTag ?? "海运"} · {s.label}：${s.total.toFixed(2)}
+                        <span className="text-stone-400">
+                          （{s.total > budget.total ? `贵 $${(s.total - budget.total).toFixed(0)}` : `省 $${(budget.total - s.total).toFixed(0)}`}）
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-3">
+                  {currentChannelId === budget.channel ? (
+                    <span className="text-xs font-medium text-[var(--sb-brand)]">
+                      ✓ 当前方案{isAuto ? "（自动挑的）" : ""}
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => switchTo(budget.channel)}
+                      className="rounded-md bg-[var(--sb-brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--sb-brand-hover)]">
+                      改用此方案
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {fastest && fastest.channel !== budget.channel ? (
+                <div className={`rounded-xl border-2 bg-white p-5 ${
+                  currentChannelId === fastest.channel ? "border-[var(--sb-brand)]" : "border-stone-200"
+                }`}>
+                  <p className="text-[11px] font-medium tracking-[0.18em] text-stone-500">
+                    时效最快 · 赶交期选它
+                  </p>
+                  <p className="mt-2 font-semibold">{fastest.label}</p>
+                  <p className="mt-1 text-xs text-stone-500">空运 · {fastest.transit}</p>
+                  <p className="mt-3 text-2xl font-bold">
+                    ${fastest.total.toFixed(2)}
+                    <span className="ml-1 text-xs font-normal text-stone-400">到手价</span>
+                  </p>
+                  <p className="mt-1 text-xs text-stone-500">
+                    比省钱方案贵 ${(fastest.total - budget.total).toFixed(0)} ·
+                    国际运费 ${fastest.freight.toFixed(2)} · 计费重 {fastest.chargeableKg} kg
+                  </p>
+                  <div className="mt-3">
+                    {currentChannelId === fastest.channel ? (
+                      <span className="text-xs font-medium text-[var(--sb-brand)]">✓ 当前方案</span>
+                    ) : (
+                      <button type="button" onClick={() => switchTo(fastest.channel)}
+                        className="rounded-md border border-[var(--sb-brand)] px-3 py-1.5 text-xs font-semibold text-[var(--sb-brand)] hover:bg-[var(--sb-brand-soft)]">
+                        改用此方案
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : budget.mode === "air" ? (
+                <div className="rounded-xl border border-stone-200 bg-stone-50 p-5">
+                  <p className="text-[11px] font-medium tracking-[0.18em] text-stone-500">老采购点评</p>
+                  <p className="mt-2 text-sm leading-relaxed text-stone-700">
+                    这票货量级小，空运又省又快，就是它了。等量起来（百公斤级以上），海运能把到手价再压一截，到时候来找我重算。
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          )}
+
           <div className="rounded-xl border border-stone-200 bg-white p-6">
             <h2 className="mb-1 font-semibold">到手价明细</h2>
             {q.data.realChannel && (
@@ -316,7 +465,7 @@ export default function Calculator() {
             )}
             <p className="mt-3 text-xs leading-relaxed text-stone-400">
               费率表版本 {q.data.commissionMeta.ruleVersion} · 佣金基数为出厂价合计（不含运费）·
-              参考汇率 {q.data.exchangeRate} ·
+              {FX_LABEL} ·
               {q.data.chargeableBasis === "real_channel"
                 ? ` 国际运费按协议价卡精确报价（${q.data.volumetricNote}），附加费以实际出货核验为准`
                 : q.data.chargeableBasis === "actual_unsized"
@@ -327,63 +476,61 @@ export default function Calculator() {
             </p>
           </div>
 
-          {/* 老采购渠道建议 */}
-          <div className="rounded-xl border border-dashed border-[var(--sb-line,#d6c9b8)] bg-[var(--sb-paper,#f7f3ec)] p-5">
-            <p className="text-[11px] font-medium tracking-[0.18em] text-stone-500">
-              老采购建议 · CHANNEL ADVICE
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-stone-700">
-              {q.data.channelAdvice.isCurrentRecommended ? (
-                <>
-                  这票货我建议走<strong className="text-[var(--sb-brand)]">{q.data.channelAdvice.recommendedLabel}</strong>，你选的就是它——{q.data.channelAdvice.reason}。
-                </>
-              ) : (
-                <>
-                  这票货我更建议走<strong className="text-[var(--sb-brand)]">{q.data.channelAdvice.recommendedLabel}</strong>——{q.data.channelAdvice.reason}。你当前选的是{q.data.realChannel?.name ?? CHANNEL_LABEL[submitted!.channel as keyof typeof CHANNEL_LABEL] ?? submitted!.channel}，到手价对比看下表，换不换你定。
-                </>
-              )}
-            </p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[520px] text-xs">
-                <thead>
-                  <tr className="text-left text-stone-500">
-                    <th className="pb-1.5 font-medium">渠道</th>
-                    <th className="pb-1.5 font-medium">计费重</th>
-                    <th className="pb-1.5 font-medium">国际运费</th>
-                    <th className="pb-1.5 font-medium">到手价</th>
-                    <th className="pb-1.5 font-medium">参考时效</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {q.data.channelAdvice.compare.map((c) => (
-                    <tr
-                      key={c.channel}
-                      className={`border-t border-stone-200/70 ${
-                        c.channel === q.data!.channelAdvice.recommended
-                          ? "font-medium text-[var(--sb-brand)]"
-                          : "text-stone-600"
-                      }`}
-                    >
-                      <td className="py-1.5">
-                        {c.label}
-                        {c.channel === q.data!.channelAdvice.recommended && " ✓"}
-                      </td>
-                      <td className="py-1.5">{c.chargeableKg} kg</td>
-                      <td className="py-1.5">${c.freight.toFixed(2)}</td>
-                      <td className="py-1.5">${c.total.toFixed(2)}</td>
-                      <td className="py-1.5">{c.transit}</td>
+          {/* 全渠道对比（备查，不用选） */}
+          {compare.length > 1 && (
+            <details className="rounded-xl border border-dashed border-[var(--sb-line,#d6c9b8)] bg-[var(--sb-paper,#f7f3ec)] p-5">
+              <summary className="cursor-pointer text-[11px] font-medium tracking-[0.18em] text-stone-500">
+                全部渠道对比 · 备查（{compare.length} 条已报价
+                {q.data.channelAdvice.unavailable?.length
+                  ? `，${q.data.channelAdvice.unavailable.length} 条不可用`
+                  : ""}
+                ）
+              </summary>
+              <p className="mt-2 text-sm leading-relaxed text-stone-700">
+                {q.data.channelAdvice.reason && <>{q.data.channelAdvice.reason}。</>}
+              </p>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[520px] text-xs">
+                  <thead>
+                    <tr className="text-left text-stone-500">
+                      <th className="pb-1.5 font-medium">渠道</th>
+                      <th className="pb-1.5 font-medium">计费重</th>
+                      <th className="pb-1.5 font-medium">国际运费</th>
+                      <th className="pb-1.5 font-medium">到手价</th>
+                      <th className="pb-1.5 font-medium">参考时效</th>
                     </tr>
-                  ))}
-                  {q.data.channelAdvice.unavailable?.map((u) => (
-                    <tr key={u.label} className="border-t border-stone-200/70 text-stone-400">
-                      <td className="py-1.5">{u.label}</td>
-                      <td className="py-1.5" colSpan={4}>未入选：{u.reason}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                  </thead>
+                  <tbody>
+                    {compare.map((c) => (
+                      <tr
+                        key={c.channel}
+                        className={`border-t border-stone-200/70 ${
+                          c.channel === q.data!.channelAdvice.recommended
+                            ? "font-medium text-[var(--sb-brand)]"
+                            : "text-stone-600"
+                        }`}
+                      >
+                        <td className="py-1.5">
+                          {c.label}
+                          {c.channel === q.data!.channelAdvice.recommended && " ✓"}
+                        </td>
+                        <td className="py-1.5">{c.chargeableKg} kg</td>
+                        <td className="py-1.5">${c.freight.toFixed(2)}</td>
+                        <td className="py-1.5">${c.total.toFixed(2)}</td>
+                        <td className="py-1.5">{c.transit}</td>
+                      </tr>
+                    ))}
+                    {q.data.channelAdvice.unavailable?.map((u) => (
+                      <tr key={u.label} className="border-t border-stone-200/70 text-stone-400">
+                        <td className="py-1.5">{u.label}</td>
+                        <td className="py-1.5" colSpan={4}>未入选：{u.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
         </>
       )}
     </div>
