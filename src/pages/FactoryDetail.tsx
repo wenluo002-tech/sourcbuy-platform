@@ -1,6 +1,16 @@
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
+
+const IMAGE_GROUPS = [
+  ["product", "产品实拍"],
+  ["workshop", "生产车间"],
+  ["equipment", "生产设备"],
+  ["warehouse", "仓储"],
+  ["gate", "厂区"],
+  ["catalog", "产品册"],
+] as const;
 
 const SCORE_LABELS: Array<[string, string]> = [
   ["qualityCert", "资质认证"],
@@ -19,6 +29,38 @@ export default function FactoryDetail() {
   if (q.isLoading) return <p className="text-black/45">加载中…</p>;
   if (!q.data) return <p className="text-black/45">工厂不存在。</p>;
   const f = q.data;
+
+  return <FactoryDetailView f={f} />;
+}
+
+function FactoryDetailView({ f }: { f: any }) {
+  // 灯箱：所有分组图片拍平成一条序列，点缩略图放大，支持左右切换
+  const [viewer, setViewer] = useState<number | null>(null);
+  const flatImages = useMemo(() => {
+    const out: Array<{ src: string; group: string }> = [];
+    for (const [k, label] of IMAGE_GROUPS) {
+      const list = ((f.images as Record<string, string[]>)?.[k] ?? [])
+        .filter((u: string) => /^https?:\/\//i.test(u))
+        .slice(0, 6);
+      for (const src of list) out.push({ src, group: label });
+    }
+    return out;
+  }, [f.images]);
+
+  useEffect(() => {
+    if (viewer === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setViewer(null);
+      if (e.key === "ArrowLeft") setViewer((v) => (v === null ? v : (v - 1 + flatImages.length) % flatImages.length));
+      if (e.key === "ArrowRight") setViewer((v) => (v === null ? v : (v + 1) % flatImages.length));
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [viewer !== null, flatImages.length]);
 
   const facts: Array<[string, string | null]> = [
     ["所在地区", [f.province, f.city, f.district].filter(Boolean).join(" ") || f.location],
@@ -96,42 +138,41 @@ export default function FactoryDetail() {
           <div className="rounded-xl border border-black/10 bg-white p-6">
             <h2 className="mb-4 font-semibold">工厂实拍</h2>
             <div className="space-y-4">
-              {(
-                [
-                  ["product", "产品实拍"],
-                  ["workshop", "生产车间"],
-                  ["equipment", "生产设备"],
-                  ["warehouse", "仓储"],
-                  ["gate", "厂区"],
-                  ["catalog", "产品册"],
-                ] as const
-              ).map(([k, label]) => {
-                const list = ((f.images as Record<string, string[]>)?.[k] ?? [])
-                  .filter((u) => /^https?:\/\//i.test(u))
-                  .slice(0, 6);
+              {IMAGE_GROUPS.map(([k, label]) => {
+                const list = flatImages
+                  .map((img, idx) => ({ ...img, idx }))
+                  .filter((img) => img.group === label);
                 if (!list.length) return null;
                 return (
                   <div key={k}>
                     <p className="mb-1.5 text-xs font-medium text-black/45">{label}</p>
                     <div className="flex flex-wrap gap-2">
-                      {list.map((src, i) => (
-                        <img
-                          key={i}
-                          src={src}
-                          alt={label}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                          className="h-24 w-24 rounded-lg border border-black/5 object-cover md:h-28 md:w-28"
-                        />
+                      {list.map((img) => (
+                        <button
+                          key={img.idx}
+                          type="button"
+                          onClick={() => setViewer(img.idx)}
+                          className="group/img relative cursor-zoom-in overflow-hidden rounded-lg border border-black/5 focus-visible:outline-2 focus-visible:outline-[var(--sb-brand)]"
+                          aria-label={`放大查看${label}`}
+                        >
+                          <img
+                            src={img.src}
+                            alt={label}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.currentTarget.closest("button") as HTMLButtonElement | null)?.style.setProperty("display", "none");
+                            }}
+                            className="h-24 w-24 object-cover transition-transform duration-150 group-hover:scale-105 md:h-28 md:w-28"
+                          />
+                        </button>
                       ))}
                     </div>
                   </div>
                 );
               })}
             </div>
+            <p className="mt-3 text-[11px] text-black/35">点击图片可放大查看，左右方向键切换，Esc 关闭。</p>
           </div>
         )}
 
@@ -216,6 +257,57 @@ export default function FactoryDetail() {
               算法已对 {SCORING_FORMULA.verifiedOn} 家有完整子分的工厂回归验证，拟合误差 ≤{SCORING_FORMULA.maxError} 分。
             </p>
           </details>
+        </div>
+      )}
+
+      {/* 图片灯箱 */}
+      {viewer !== null && flatImages[viewer] && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setViewer(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="图片查看器"
+        >
+          <button
+            type="button"
+            onClick={() => setViewer(null)}
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xl text-white transition-colors hover:bg-white/20"
+            aria-label="关闭"
+          >
+            ×
+          </button>
+          {flatImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setViewer((viewer - 1 + flatImages.length) % flatImages.length); }}
+                className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20"
+                aria-label="上一张"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setViewer((viewer + 1) % flatImages.length); }}
+                className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20"
+                aria-label="下一张"
+              >
+                ›
+              </button>
+            </>
+          )}
+          <figure className="max-h-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={flatImages[viewer].src}
+              alt={flatImages[viewer].group}
+              referrerPolicy="no-referrer"
+              className="max-h-[82vh] w-auto max-w-full rounded-lg object-contain shadow-2xl"
+            />
+            <figcaption className="mt-3 text-center text-xs tracking-wide text-white/70">
+              {flatImages[viewer].group} · {viewer + 1} / {flatImages.length}
+            </figcaption>
+          </figure>
         </div>
       )}
     </div>
