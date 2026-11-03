@@ -37,10 +37,10 @@ export default function Home() {
     stats.data?.byTier.find((x) => x.tier === t)?.c ?? 0;
 
   return (
-    <div ref={pageRef} className="space-y-20">
+    <div ref={pageRef} className="space-y-14 md:space-y-20">
       {/* ===== Hero：生成式网络画布 + 遮罩行标题 ===== */}
       <section
-        className="relative overflow-hidden rounded-[24px] px-6 py-14 md:px-16 md:py-24"
+        className="relative overflow-hidden rounded-[24px] px-5 py-11 sm:px-6 sm:py-14 md:px-16 md:py-24"
         style={{ background: "linear-gradient(135deg, var(--sb-mist) 0%, var(--sb-mist-light) 55%, #eaf2f6 100%)" }}
       >
         {/* 环境层：漂移的供应网络 */}
@@ -57,21 +57,21 @@ export default function Home() {
             AI Sourcing Agent · 只代表买方
           </span>
 
-          <h1 className="mt-5 max-w-3xl text-[30px] font-bold leading-[1.12] tracking-tight sm:text-[44px] md:text-[60px]">
-            <span className="sb-line-mask"><span>说出采购需求，</span></span>
-            <span className="sb-line-mask"><span style={{ ["--sb-delay" as string]: "100ms" }}>好货与底价一次给齐。</span></span>
+          <h1 className="mt-5 max-w-3xl text-[clamp(23px,6.8vw,30px)] font-bold leading-[1.12] tracking-tight sm:text-[44px] md:text-[60px]">
+            <span className="sb-line-mask"><span className="whitespace-nowrap">说出采购需求，</span></span>
+            <span className="sb-line-mask"><span className="whitespace-nowrap" style={{ ["--sb-delay" as string]: "100ms" }}>好货与底价一次给齐。</span></span>
           </h1>
 
           {/* 信任信号：三个短词，阶梯入场 */}
-          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-[var(--sb-ink-60)]">
+          <div className="mt-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 text-[12px] text-[var(--sb-ink-60)] sm:gap-x-5 sm:text-[13px]">
             {["数千家严选工厂", "评分公开可核验", "全程只站你这边"].map((t, i) => (
               <span
                 key={t}
                 className="sb-line-mask flex items-center gap-2"
                 style={{ ["--sb-delay" as string]: `${220 + i * 100}ms` }}
               >
-                <span className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-[2px] bg-[var(--sb-brand)]" />
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="h-1 w-1 rounded-[2px] bg-[var(--sb-brand)] sm:h-1.5 sm:w-1.5" />
                   {t}
                 </span>
               </span>
@@ -79,7 +79,7 @@ export default function Home() {
           </div>
 
           <form
-            className="mt-10 max-w-2xl"
+            className="mt-8 max-w-2xl sm:mt-10"
             onSubmit={(e) => {
               e.preventDefault();
               goChat(kw);
@@ -130,7 +130,7 @@ export default function Home() {
             className="sb-line-mask mt-9"
             style={{ ["--sb-delay" as string]: "680ms" }}
           >
-            <span className="text-xs text-[var(--sb-ink-60)]">
+            <span className="text-[11px] text-[var(--sb-ink-60)] sm:text-xs">
               只代表买方 · 不收卖方返点 · 佣金费率公开 · 货损先行赔付
             </span>
           </p>
@@ -139,15 +139,15 @@ export default function Home() {
 
       {/* ===== 实时数字：滚动揭示 + 数字滚动 ===== */}
       <section>
-        <div className="sb-reveal flex items-baseline justify-between">
+        <div className="sb-reveal flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
             Live from our database
           </h2>
-          <span className="text-xs text-[var(--sb-ink-40)]">实时统计自工厂数据库</span>
+          <span className="whitespace-nowrap text-xs text-[var(--sb-ink-40)]">实时统计自工厂数据库</span>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-y-10 border-t border-[var(--sb-line)] pt-7 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mt-4 grid grid-cols-2 gap-y-7 border-t border-[var(--sb-line)] pt-6 sm:grid-cols-3 sm:gap-y-10 sm:pt-7 lg:grid-cols-6">
           <div className="sb-reveal">
-            <div className="text-[34px] font-bold leading-none tracking-tight">
+            <div className="text-[30px] font-bold leading-none tracking-tight sm:text-[34px]">
               {stats.data ? <CountUp value={stats.data.total} /> : "…"}
             </div>
             <div className="mt-2 text-xs font-medium text-[var(--sb-ink)]">严选源头工厂</div>
@@ -157,7 +157,7 @@ export default function Home() {
           </div>
           {TIER_ORDER.map((t, i) => (
             <div key={t} className="sb-reveal" style={{ ["--sb-delay" as string]: `${(i + 1) * 90}ms` }}>
-              <div className="text-[34px] font-bold leading-none tracking-tight">
+              <div className="text-[30px] font-bold leading-none tracking-tight sm:text-[34px]">
                 {stats.data ? <CountUp value={tierCount(t)} /> : "…"}
               </div>
               <div className="mt-2 text-xs font-medium text-[var(--sb-ink)]">{t}工厂</div>
@@ -182,13 +182,15 @@ export default function Home() {
           ].map(([title, desc], i) => (
             <div
               key={title}
-              className="sb-reveal group grid gap-2 border-b border-[var(--sb-line)] py-7 transition-colors duration-300 hover:bg-white/50 md:grid-cols-[120px_200px_1fr] md:gap-6"
+              className="sb-reveal group grid gap-1.5 border-b border-[var(--sb-line)] py-5 transition-colors duration-300 hover:bg-white/50 md:grid-cols-[120px_200px_1fr] md:gap-6 md:py-7"
               style={{ ["--sb-delay" as string]: `${i * 90}ms` }}
             >
-              <span className="sb-num text-xs font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)] transition-colors duration-300 group-hover:text-[var(--sb-brand)]">
-                Step {i + 1}
-              </span>
-              <h3 className="font-semibold">{title}</h3>
+              <div className="flex items-baseline gap-3 md:contents">
+                <span className="sb-num text-xs font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)] transition-colors duration-300 group-hover:text-[var(--sb-brand)]">
+                  Step {i + 1}
+                </span>
+                <h3 className="font-semibold">{title}</h3>
+              </div>
               <p className="text-sm leading-relaxed text-[var(--sb-ink-60)]">{desc}</p>
             </div>
           ))}
@@ -208,13 +210,15 @@ export default function Home() {
           ].map(([title, desc], i) => (
             <div
               key={title}
-              className="sb-reveal grid gap-2 border-b border-[var(--sb-line)] py-7 transition-colors duration-300 hover:bg-white/50 md:grid-cols-[120px_200px_1fr] md:gap-6"
+              className="sb-reveal grid gap-1.5 border-b border-[var(--sb-line)] py-5 transition-colors duration-300 hover:bg-white/50 md:grid-cols-[120px_200px_1fr] md:gap-6 md:py-7"
               style={{ ["--sb-delay" as string]: `${i * 90}ms` }}
             >
-              <span className="sb-num text-xs font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)]">
-                0{i + 1}
-              </span>
-              <h3 className="font-semibold">{title}</h3>
+              <div className="flex items-baseline gap-3 md:contents">
+                <span className="sb-num text-xs font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)]">
+                  0{i + 1}
+                </span>
+                <h3 className="font-semibold">{title}</h3>
+              </div>
               <p className="text-sm leading-relaxed text-[var(--sb-ink-60)]">{desc}</p>
             </div>
           ))}
@@ -243,7 +247,7 @@ export default function Home() {
               style={{ ["--sb-delay" as string]: `${i * 70}ms` }}
             >
               <div className="flex items-start justify-between gap-2">
-                <h3 className="line-clamp-1 text-sm font-semibold group-hover:text-[var(--sb-brand)]">
+                <h3 className="line-clamp-1 text-sm font-semibold text-[var(--sb-ink)] [@media(hover:hover)]:group-hover:text-[var(--sb-brand)]">
                   {f.name}
                 </h3>
                 <span className="sb-num shrink-0 rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
