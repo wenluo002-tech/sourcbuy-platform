@@ -59,20 +59,55 @@ export interface ChatMsg {
   content: string;
 }
 
+// 话术生成超时/失败时的规则兜底——只用系统已拿到的真实数据，一句都不编
+function buildFallbackReply(
+  intent: { product: string | null; quantity: number | null; destination: string | null },
+  factories: { name: string; tier: string | null; score: number | null }[],
+  searchProducts: { price: number; promotionPrice: number | null; sales: number }[],
+  relaxed: boolean,
+): string {
+  const parts: string[] = [];
+  const what = intent.product ? `「${intent.product}」` : "这个品";
+  if (factories.length > 0) {
+    parts.push(
+      `${what}我筛出 ${factories.length} 家严选厂，卡片在下面——评分、年限、证据都摊开着，你自己核对。${relaxed ? "这回我把评分门槛放宽了些，别嫌厂多。" : ""}`,
+    );
+  } else {
+    parts.push(`${what}，严选库里暂时没验过专做这个的厂，我不拿不相干的厂糊弄你。`);
+  }
+  if (searchProducts.length > 0) {
+    const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
+    const band = prices.length ? `主流出厂价带在 ¥${Math.min(...prices)} 到 ¥${Math.max(...prices)}` : "";
+    parts.push(`在售货源给你列在下面了，${band ? band + "，" : ""}看中哪款点进去，规格、阶梯价、到手价都能算。`);
+  }
+  if (!intent.quantity) parts.push("你打算拿多少量？量不同，我谈的价和选的厂都不一样。");
+  else if (!intent.destination) parts.push("发往哪个国家？目的地定了，到手价我给你算到个位数。");
+  parts.push("（刚才话术生成有点慢，我先把真数据给你，细节咱接着聊。）");
+  return parts.join("\n\n");
+}
+
 export async function sourcingChat(message: string, history: ChatMsg[]) {
-  const { defaultModelId } = await listModels();
+  // 模型清单与意图抽取并行——省 2-4s 冷启动
+  const [modelsRes, intentRes] = await Promise.allSettled([
+    listModels(),
+    generateObject({
+      model: kimiGw(process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking"),
+      system: INTENT_SYSTEM,
+      messages: [
+        ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
+        { role: "user" as const, content: message },
+      ],
+      schema: intentSchema,
+      abortSignal: AbortSignal.timeout(20_000), // 意图抽取 20s 封顶
+    }),
+  ]);
+  const defaultModelId = modelsRes.status === "fulfilled" ? modelsRes.value.defaultModelId : process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking";
+  if (intentRes.status === "rejected") throw intentRes.reason;
+  const intent = intentRes.value.object;
   const messages = [
     ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
     { role: "user" as const, content: message },
   ];
-
-  // 阶段一：抽意图
-  const { object: intent } = await generateObject({
-    model: kimiGw(defaultModelId),
-    system: INTENT_SYSTEM,
-    messages,
-    schema: intentSchema,
-  });
 
   // 阶段一·五：用户贴了 1688 链接/货号 → 实时拉取真实商品 + 背后工厂
   const offerId = extractOfferId(message);
@@ -94,6 +129,7 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
       model: kimiGw(defaultModelId),
       system: REPLY_SYSTEM,
       prompt: `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
+      abortSignal: AbortSignal.timeout(20_000),
     });
     return { reply: text, understood: false, intent, factories: [], product: null };
   }
@@ -107,26 +143,32 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
   }
   let factories: Awaited<ReturnType<typeof matchFactories>> = [];
   let relaxed = false;
-  if (keyword) {
-    factories = await matchFactories({ keyword, limit: 6 });
-    if (factories.length < 3) {
-      const more = await matchFactories({ keyword, minScore: 0, limit: 6 });
-      if (more.length > factories.length) {
-        factories = more;
-        relaxed = true;
-      }
-    }
-  }
-
-  // 阶段二·五：真实商品搜索（产品优先——买家先看到货；万邦 item_search，30 分钟缓存防刷）
-  // 搜索源失败不阻塞对话：降级为仅工厂推荐
   let searchProducts: { offerId: string; title: string; image: string | null; price: number; promotionPrice: number | null; sales: number }[] = [];
-  if (keyword && !productInfo) {
-    try {
-      const s = await searchOffers(keyword, 1);
-      searchProducts = s.items.slice(0, 8);
-    } catch {
-      searchProducts = [];
+  if (keyword) {
+    // 工厂匹配与商品搜索并行——两个独立数据源，串行白等 3-5s
+    const [fRes, sRes] = await Promise.allSettled([
+      (async () => {
+        let fs = await matchFactories({ keyword, limit: 6 });
+        let wasRelaxed = false;
+        if (fs.length < 3) {
+          const more = await matchFactories({ keyword, minScore: 0, limit: 6 });
+          if (more.length > fs.length) {
+            fs = more;
+            wasRelaxed = true;
+          }
+        }
+        return { fs, wasRelaxed };
+      })(),
+      productInfo
+        ? Promise.resolve(null)
+        : searchOffers(keyword, 1).catch(() => null), // 搜索源失败不阻塞对话
+    ]);
+    if (fRes.status === "fulfilled") {
+      factories = fRes.value.fs;
+      relaxed = fRes.value.wasRelaxed;
+    }
+    if (sRes.status === "fulfilled" && sRes.value) {
+      searchProducts = sRes.value.items.slice(0, 8);
     }
   }
 
@@ -173,14 +215,22 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
       evidence: f.evidence,
     })),
   });
-  const { text: reply } = await generateText({
-    model: kimiGw(defaultModelId),
-    system: REPLY_SYSTEM,
-    messages: [
-      ...messages,
-      { role: "user" as const, content: `[系统事实] ${facts}\n请基于以上事实回复用户。` },
-    ],
-  });
+  // 阶段三：基于真实结果写话术（30s 封顶；超时/失败 → 规则模板兜底，绝不让买家白等报错）
+  let reply: string;
+  try {
+    const r = await generateText({
+      model: kimiGw(defaultModelId),
+      system: REPLY_SYSTEM,
+      messages: [
+        ...messages,
+        { role: "user" as const, content: `[系统事实] ${facts}\n请基于以上事实回复用户。` },
+      ],
+      abortSignal: AbortSignal.timeout(30_000),
+    });
+    reply = r.text;
+  } catch {
+    reply = buildFallbackReply(intent, factories, searchProducts, relaxed);
+  }
 
   return {
     reply,

@@ -344,8 +344,7 @@ export async function calcLandedPrice(input: LandedPriceInput) {
     ];
     const total = r2(lines.reduce((s, l) => s + l.amount, 0));
 
-    // 同目的地所有真实渠道对比（同口径：货值+佣金都相同，只差物流段）
-    const fixedUsd = r2(purchaseUsd + DOMESTIC_FEE + commission.fee);
+    // 同目的地所有真实渠道对比（与明细行同一口径：各项先舍入再求和，保证卡片数与逐行之和分毫不差）
     const compare = channelsForCountry(input.destinationCode ?? "")
       .map((c) => {
         const cq = quoteFreight({
@@ -355,7 +354,10 @@ export async function calcLandedPrice(input: LandedPriceInput) {
           weightKg: input.weightKg, dimCm: input.dimCm,
         });
         if (!cq.ok) return { channelId: c.id, channelName: c.name, ok: false as const, reason: cq.error ?? "不可报价", manualOnly: !!cq.manualOnly, mode: c.mode, speedTag: c.speedTag ?? null, transitNote: c.transitNote };
-        const totalUsd = r2(fixedUsd + toUsd(cq.totalCny));
+        const totalUsd = r2(
+          r2(purchaseUsd) + r2(DOMESTIC_FEE) + commission.fee + toUsd(cq.freightCny) +
+          cq.surcharges.reduce((s, x) => s + toUsd(x.amountCny), 0) + (cq.ddp ? 0 : 21),
+        );
         return { channelId: c.id, channelName: c.name, ok: true as const, mode: c.mode, speedTag: c.speedTag ?? null, transitNote: c.transitNote, chargeableKg: cq.chargeableKg, freightUsd: toUsd(cq.freightCny), totalUsd };
       });
     const quotable = compare.filter((c) => c.ok);

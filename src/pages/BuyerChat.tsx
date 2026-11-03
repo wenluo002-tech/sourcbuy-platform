@@ -362,6 +362,11 @@ export default function BuyerChat() {
     const history = turns.map((t) => ({ role: t.role, content: t.content }));
     setTurns((ts) => [...ts, { role: "user", content: msg }]);
     setInput("");
+    doMutate(msg, history, false);
+  }
+
+  // 失败静默重试一次（网络/模型抖动大多是瞬时的）；再失败才诚实告诉买家
+  function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean) {
     chat.mutate(
       { message: msg, history },
       {
@@ -377,15 +382,20 @@ export default function BuyerChat() {
               quantity: (res as any).intent?.quantity ?? null,
             },
           ]),
-        onError: () =>
+        onError: () => {
+          if (!isRetry) {
+            setTimeout(() => doMutate(msg, history, true), 2000);
+            return;
+          }
           setTurns((ts) => [
             ...ts,
             {
               role: "assistant",
               content:
-                "刚才网络抖了一下，没收到回复。你再说一次？如果反复失败，也可以直接去工厂库搜。",
+                "这次查询卡住了——源头货源接口响应太慢，我不拿半截数据糊弄你。再发一次试试；连着失败就先去「严选工厂库」自己逛，或把需求留给我，我缓过来接着查。",
             },
-          ]),
+          ]);
+        },
       }
     );
   }
