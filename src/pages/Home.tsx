@@ -36,38 +36,47 @@ export default function Home() {
   return (
     <div className="space-y-16">
       {/* ===== Hero：对话即首屏 ===== */}
-      <section className="sb-rise rounded-[20px] bg-[var(--sb-mist)] px-6 py-12 md:px-14 md:py-16">
+      <section className="sb-rise rounded-[24px] px-6 py-14 md:px-16 md:py-20"
+        style={{ background: "linear-gradient(135deg, var(--sb-mist) 0%, var(--sb-mist-light) 55%, #eaf2f6 100%)" }}>
         <span className="sb-eyebrow">AI Sourcing Agent · 只代表买方</span>
-        <h1 className="mt-3 max-w-2xl text-3xl font-bold leading-[1.15] tracking-tight md:text-[44px]">
-          说出你的采购需求，
+        <h1 className="mt-4 max-w-3xl text-[30px] font-bold leading-[1.15] tracking-tight sm:text-[38px] md:text-[52px]">
+          说出采购需求，
           <br />
-          源头好货与底价，一次给齐。
+          好货与底价一次给齐。
         </h1>
-        <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-[var(--sb-ink-60)] md:text-base">
-          背后是数千家严选源头工厂和一套公开的评分体系。描述产品、数量和目的地，AI
-          采购顾问即刻为你锁定 3–6
-          家匹配工厂——推荐理由逐条可核验，从出厂价到到手价逐行列清，全程只站你这边。
-        </p>
+
+        {/* 信任信号：三个短词代替长段落 */}
+        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-[var(--sb-ink-60)]">
+          {["数千家严选工厂", "评分公开可核验", "全程只站你这边"].map((t) => (
+            <span key={t} className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-[2px] bg-[var(--sb-brand)]" />
+              {t}
+            </span>
+          ))}
+        </div>
 
         <form
-          className="mt-8 max-w-2xl"
+          className="mt-9 max-w-2xl"
           onSubmit={(e) => {
             e.preventDefault();
             goChat(kw);
           }}
         >
-          <div className="flex items-center gap-2 rounded-2xl border border-[var(--sb-line)] bg-white p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05)]">
+          <div className="flex items-center gap-2 rounded-full border border-[var(--sb-line)] bg-white p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05),0_12px_32px_-16px_rgba(31,74,148,0.25)]">
             <input
               value={kw}
               onChange={(e) => setKw(e.target.value)}
-              placeholder="例如：LED 灯带 500 卷，10 米/卷，暖白，欧规插头，发德国…"
-              className="h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
+              placeholder="例如：LED 灯带 500 卷，暖白，欧规插头，发德国…"
+              className="h-12 min-w-0 flex-1 bg-transparent px-4 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
             />
             <button
               type="submit"
-              className="h-11 shrink-0 rounded-xl bg-[var(--sb-brand)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)]"
+              className="sb-pill flex h-12 shrink-0 items-center gap-2 bg-[var(--sb-brand)] px-6 text-sm font-semibold text-white hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)]"
             >
               开始采购
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 8h11M9 3.5 14 8l-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </button>
           </div>
         </form>
@@ -77,7 +86,7 @@ export default function Home() {
             <button
               key={s}
               onClick={() => goChat(s)}
-              className="rounded-full border border-[var(--sb-line)] bg-white/60 px-3.5 py-1.5 text-xs text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+              className="rounded-full border border-[var(--sb-line)] bg-white/70 px-3.5 py-1.5 text-xs text-[var(--sb-ink-60)] transition-colors duration-150 hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
             >
               {s} →
             </button>
