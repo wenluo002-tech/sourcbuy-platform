@@ -92,7 +92,7 @@ function FactoryDetailView({ f }: { f: any }) {
               {f.medal && f.medal !== "无牌工厂" && (
                 <span className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{f.medal}{f.medalLevel ?? ""}</span>
               )}
-              {[...new Set((f.tags ?? []).filter((t: string) => t !== f.tier && !(f.isSuper && t === "超级工厂")))].map((t) => (
+              {[...new Set<string>((f.tags ?? []).filter((t: string) => t !== f.tier && !(f.isSuper && t === "超级工厂")))].map((t) => (
                 <span key={t} className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{t}</span>
               ))}
             </div>

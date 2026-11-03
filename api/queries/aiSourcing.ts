@@ -5,7 +5,8 @@ import { listModels } from "../lib/ai-client";
 import { matchFactories } from "./factories";
 import { extractOfferId, offerWithFactory } from "./products";
 import { searchOffers } from "../sourcing/offerService";
-import { expandQuery } from "../../contracts/lexicon";
+import { expandQuery, LEXICON } from "../../contracts/lexicon";
+import { log } from "../lib/logger";
 
 const kimiGw = createOpenAICompatible({
   name: "kimi-gw",
@@ -59,6 +60,46 @@ export interface ChatMsg {
   content: string;
 }
 
+// greeting 话术 LLM 失败时的静态开场白（与前端首条消息一致）
+const GREETING_FALLBACK =
+  "你好，我是你的 AI 采购买手，干这行十几年了。你要什么货、多少量、发往哪里，告诉我就行——我帮你找源头好货和好价，背后的工厂我都验过底。每一单为什么推荐、到手价多少，摆证据说清楚；需求不靠谱我也会直说。";
+
+// 常见目的地词表（国名/热门城市），供 LLM 挂掉时的本地意图兜底提取
+const DEST_WORDS = [
+  "美国", "加拿大", "英国", "德国", "法国", "意大利", "西班牙", "荷兰", "比利时", "波兰", "捷克", "奥地利", "瑞典", "挪威", "丹麦", "芬兰", "爱尔兰", "葡萄牙", "希腊", "瑞士",
+  "澳大利亚", "新西兰", "日本", "韩国", "新加坡", "马来西亚", "泰国", "越南", "菲律宾", "印尼", "印度", "阿联酋", "沙特", "迪拜", "土耳其", "以色列",
+  "墨西哥", "巴西", "智利", "阿根廷", "哥伦比亚", "秘鲁", "南非", "埃及", "尼日利亚", "肯尼亚", "俄罗斯", "乌克兰",
+  "洛杉矶", "纽约", "伦敦", "巴黎", "柏林", "汉堡", "马德里", "米兰", "阿姆斯特丹", "悉尼", "墨尔本", "多伦多", "温哥华", "东京", "大阪", "首尔",
+];
+
+// LLM 全挂时的本地意图兜底：词库最长产品词 + 数量正则（排除金额）+ 目的地词表，保证无 LLM 时筛厂/搜货链路照跑
+function localIntentFallback(message: string): z.infer<typeof intentSchema> {
+  // 纯问候/寒暄本地判定：不查库，交给 greeting 静态开场白（否则"你好"会被当品类去搜货）
+  if (/^(你好|您好|hi|hello|hey|嗨|喂|在吗|在不在|早上好|下午好|晚上好|good\s*(morning|afternoon|evening))\s*[!！~～。.。]*$/i.test(message.trim())) {
+    return { product: null, quantity: null, destination: null, budgetNote: null, followUp: null, isGreeting: true };
+  }
+  // 具体产品词优先（跨类目取最长命中），其次类目名，最后短消息原文
+  let product: string | null = null;
+  let catHit: string | null = null;
+  for (const [cat, def] of Object.entries(LEXICON)) {
+    for (const p of def.products) {
+      if (p.length >= 2 && message.includes(p) && (product == null || p.length > product.length)) product = p;
+    }
+    if (!catHit && message.includes(cat)) catHit = cat;
+  }
+  product ??= catHit ?? (message.trim().length <= 20 ? message.trim() : null);
+  const text = message.replace(/[,，]/g, "");
+  let quantity: number | null = null;
+  for (const m of text.matchAll(/(\d{2,7})\s*(?:条|个|件|台|卷|双|只|箱|套|pcs?)?/gi)) {
+    const tail = text.slice((m.index ?? 0) + m[0].length);
+    if (/^\s*(?:元|块|¥|\$|美元|人民币)/.test(tail)) continue; // 金额不当数量
+    quantity = Number(m[1]);
+    break;
+  }
+  const destination = DEST_WORDS.find((w) => message.includes(w)) ?? null;
+  return { product, quantity, destination, budgetNote: null, followUp: null, isGreeting: false };
+}
+
 // 话术生成超时/失败时的规则兜底——只用系统已拿到的真实数据，一句都不编
 function buildFallbackReply(
   intent: { product: string | null; quantity: number | null; destination: string | null },
@@ -86,7 +127,7 @@ function buildFallbackReply(
   return parts.join("\n\n");
 }
 
-export async function sourcingChat(message: string, history: ChatMsg[]) {
+async function sourcingChatInner(message: string, history: ChatMsg[]) {
   // 模型清单与意图抽取并行——省 2-4s 冷启动
   const [modelsRes, intentRes] = await Promise.allSettled([
     listModels(),
@@ -98,12 +139,15 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
         { role: "user" as const, content: message },
       ],
       schema: intentSchema,
-      abortSignal: AbortSignal.timeout(20_000), // 意图抽取 20s 封顶
+      abortSignal: AbortSignal.timeout(12_000), // 意图抽取 12s 封顶（预览网关超时紧，给后端全链留余量）
     }),
   ]);
   const defaultModelId = modelsRes.status === "fulfilled" ? modelsRes.value.defaultModelId : process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking";
-  if (intentRes.status === "rejected") throw intentRes.reason;
-  const intent = intentRes.value.object;
+  // 意图抽取失败绝不抛 500：降级到本地词库兜底，筛厂/搜货链路照跑
+  if (intentRes.status === "rejected") {
+    log.warn("意图抽取失败，走本地词库兜底", { error: intentRes.reason instanceof Error ? intentRes.reason.message : String(intentRes.reason) });
+  }
+  const intent = intentRes.status === "fulfilled" ? intentRes.value.object : localIntentFallback(message);
   const messages = [
     ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
     { role: "user" as const, content: message },
@@ -123,15 +167,20 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
     }
   }
 
-  // 纯闲聊（且没带 1688 链接）：直接回，不查库
+  // 纯闲聊（且没带链接）：直接回，不查库；LLM 失败时给静态开场白，不报错
   if (intent.isGreeting && !intent.product && !productInfo) {
-    const { text } = await generateText({
-      model: kimiGw(defaultModelId),
-      system: REPLY_SYSTEM,
-      prompt: `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
-      abortSignal: AbortSignal.timeout(20_000),
-    });
-    return { reply: text, understood: false, intent, factories: [], product: null };
+    try {
+      const { text } = await generateText({
+        model: kimiGw(defaultModelId),
+        system: REPLY_SYSTEM,
+        prompt: `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
+        abortSignal: AbortSignal.timeout(12_000),
+      });
+      return { reply: text, understood: false, intent, factories: [], product: null };
+    } catch (e) {
+      log.warn("greeting 话术生成失败，用静态开场白", { error: e instanceof Error ? e.message : String(e) });
+      return { reply: GREETING_FALLBACK, understood: false, intent, factories: [], product: null };
+    }
   }
 
   // 阶段二：真实匹配（先按 85 分门槛，不足 3 家放宽门槛补齐）
@@ -166,6 +215,8 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
     if (fRes.status === "fulfilled") {
       factories = fRes.value.fs;
       relaxed = fRes.value.wasRelaxed;
+    } else {
+      log.warn("工厂匹配失败，本轮不带厂卡", { error: fRes.reason instanceof Error ? fRes.reason.message : String(fRes.reason) });
     }
     if (sRes.status === "fulfilled" && sRes.value) {
       searchProducts = sRes.value.items.slice(0, 8);
@@ -215,7 +266,7 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
       evidence: f.evidence,
     })),
   });
-  // 阶段三：基于真实结果写话术（30s 封顶；超时/失败 → 规则模板兜底，绝不让买家白等报错）
+  // 阶段三：基于真实结果写话术（18s 封顶；超时/失败 → 规则模板兜底，绝不让买家白等报错）
   let reply: string;
   try {
     const r = await generateText({
@@ -225,10 +276,11 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
         ...messages,
         { role: "user" as const, content: `[系统事实] ${facts}\n请基于以上事实回复用户。` },
       ],
-      abortSignal: AbortSignal.timeout(30_000),
+      abortSignal: AbortSignal.timeout(18_000),
     });
     reply = r.text;
-  } catch {
+  } catch (e) {
+    log.warn("reply 话术生成失败，走规则模板兜底", { error: e instanceof Error ? e.message : String(e) });
     reply = buildFallbackReply(intent, factories, searchProducts, relaxed);
   }
 
@@ -242,4 +294,22 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
       ? { offer: productInfo.offer, factory: productInfo.factory }
       : null,
   };
+}
+
+// 最外层保险：任何漏网异常都不让买家看到报错——返回诚实的降级话术（HTTP 200），并留日志可查
+export async function sourcingChat(message: string, history: ChatMsg[]) {
+  try {
+    return await sourcingChatInner(message, history);
+  } catch (e) {
+    log.error("ai.chat 未捕获异常，走全兜底", { error: e instanceof Error ? e.message : String(e) });
+    return {
+      reply:
+        "我这边系统卡了一下——不是你的问题，是我这头的接口闹脾气。你的话我记住了，稍等片刻再发一次就行；急着看货就先去「严选工厂库」自己逛，看中的发我，我接着帮你查底细。",
+      understood: false,
+      intent: { product: null, quantity: null },
+      factories: [],
+      products: [],
+      product: null,
+    };
+  }
 }
