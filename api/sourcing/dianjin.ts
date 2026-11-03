@@ -113,13 +113,18 @@ export async function djGetOffer(offerId: string): Promise<OfferDetail | null> {
 
   const skuRaw: any = twp?.skuMapOriginal ?? {};
   const entries: any[] = Array.isArray(skuRaw) ? skuRaw : Object.entries(skuRaw).map(([k, v]) => ({ ...((v as any) ?? {}), specAttrs: k }));
+  const posNum = (v: unknown): number | null => {
+    const n = num(v);
+    return n != null && n > 0 ? n : null;
+  };
   const skus: OfferSku[] = entries.map((s: any) => ({
     skuId: s?.skuId ? String(s.skuId) : null,
     specText: String(s?.specAttrs ?? s?.specText ?? "").replace(/&gt;/g, ">"),
-    price: Number(s?.discountPrice ?? s?.price ?? 0),
-    listPrice: num(s?.price),
+    price: posNum(s?.discountPrice) ?? posNum(s?.price),
+    listPrice: posNum(s?.price),
     stock: num(s?.canBookCount),
     weightKg: null, // 点金详情3 无每 SKU 重量字段
+    image: null, // 点金无规格图
   }));
 
   return {
@@ -137,6 +142,7 @@ export async function djGetOffer(offerId: string): Promise<OfferDetail | null> {
     memberId,
     dispatchHours: null,
     dispatchNote: null,
+    specImages: {},
     source: "dianjin",
     fetchedAt: new Date().toISOString(),
   };

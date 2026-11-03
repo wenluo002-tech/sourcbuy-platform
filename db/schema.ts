@@ -165,8 +165,9 @@ export const offers = mysqlTable(
     moq: int("moq"), // offerBeginAmount 起订量
     sales: int("sales"),
     skus: json("skus").$type<
-      { skuId: string | null; specText: string; price: number; listPrice: number | null; stock: number | null; weightKg: number | null }[]
+      { skuId: string | null; specText: string; price: number | null; listPrice: number | null; stock: number | null; weightKg: number | null; image: string | null }[]
     >(),
+    specImages: json("spec_images").$type<Record<string, string>>(), // 第一维规格值→图片 URL
     sellerName: varchar("seller_name", { length: 255 }),
     memberId: varchar("member_id", { length: 64 }), // 店铺子域名 = factories.member_id join key
     dispatchHours: int("dispatch_hours"), // 承诺发货小时数

@@ -2,7 +2,7 @@
 // getOfferDetail 链路：MySQL 缓存(24h) → 万邦 item_get_app(0.05) → 点金 1688xq3(0.28,纯灾备) → 旧聚合 API
 // searchOffers 链路：搜索缓存(30min 防刷) → 万邦 item_search(0.022)
 // 每一笔真实调用都落 sourcingApiLogs（万邦下架/无效也计费，必须可审计）
-import { eq, and, desc, gt } from "drizzle-orm";
+import { eq, and, desc, gt, sql } from "drizzle-orm";
 import { getDb } from "../queries/connection";
 import { offers, offerSearchCache, sourcingApiLogs, factories } from "@db/schema";
 import { wbGetOfferApp, wbSearchItems, WANBANG_COST } from "./wanbang";
@@ -62,6 +62,7 @@ function rowToDetail(r: typeof offers.$inferSelect): OfferDetail {
     memberId: r.memberId,
     dispatchHours: r.dispatchHours,
     dispatchNote: r.dispatchNote,
+    specImages: r.specImages ?? {},
     source: "cache",
     fetchedAt: r.fetchedAt.toISOString(),
   };
@@ -85,6 +86,26 @@ async function joinFactory(memberId: string | null) {
   return rows[0] ?? null;
 }
 
+// 详情接口没有平台总销量时，从搜索缓存里捞回该商品的搜索级销量（本地查询，零成本）
+async function salesFromSearchCache(offerId: string): Promise<number | null> {
+  try {
+    const rows = await getDb()
+      .select({ items: offerSearchCache.items })
+      .from(offerSearchCache)
+      .where(sql`JSON_SEARCH(${offerSearchCache.items}, 'one', ${offerId}, NULL, '$[*].offerId') IS NOT NULL`)
+      .orderBy(desc(offerSearchCache.createdAt))
+      .limit(5);
+    let best: number | null = null;
+    for (const r of rows) {
+      const hit = (r.items ?? []).find((i) => i.offerId === offerId);
+      if (hit && hit.sales > 0) best = Math.max(best ?? 0, hit.sales);
+    }
+    return best;
+  } catch {
+    return null;
+  }
+}
+
 async function upsertOffer(d: OfferDetail) {
   const db = getDb();
   const values = {
@@ -101,6 +122,7 @@ async function upsertOffer(d: OfferDetail) {
     dispatchHours: d.dispatchHours,
     dispatchNote: d.dispatchNote?.slice(0, 250) ?? null,
     unitWeightKg: d.unitWeightKg != null ? String(d.unitWeightKg) : null,
+    specImages: d.specImages ?? {},
     source: d.source === "cache" ? "legacy" : d.source,
     status: "active" as const,
     fetchedAt: new Date(),
@@ -115,12 +137,16 @@ export async function getOfferDetail(offerId: string) {
   // 无效 ID 直接拦截——万邦对不存在的商品也照扣 0.05，绝不能白烧
   if (!/^\d{6,20}$/.test(offerId)) return { offer: null, factory: null };
   const db = getDb();
+  const finish = async (o: OfferDetail, extra?: Record<string, unknown>) => {
+    if (o.sales == null) o.sales = await salesFromSearchCache(offerId);
+    return { offer: o, factory: await joinFactory(o.memberId), ...extra };
+  };
 
   // 1. 缓存命中（24h 内）→ 零成本
   const cached = await db.select().from(offers).where(eq(offers.offerId, offerId)).limit(1);
   const row = cached[0];
   if (row && row.status !== "delisted" && Date.now() - row.fetchedAt.getTime() < OFFER_TTL_MS) {
-    return { offer: rowToDetail(row), factory: await joinFactory(row.memberId) };
+    return finish(rowToDetail(row));
   }
 
   // 2. 万邦（主力）
@@ -133,7 +159,7 @@ export async function getOfferDetail(offerId: string) {
     if (!detail && row) {
       // 万邦确认下架：标记并仍返回过期缓存（页面顶部提示），不反复烧钱复查
       await db.update(offers).set({ status: "delisted", fetchedAt: new Date() }).where(eq(offers.offerId, offerId));
-      return { offer: { ...rowToDetail(row) }, factory: await joinFactory(row.memberId), delisted: true };
+      return finish(rowToDetail(row), { delisted: true });
     }
   } catch (e: any) {
     await logApi({ provider: "wanbang", endpoint: "item_get_app", offerId, costCny: 0, billed: false, ok: false, durationMs: Date.now() - t0, error: e?.message ?? "unknown" });
@@ -170,6 +196,7 @@ export async function getOfferDetail(offerId: string) {
           memberId: o.memberId ?? null,
           dispatchHours: null,
           dispatchNote: null,
+          specImages: {},
           source: "legacy",
           fetchedAt: new Date().toISOString(),
         };
@@ -181,12 +208,12 @@ export async function getOfferDetail(offerId: string) {
 
   if (!detail) {
     // 上游全挂但有过期缓存：兜底返回，页面顶部提示数据可能过时
-    if (row) return { offer: rowToDetail(row), factory: await joinFactory(row.memberId), stale: true };
+    if (row) return finish(rowToDetail(row), { stale: true });
     return { offer: null, factory: null };
   }
 
   await upsertOffer(detail);
-  return { offer: detail, factory: await joinFactory(detail.memberId) };
+  return finish(detail);
 }
 
 export async function searchOffers(query: string, page = 1): Promise<OfferSearchResult> {

@@ -4,10 +4,11 @@
 export interface OfferSku {
   skuId: string | null;
   specText: string; // 规格串，如 "渐变紫-一体轮>18寸"
-  price: number; // 成交价（discountPrice ?? price）
+  price: number | null; // 单 SKU 成交价；该 listing 不支持 SKU 级定价时为 null（前端回落阶梯价）
   listPrice: number | null; // 划线价
   stock: number | null; // canBookCount
-  weightKg: number | null; // 该 SKU 单件重量（freightInfo.skuWeight）
+  weightKg: number | null; // 该 SKU 单件重量（多源交叉校验后）
+  image: string | null; // 该规格对应图片（skuProps 第一维规格图）
 }
 
 export interface OfferDetail {
@@ -25,6 +26,7 @@ export interface OfferDetail {
   memberId: string | null; // 店铺子域名 = 严选库 factories.memberId join key
   dispatchHours: number | null; // 承诺发货时效（小时）
   dispatchNote: string | null; // 原文，如 "承诺48小时发货·常发圆通快递"
+  specImages: Record<string, string>; // 第一维规格值（如颜色名）→ 图片 URL（skuProps）
   source: "wanbang" | "dianjin" | "legacy" | "cache";
   fetchedAt: string; // ISO 时间
 }

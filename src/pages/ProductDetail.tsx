@@ -6,17 +6,16 @@ import { DESTINATIONS } from "@contracts/freight";
 
 const REF_RATE = FX_SETTLEMENT;
 
-function fmtSales(n: number | null): string | null {
-  if (n == null || n <= 0) return null;
-  if (n >= 10000) return `已售 ${(n / 10000).toFixed(1).replace(/\.0$/, "")} 万`;
-  return `已售 ${n.toLocaleString()}`;
+function fmtSalesNum(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")}万`;
+  return n.toLocaleString();
 }
 
 const input =
   "w-full rounded-lg border border-[var(--sb-line)] bg-white px-3 py-2 text-sm focus:border-[var(--sb-brand)] focus:outline-none";
 const label = "mb-1 block text-[11px] font-medium text-[var(--sb-ink-40)]";
 
-/* 运输链路：把履约过程摆在买家面前——这是我们的服务费买到的东西 */
+/* 履约链路：佣金买到的四段服务 */
 function FulfillmentChain({ dispatchNote }: { dispatchNote: string | null }) {
   const steps = [
     { t: "工厂出货", d: dispatchNote ?? "按工厂承诺时效发货" },
@@ -28,9 +27,7 @@ function FulfillmentChain({ dispatchNote }: { dispatchNote: string | null }) {
     <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {steps.map((s, i) => (
         <li key={s.t} className="rounded-xl border border-[var(--sb-line)] bg-white p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--sb-brand)]">
-            0{i + 1}
-          </p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--sb-brand)]">0{i + 1}</p>
           <p className="mt-1.5 text-sm font-semibold">{s.t}</p>
           <p className="mt-1 text-xs leading-relaxed text-[var(--sb-ink-60)]">{s.d}</p>
         </li>
@@ -46,27 +43,24 @@ export default function ProductDetail() {
   const factory = q.data?.factory ?? null;
 
   const [imgIdx, setImgIdx] = useState(0);
+  const [skuImg, setSkuImg] = useState<string | null>(null); // 选规格时切到该规格的颜色图
   const [skuIdx, setSkuIdx] = useState(0);
   const [qty, setQty] = useState("");
   const [dest, setDest] = useState("");
   const [riskTier, setRiskTier] = useState<"A" | "B" | "C">("B");
-  const [calcKey, setCalcKey] = useState(0); // 0 = 未触发
+  const [calcKey, setCalcKey] = useState(0);
 
   const sku = offer?.skus?.[skuIdx] ?? null;
-  const unitPrice = sku?.price ?? offer?.priceTiers?.[0]?.price ?? offer?.priceMin ?? null;
-  const weightKg = sku?.weightKg ?? offer?.unitWeightKg ?? null;
+  const tiers = useMemo(() => [...(offer?.priceTiers ?? [])].sort((a, b) => a.minQty - b.minQty), [offer]);
   const qtyN = Math.max(0, parseInt(qty, 10) || 0);
+  // 计价优先级：单 SKU 价（若该 listing 支持）→ 按数量命中阶梯档 → 最低价
+  const tierPriceForQty = qtyN > 0 ? [...tiers].reverse().find((t) => qtyN >= t.minQty)?.price : undefined;
+  const unitPrice = sku?.price ?? tierPriceForQty ?? tiers[0]?.price ?? offer?.priceMin ?? null;
+  const weightKg = sku?.weightKg ?? offer?.unitWeightKg ?? null;
 
   const calcInput = useMemo(() => {
     if (!calcKey || !unitPrice || !weightKg || qtyN <= 0) return null;
-    return {
-      unitPriceCny: unitPrice,
-      quantity: qtyN,
-      weightKg,
-      riskTier,
-      channel: "auto",
-      destinationCode: dest || undefined,
-    };
+    return { unitPriceCny: unitPrice, quantity: qtyN, weightKg, riskTier, channel: "auto", destinationCode: dest || undefined };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calcKey]);
   const landed = trpc.pricing.landed.useQuery(calcInput!, { enabled: !!calcInput });
@@ -91,9 +85,7 @@ export default function ProductDetail() {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
         <p className="text-lg font-semibold">这个商品没拿到</p>
-        <p className="mt-2 text-sm text-[var(--sb-ink-60)]">
-          可能已下架，或货号有误。把链接发给我，我再帮你查一次。
-        </p>
+        <p className="mt-2 text-sm text-[var(--sb-ink-60)]">可能已下架，或货号有误。把链接发给我，我再帮你查一次。</p>
         <Link to="/buyer" className="sb-pill mt-6 inline-block px-6 py-2.5 text-sm">
           去问老采购 →
         </Link>
@@ -101,19 +93,29 @@ export default function ProductDetail() {
     );
   }
 
-  const tiers = [...(offer.priceTiers ?? [])].sort((a, b) => a.minQty - b.minQty);
-  const sales = fmtSales(offer.sales);
-  const weightNote =
-    weightKg != null
-      ? `单件申报约 ${weightKg} kg（已按体积重交叉校验）`
-      : "单件重量待核实，试算时需手动填";
+  const mainImg = skuImg ?? offer.images[imgIdx] ?? null;
+  const hasRange = tiers.length > 1 && tiers[0].price !== tiers[tiers.length - 1].price;
+  // 主价格：SKU 有价显示 SKU 价；多档阶梯显示区间（低–高）；否则显示单档价
+  const rangeLo = hasRange ? Math.min(...tiers.map((t) => t.price)) : null;
+  const rangeHi = hasRange ? Math.max(...tiers.map((t) => t.price)) : null;
+  const priceMain = sku?.price != null ? `¥${sku.price}` : hasRange ? `¥${rangeLo}–${rangeHi}` : offer.priceMin != null ? `¥${offer.priceMin}` : "—";
+  const priceUsd = (sku?.price ?? (!hasRange ? offer.priceMin : null)) != null ? ((sku?.price ?? offer.priceMin!) / REF_RATE).toFixed(2) : null;
+
+  // 「为什么挑中它」：只用真实数据，一条都编不出来就不渲染整块
+  const maxStock = offer.skus.reduce((m, s) => Math.max(m, s.stock ?? 0), 0);
+  const why: string[] = [];
+  if (offer.sales != null && offer.sales > 0) why.push(`平台已售 ${fmtSalesNum(offer.sales)} 件——有真实动销，不是冷门尾货`);
+  if (hasRange) {
+    const drop = 1 - tiers[tiers.length - 1].price / tiers[0].price;
+    if (drop >= 0.05) why.push(`量到 ${tiers[tiers.length - 1].minQty} 件，单价降到 ¥${tiers[tiers.length - 1].price}，比零售档省 ${(drop * 100).toFixed(0)}%`);
+  }
+  if (offer.skus.length > 1) why.push(`${offer.skus.length} 个规格全码在库${maxStock > 0 ? `，单规格最深可订 ${fmtSalesNum(maxStock)} 件` : ""}——铺货、补货都不用等`);
+  if (offer.dispatchHours) why.push(`工厂承诺 ${offer.dispatchHours} 小时内发货，交期写进了平台规则`);
+  if (factory) why.push(`工厂就在我们严选库里${factory.tier ? `（${factory.tier}标）` : ""}，评分 ${factory.score}——底细我们验过`);
 
   return (
     <div className="mx-auto max-w-5xl pb-16">
-      <Link
-        to="/buyer"
-        className="text-xs font-medium text-[var(--sb-ink-40)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
-      >
+      <Link to="/buyer" className="text-xs font-medium text-[var(--sb-ink-40)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline">
         ← 返回对话
       </Link>
 
@@ -121,13 +123,8 @@ export default function ProductDetail() {
         {/* 图廊 */}
         <div className="min-w-0">
           <div className="overflow-hidden rounded-2xl border border-[var(--sb-line)] bg-white">
-            {offer.images[imgIdx] ? (
-              <img
-                src={offer.images[imgIdx]}
-                alt={offer.title}
-                referrerPolicy="no-referrer"
-                className="aspect-square w-full object-cover"
-              />
+            {mainImg ? (
+              <img src={mainImg} alt={offer.title} referrerPolicy="no-referrer" className="aspect-square w-full object-cover" />
             ) : (
               <div className="aspect-square w-full bg-[var(--sb-paper)]" />
             )}
@@ -137,9 +134,12 @@ export default function ProductDetail() {
               {offer.images.map((src, i) => (
                 <button
                   key={i}
-                  onClick={() => setImgIdx(i)}
+                  onClick={() => {
+                    setImgIdx(i);
+                    setSkuImg(null); // 手动点缩略图时回到图廊图
+                  }}
                   className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-colors ${
-                    i === imgIdx ? "border-[var(--sb-brand)]" : "border-transparent"
+                    i === imgIdx && !skuImg ? "border-[var(--sb-brand)]" : "border-transparent"
                   }`}
                 >
                   <img
@@ -162,31 +162,28 @@ export default function ProductDetail() {
         <div className="min-w-0">
           <h1 className="text-lg leading-snug font-bold break-words md:text-xl">{offer.title}</h1>
           <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--sb-ink-60)]">
-            {offer.moq != null && <span>起订 ≥ {offer.moq}</span>}
-            {sales && <span>{sales}</span>}
-            {offer.dispatchNote && <span>{offer.dispatchNote}</span>}
-            <span>{weightNote}</span>
+            {offer.moq != null && <span>起订 ≥ {offer.moq} 件</span>}
+            {offer.sales != null && offer.sales > 0 && <span>已售 {fmtSalesNum(offer.sales)}</span>}
+            {offer.dispatchHours != null && <span>{offer.dispatchHours} 小时发货</span>}
           </div>
 
           {/* 价格 */}
           <div className="mt-4 rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] px-4 py-3.5">
             <div className="flex flex-wrap items-baseline gap-x-2">
-              <span className="sb-num text-3xl font-bold tracking-tight text-[var(--sb-navy)]">
-                ¥{unitPrice ?? "—"}
-              </span>
+              <span className="sb-num text-3xl font-bold tracking-tight text-[var(--sb-navy)]">{priceMain}</span>
               <span className="text-xs text-[var(--sb-ink-40)]">/ 件 · 出厂价</span>
-              {unitPrice != null && (
-                <span className="sb-num text-sm text-[var(--sb-ink-40)]">
-                  ≈ US${(unitPrice / REF_RATE).toFixed(2)}
-                </span>
-              )}
+              {priceUsd && <span className="sb-num text-sm text-[var(--sb-ink-40)]">≈ US${priceUsd}</span>}
             </div>
-            {tiers.length > 1 && (
+            {hasRange && (
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {tiers.map((t, i) => (
                   <span
                     key={i}
-                    className="rounded-md border border-[var(--sb-line)] bg-white px-2 py-1 text-[11px] tabular-nums text-[var(--sb-ink-60)]"
+                    className={`rounded-md border px-2 py-1 text-[11px] tabular-nums ${
+                      qtyN > 0 && qtyN >= t.minQty && (i === tiers.length - 1 || qtyN < tiers[i + 1].minQty)
+                        ? "border-[var(--sb-brand)] bg-[var(--sb-brand-soft)] font-medium text-[var(--sb-brand)]"
+                        : "border-[var(--sb-line)] bg-white text-[var(--sb-ink-60)]"
+                    }`}
                   >
                     ≥{t.minQty} 件 · ¥{t.price}
                   </span>
@@ -194,7 +191,7 @@ export default function ProductDetail() {
               </div>
             )}
             <p className="mt-2 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
-              按结汇汇率 {REF_RATE} 折算（当日牌价 − 0.3）；到手价另含运费、关税与履约佣金
+              结汇汇率 {REF_RATE}（牌价 − 0.3）；到手价 = 出厂价 + 运费 + 关税 + 履约佣金
             </p>
           </div>
 
@@ -202,21 +199,24 @@ export default function ProductDetail() {
           {offer.skus.length > 0 && (
             <div className="mt-4">
               <p className={label}>
-                规格（{offer.skus.length} 个{sku?.stock != null ? ` · 当前规格可售 ${sku.stock.toLocaleString()}` : ""}）
+                规格（{offer.skus.length} 个{sku?.stock != null ? ` · 当前规格可订 ${sku.stock.toLocaleString()} 件` : ""}）
               </p>
               <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto pr-1">
                 {offer.skus.map((s, i) => (
                   <button
                     key={i}
-                    onClick={() => setSkuIdx(i)}
+                    onClick={() => {
+                      setSkuIdx(i);
+                      if (s.image) setSkuImg(s.image); // 切规格联动颜色图
+                    }}
                     className={`rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors ${
                       i === skuIdx
                         ? "border-[var(--sb-brand)] bg-[var(--sb-brand-soft)] font-medium text-[var(--sb-brand)]"
                         : "border-[var(--sb-line)] bg-white text-[var(--sb-ink-60)] hover:border-[var(--sb-brand)]/50"
                     }`}
                   >
-                    {s.specText}
-                    <span className="ml-1.5 tabular-nums">¥{s.price}</span>
+                    {s.specText.replace(/>/g, " · ")}
+                    {s.price != null && <span className="ml-1.5 tabular-nums">¥{s.price}</span>}
                   </button>
                 ))}
               </div>
@@ -225,7 +225,7 @@ export default function ProductDetail() {
 
           {/* 到手价快算 */}
           <div className="mt-4 rounded-xl border border-[var(--sb-line)] bg-white p-4">
-            <p className={label}>到手价快算（用该规格真实重量）</p>
+            <p className={label}>到手价快算{weightKg != null ? `（单件约 ${weightKg} kg）` : ""}</p>
             {weightKg == null ? (
               <p className="text-xs leading-relaxed text-[var(--sb-ink-60)]">
                 这款的重量上游没给可靠数据，我不瞎填——点下方「完整试算」手动输入重量再算。
@@ -256,9 +256,9 @@ export default function ProductDetail() {
                   <label className="col-span-2 md:col-span-1">
                     <span className={label}>品类风险档</span>
                     <select value={riskTier} onChange={(e) => setRiskTier(e.target.value as any)} className={input}>
-                      <option value="A">A 档 · 低风险标品</option>
-                      <option value="B">B 档 · 中风险</option>
-                      <option value="C">C 档 · 高风险</option>
+                      <option value="A">低风险</option>
+                      <option value="B">常规</option>
+                      <option value="C">高风险</option>
                     </select>
                   </label>
                   <div className="col-span-2 flex items-end md:col-span-1">
@@ -275,9 +275,7 @@ export default function ProductDetail() {
                   <div className="mt-3 rounded-lg bg-[var(--sb-navy)] px-4 py-3 text-[#eef4f5]">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                       <div>
-                        <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">
-                          到手单价{dest ? "" : "（通用估算）"}
-                        </p>
+                        <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">到手单价{dest ? "" : "（通用估算）"}</p>
                         <p className="sb-num text-2xl font-bold">US${landed.data.perUnit}</p>
                       </div>
                       <div className="text-right">
@@ -294,9 +292,7 @@ export default function ProductDetail() {
                   </div>
                 )}
                 {landed.error && (
-                  <p className="mt-2 text-xs text-[var(--sb-ink-60)]">
-                    试算没跑通：{landed.error.message}。可以走完整试算页逐项填。
-                  </p>
+                  <p className="mt-2 text-xs text-[var(--sb-ink-60)]">试算没跑通：{landed.error.message}。可以走完整试算页逐项填。</p>
                 )}
               </>
             )}
@@ -320,6 +316,21 @@ export default function ProductDetail() {
         </div>
       </div>
 
+      {/* 为什么挑中它 */}
+      {why.length > 0 && (
+        <section className="mt-10">
+          <p className="sb-eyebrow">Why This One · 老采购的拿货理由</p>
+          <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
+            {why.map((w, i) => (
+              <li key={i} className="flex items-start gap-2.5 rounded-xl border border-[var(--sb-line)] bg-white px-4 py-3 text-sm leading-relaxed text-[var(--sb-ink-60)]">
+                <span className="mt-0.5 shrink-0 text-[var(--sb-brand)]">✓</span>
+                {w}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* 工厂背书 */}
       <section className="mt-10">
         <p className="sb-eyebrow">Behind This Listing · 背后的厂</p>
@@ -327,16 +338,11 @@ export default function ProductDetail() {
           <div className="mt-3 rounded-2xl border border-[var(--sb-line)] bg-white p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <Link
-                  to={`/factories/${factory.id}`}
-                  className="text-base font-semibold hover:text-[var(--sb-brand)]"
-                >
+                <Link to={`/factories/${factory.id}`} className="text-base font-semibold hover:text-[var(--sb-brand)]">
                   {factory.name}
                 </Link>
                 <p className="mt-1 text-xs text-[var(--sb-ink-40)]">
-                  {[factory.tier ? `${factory.tier}标严选` : null, factory.location, factory.years ? `${factory.years} 年老厂` : null]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {[factory.tier ? `${factory.tier}标严选` : null, factory.location, factory.years ? `${factory.years} 年老厂` : null].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <div className="text-right">
@@ -361,7 +367,7 @@ export default function ProductDetail() {
         )}
       </section>
 
-      {/* 运输链路 */}
+      {/* 履约链路 */}
       <section className="mt-10">
         <p className="sb-eyebrow">How It Ships · 履约链路</p>
         <h2 className="mt-2 text-lg font-bold">你的佣金买到的是这四段</h2>
@@ -370,9 +376,8 @@ export default function ProductDetail() {
         </div>
       </section>
 
-      <p className="mt-8 text-[10px] text-[var(--sb-ink-40)]">
-        商品数据核验于 {new Date(offer.fetchedAt).toLocaleString("zh-CN", { hour12: false })}
-        {offer.source === "cache" ? "（缓存，24 小时内实时核验过一次）" : "（实时核验）"} · 价格为工厂原始报价，下单前以实际议价为准
+      <p className="mt-8 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
+        报价与库存来自工厂端实时数据（每日复核）；下单前老采购还会再核一遍价，买贵买错都有兜底。
       </p>
     </div>
   );

@@ -116,9 +116,10 @@ export async function wbGetOfferApp(offerId: string): Promise<{ offer: OfferDeta
   const priceMin = num(twp?.offerMinPrice) ?? tiers[0]?.price ?? null;
   const priceMax = num(twp?.offerMaxPrice) ?? tiers[tiers.length - 1]?.price ?? null;
 
-  // SKU 重量（三源交叉校验，卖家填数不可靠，宁可 null 走显式估算也不喂假数给运费引擎）：
-  //   ① pieceWeightScaleInfo.weight——经验为公斤；并用同行 volume(cm³)/6000 的体积重兜底
-  //   ② freightInfo.skuWeight——部分 listing 单位是吨（实测 0.01=10kg），乘以 1000 复检
+  // SKU 重量（多源交叉校验——上游单位随 listing 飘忽：pieceWeightScaleInfo.weight 实测有公斤(童车10)
+  // 也有克(瑜伽裤500)，freightInfo.skuWeight 有公斤(0.5)也有吨(0.01)。孤证不信，两源相符才采用）：
+  //   pack 源候选：weight 按公斤 / 按克(÷1000) / 体积重(volume cm³÷6000)
+  //   freight 源候选：skuWeight 按公斤 / 按吨(×1000)
   const skuWeightMap: Record<string, number> = shipping?.freightInfo?.skuWeight ?? {};
   const packList: any[] = d?.productPackInfo?.fields?.pieceWeightScale?.pieceWeightScaleInfo ?? [];
   const packBySkuId = new Map<string, any>();
@@ -128,30 +129,57 @@ export async function wbGetOfferApp(offerId: string): Promise<{ offer: OfferDeta
     const spec = [p?.sku1, p?.sku2, p?.sku3].filter(Boolean).join(">");
     if (spec) packBySpec.set(spec, p);
   }
-  const plausibleKg = (w: number | null): number | null => (w != null && w >= 0.02 && w <= 500 ? w : null);
-  const packKg = (p: any): number | null => {
-    if (!p) return null;
-    const pw = plausibleKg(num(p?.weight));
-    if (pw != null) return pw;
-    const vol = num(p?.volume);
-    return vol != null && vol > 0 ? Math.round((vol / 6000) * 1000) / 1000 : null;
+  const BAND: [number, number] = [0.02, 60]; // 单件合理带（公斤）；超出即不可信
+  const inBand = (w: number | null): w is number => w != null && w >= BAND[0] && w <= BAND[1];
+  const close = (a: number, b: number) => Math.abs(a - b) / Math.max(a, b) <= 0.35;
+  const resolveWeightKg = (pack: any, skuId: string | null): number | null => {
+    const packCands: number[] = [];
+    const pw = num(pack?.weight);
+    if (pw != null) { packCands.push(pw, pw / 1000); }
+    const vol = num(pack?.volume);
+    if (vol != null && vol > 0) packCands.push(vol / 6000);
+    const frCands: number[] = [];
+    const sw = skuId ? num(skuWeightMap[skuId]) : null;
+    if (sw != null) { frCands.push(sw, sw * 1000); }
+    // ① pack 与 freight 两源在合理带内相符 → 取 pack 侧（更贴近打包实测）
+    for (const a of packCands) for (const b of frCands) {
+      if (inBand(a) && inBand(b) && close(a, b)) return Math.round(a * 1000) / 1000;
+    }
+    // ② 体积重与任一源相符（抛货场景）
+    const volW = vol != null && vol > 0 ? vol / 6000 : null;
+    if (volW != null) {
+      for (const c of [...packCands, ...frCands]) {
+        if (inBand(c) && close(c, volW)) return Math.round(c * 1000) / 1000;
+      }
+    }
+    // ③ 只剩唯一落在合理带内的候选才用；多个打架 → null（宁可显式估算）
+    const solo = [...packCands, ...frCands].filter(inBand);
+    return solo.length === 1 ? Math.round(solo[0] * 1000) / 1000 : null;
   };
+  // 规格图：skuProps 第一维（通常是颜色）每个值带 imageUrl
+  const specImages: Record<string, string> = {};
+  for (const grp of dj?.skuModel?.skuProps ?? []) {
+    for (const v of grp?.value ?? []) {
+      if (v?.name && v?.imageUrl && !specImages[String(v.name)]) specImages[String(v.name)] = String(v.imageUrl);
+    }
+  }
   const skuMap: Record<string, any> = dj?.skuModel?.skuInfoMapOriginal ?? dj?.skuModel?.skuInfoMap ?? {};
+  const posNum = (v: unknown): number | null => {
+    const n = num(v);
+    return n != null && n > 0 ? n : null;
+  };
   const skus: OfferSku[] = Object.entries(skuMap).map(([specText, s]: [string, any]) => {
     const skuId = s?.skuId ? String(s.skuId) : null;
     const pack = (skuId && packBySkuId.get(skuId)) || packBySpec.get(specText) || null;
-    let weightKg = packKg(pack);
-    if (weightKg == null && skuId && skuWeightMap[skuId] != null) {
-      const sw = num(skuWeightMap[skuId]);
-      weightKg = plausibleKg(sw) ?? (sw != null ? plausibleKg(sw * 1000) : null);
-    }
+    const cleanSpec = specText.replace(/&gt;/g, ">");
     return {
       skuId,
-      specText: specText.replace(/&gt;/g, ">"),
-      price: Number(s?.discountPrice ?? s?.price ?? 0),
-      listPrice: num(s?.price),
+      specText: cleanSpec,
+      price: posNum(s?.discountPrice) ?? posNum(s?.price), // 该 listing 无 SKU 级定价时=null，前端走阶梯价
+      listPrice: posNum(s?.price),
       stock: num(s?.canBookCount),
-      weightKg,
+      weightKg: resolveWeightKg(pack, skuId),
+      image: specImages[cleanSpec.split(">")[0]?.trim()] ?? null,
     };
   });
 
@@ -182,6 +210,7 @@ export async function wbGetOfferApp(offerId: string): Promise<{ offer: OfferDeta
     memberId,
     dispatchHours,
     dispatchNote,
+    specImages,
     source: "wanbang",
     fetchedAt: new Date().toISOString(),
   };
