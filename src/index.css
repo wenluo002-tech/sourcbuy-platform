@@ -137,6 +137,30 @@ body {
   background: rgba(11, 11, 11, 0.15);
   border-radius: 3px;
 }
+
+/* ============ 试算器视觉系统 ============ */
+:root {
+  /* 深海军蓝面板：品牌蓝的暗阶，用于「老采购推荐」方案卡 */
+  --sb-navy: #10254d;
+  --sb-navy-ink: rgba(255, 255, 255, 0.6);   /* navy 上次级文字 */
+  --sb-navy-line: rgba(255, 255, 255, 0.14); /* navy 上分隔线 */
+  --sb-sky: #a8c0ea;                          /* navy 上高亮 */
+}
+
+/* 数字双声部：所有金额/重量用表格数字，逐位对齐 */
+.sb-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* 药丸按钮：150ms 过渡 + 按压回弹 */
+.sb-pill {
+  border-radius: 999px;
+  transition: all 150ms var(--sb-ease);
+}
+.sb-pill:active { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) {
+  .sb-pill:active { transform: none; }
+}
 /* 作业状态流：分阶段揭示 */
 @keyframes sb-stage-in {
   from { opacity: 0; transform: translateY(4px); }
