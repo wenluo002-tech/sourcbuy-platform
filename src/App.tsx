@@ -4,6 +4,7 @@ import Factories from './pages/Factories'
 import FactoryDetail from './pages/FactoryDetail'
 import Calculator from './pages/Calculator'
 import BuyerChat from './pages/BuyerChat'
+import ProductDetail from './pages/ProductDetail'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/buyer" element={<BuyerChat />} />
         <Route path="/factories" element={<Factories />} />
         <Route path="/factories/:id" element={<FactoryDetail />} />
+        <Route path="/products/:offerId" element={<ProductDetail />} />
         <Route path="/calculator" element={<Calculator />} />
       </Route>
     </Routes>

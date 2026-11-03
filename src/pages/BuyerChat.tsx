@@ -157,26 +157,30 @@ function ProductStrip({
           return (
             <div
               key={p.offerId}
-              className="group overflow-hidden rounded-xl border border-[var(--sb-line)] bg-white"
+              className="group overflow-hidden rounded-xl border border-[var(--sb-line)] bg-white transition-shadow hover:shadow-[0_2px_8px_rgba(11,11,11,0.06)]"
             >
-              {p.image ? (
-                <img
-                  src={p.image}
-                  alt=""
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
-                  className="aspect-square w-full object-cover"
-                />
-              ) : (
-                <div className="aspect-square w-full bg-[var(--sb-paper)]" />
-              )}
+              <Link to={`/products/${p.offerId}`} className="block">
+                {p.image ? (
+                  <img
+                    src={p.image}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                    className="aspect-square w-full object-cover"
+                  />
+                ) : (
+                  <div className="aspect-square w-full bg-[var(--sb-paper)]" />
+                )}
+              </Link>
               <div className="p-2.5">
-                <p className="line-clamp-2 min-h-[2.6em] text-xs leading-snug font-medium">
-                  {p.title}
-                </p>
+                <Link to={`/products/${p.offerId}`} className="block">
+                  <p className="line-clamp-2 min-h-[2.6em] text-xs leading-snug font-medium [@media(hover:hover)]:group-hover:text-[var(--sb-brand)]">
+                    {p.title}
+                  </p>
+                </Link>
                 <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
                   <span className="sb-num text-base font-bold tracking-tight">
                     ¥{price}
@@ -189,12 +193,20 @@ function ProductStrip({
                   <span className="text-[10px] text-[var(--sb-ink-40)]">
                     {p.sales > 0 ? `已售 ${fmtSales(p.sales)}` : "在售"}
                   </span>
-                  <Link
-                    to={calcUrl}
-                    className="text-[10px] font-semibold text-[var(--sb-brand)] underline-offset-2 hover:underline"
-                  >
-                    算到手价 →
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/products/${p.offerId}`}
+                      className="text-[10px] font-medium text-[var(--sb-ink-60)] underline-offset-2 hover:text-[var(--sb-brand)] hover:underline"
+                    >
+                      详情
+                    </Link>
+                    <Link
+                      to={calcUrl}
+                      className="text-[10px] font-semibold text-[var(--sb-brand)] underline-offset-2 hover:underline"
+                    >
+                      算到手价 →
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
@@ -306,6 +318,12 @@ function ProductCard({
             该店铺不在严选库，下单前建议验厂
           </span>
         )}
+        <Link
+          to={`/products/${offer.offerId}`}
+          className="shrink-0 text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
+        >
+          看详情
+        </Link>
         <Link
           to={calcUrl}
           className="shrink-0 text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"

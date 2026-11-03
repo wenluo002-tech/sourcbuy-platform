@@ -78,7 +78,7 @@ export default function Calculator() {
     setSubmitted({
       unitPriceCny: Number(searchParams.get("price")),
       quantity: Number(searchParams.get("qty")) || 500,
-      weightKg: 0.3,
+      weightKg: Number(searchParams.get("weight")) || 0.3, // 详情页带真实重量；无则 0.3 仅作表单预填，结果页可见可改
       riskTier: "B",
       channel: "auto",
     });
