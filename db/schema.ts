@@ -148,3 +148,73 @@ export const sourcingSessions = mysqlTable(
   },
   (t) => [index("ix_sessions_user").on(t.userId)]
 );
+
+// ============ 货源适配层（万邦主力 + 点金灾备，2026-11-03 定案）============
+
+// 商品详情缓存：查过的商品永久沉淀，同一 num_iid 绝不重复花钱
+export const offers = mysqlTable(
+  "offers",
+  {
+    id: serial("id").primaryKey(),
+    offerId: varchar("offer_id", { length: 32 }).notNull(), // 1688 num_iid
+    title: varchar("title", { length: 512 }).notNull(),
+    images: json("images").$type<string[]>(),
+    priceMin: decimal("price_min", { precision: 10, scale: 2 }),
+    priceMax: decimal("price_max", { precision: 10, scale: 2 }),
+    priceTiers: json("price_tiers").$type<{ minQty: number; price: number }[]>(),
+    moq: int("moq"), // offerBeginAmount 起订量
+    sales: int("sales"),
+    skus: json("skus").$type<
+      { skuId: string | null; specText: string; price: number; listPrice: number | null; stock: number | null; weightKg: number | null }[]
+    >(),
+    sellerName: varchar("seller_name", { length: 255 }),
+    memberId: varchar("member_id", { length: 64 }), // 店铺子域名 = factories.member_id join key
+    dispatchHours: int("dispatch_hours"), // 承诺发货小时数
+    dispatchNote: varchar("dispatch_note", { length: 255 }),
+    unitWeightKg: decimal("unit_weight_kg", { precision: 8, scale: 3 }),
+    source: varchar("source", { length: 16 }).notNull(), // wanbang / dianjin / legacy
+    status: mysqlEnum("status", ["active", "delisted", "unknown"]).notNull().default("active"),
+    fetchedAt: timestamp("fetched_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_offers_offer").on(t.offerId),
+    index("ix_offers_member").on(t.memberId),
+  ]
+);
+
+// 搜索结果缓存：同一关键词+页码 30 分钟内不重查（防刷烧钱）
+export const offerSearchCache = mysqlTable(
+  "offer_search_cache",
+  {
+    id: serial("id").primaryKey(),
+    query: varchar("query", { length: 255 }).notNull(),
+    page: int("page").notNull().default(1),
+    total: int("total"),
+    items: json("items").$type<
+      { offerId: string; title: string; image: string | null; price: number; promotionPrice: number | null; sales: number }[]
+    >(),
+    source: varchar("source", { length: 16 }).notNull().default("wanbang"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_search_qp").on(t.query, t.page)]
+);
+
+// 货源 API 调用台账：每一次真实花钱的调用都记账（供应商/接口/成本/耗时/成败）
+export const sourcingApiLogs = mysqlTable(
+  "sourcing_api_logs",
+  {
+    id: serial("id").primaryKey(),
+    provider: varchar("provider", { length: 16 }).notNull(), // wanbang / dianjin / legacy
+    endpoint: varchar("endpoint", { length: 64 }).notNull(), // item_search / item_get_app / 1688xq3 ...
+    offerId: varchar("offer_id", { length: 32 }),
+    query: varchar("query", { length: 255 }),
+    costCny: decimal("cost_cny", { precision: 8, scale: 4 }).notNull().default("0"),
+    billed: boolean("billed").notNull().default(true), // 万邦返回2000（含下架）也计费
+    ok: boolean("ok").notNull(),
+    durationMs: int("duration_ms"),
+    error: varchar("error", { length: 255 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_apilogs_created").on(t.createdAt)]
+);

@@ -9,6 +9,7 @@ import {
 } from "./queries/factories";
 import { sourcingChat } from "./queries/aiSourcing";
 import { offerWithFactory } from "./queries/products";
+import { getOfferDetail, searchOffers } from "./sourcing/offerService";
 import { classifyAiError, AiUnavailable } from "./lib/ai-client";
 import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } from "../contracts/freightRates";
 
@@ -100,6 +101,18 @@ export const appRouter = createRouter({
         if (!offer) throw new Error("未能获取该商品，请确认货号或链接有效");
         return { offer, factory };
       }),
+    // V2：缓存→万邦→点金→legacy 四级链路（同一商品 24h 内零成本）
+    detailV2: publicQuery
+      .input(z.object({ offerId: z.string().min(6).max(20) }))
+      .query(async ({ input }) => {
+        const { offer, factory } = await getOfferDetail(input.offerId);
+        if (!offer) throw new Error("未能获取该商品，请确认货号或链接有效");
+        return { offer, factory };
+      }),
+    // 关键词搜品：搜索缓存 30 分钟防刷
+    search: publicQuery
+      .input(z.object({ q: z.string().min(1).max(80), page: z.number().int().min(1).max(20).default(1) }))
+      .query(({ input }) => searchOffers(input.q, input.page)),
   }),
 
   ai: createRouter({chat: publicQuery

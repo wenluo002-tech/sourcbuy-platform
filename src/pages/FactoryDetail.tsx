@@ -92,7 +92,7 @@ function FactoryDetailView({ f }: { f: any }) {
               {f.medal && f.medal !== "无牌工厂" && (
                 <span className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{f.medal}{f.medalLevel ?? ""}</span>
               )}
-              {(f.tags ?? []).map((t) => (
+              {(f.tags ?? []).map((t: string) => (
                 <span key={t} className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{t}</span>
               ))}
             </div>
