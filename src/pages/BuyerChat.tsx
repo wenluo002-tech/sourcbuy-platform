@@ -41,11 +41,21 @@ interface LinkedProduct {
   } | null;
 }
 
+interface SearchProduct {
+  offerId: string;
+  title: string;
+  image: string | null;
+  price: number;
+  promotionPrice: number | null;
+  sales: number;
+}
+
 interface Turn {
   role: "user" | "assistant";
   content: string;
   factories?: MatchedFactory[];
   product?: LinkedProduct | null;
+  products?: SearchProduct[];
   quantity?: string | null;
 }
 
@@ -58,8 +68,8 @@ const SUGGESTIONS = [
 /* 作业状态流：每一行对应后端真实在做的事，只陈述过程、不虚报结果 */
 const STAGES: { label: string; detail: string }[] = [
   { label: "解析采购需求", detail: "品类 · 数量 · 目的地 · 认证要求" },
-  { label: "检索严选工厂库", detail: "数千家源头工厂同步比对" },
-  { label: "交叉核验资质", detail: "评分 · 认证 · 履约记录" },
+  { label: "搜索真实在售货源", detail: "货源平台同步搜款 · 出厂价" },
+  { label: "比对严选工厂库", detail: "数千家源头工厂交叉核验" },
   { label: "撰写采购建议", detail: "推荐理由与风险提示" },
 ];
 const STAGE_DELAYS = [900, 1900, 3000];
@@ -116,6 +126,84 @@ function SourcingStatus() {
 }
 
 const REF_RATE = FX_SETTLEMENT; // 与到手价引擎一致的结汇汇率（牌价 − 0.3，见 contracts/fx.ts）
+
+function fmtSales(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")} 万`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")} 千`;
+  return String(n);
+}
+
+/* 搜索结果商品墙：搜索级数据（图/出厂价/销量），DDP 估算只在详情页有真实重量后给——防伪造精度 */
+function ProductStrip({
+  products,
+  quantity,
+}: {
+  products: SearchProduct[];
+  quantity?: string | null;
+}) {
+  const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)]">
+          真实在售货源 · 出厂价（未含运费佣金）
+        </p>
+        <p className="text-[10px] text-[var(--sb-ink-40)]">{products.length} 款</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
+        {products.map((p) => {
+          const price = p.promotionPrice ?? p.price;
+          const calcUrl = `/calculator?price=${price}${qty ? `&qty=${qty}` : ""}`;
+          return (
+            <div
+              key={p.offerId}
+              className="group overflow-hidden rounded-xl border border-[var(--sb-line)] bg-white"
+            >
+              {p.image ? (
+                <img
+                  src={p.image}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                  className="aspect-square w-full object-cover"
+                />
+              ) : (
+                <div className="aspect-square w-full bg-[var(--sb-paper)]" />
+              )}
+              <div className="p-2.5">
+                <p className="line-clamp-2 min-h-[2.6em] text-xs leading-snug font-medium">
+                  {p.title}
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
+                  <span className="sb-num text-base font-bold tracking-tight">
+                    ¥{price}
+                  </span>
+                  <span className="text-[10px] tabular-nums text-[var(--sb-ink-40)]">
+                    ≈ US${(price / REF_RATE).toFixed(2)}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between gap-1">
+                  <span className="text-[10px] text-[var(--sb-ink-40)]">
+                    {p.sales > 0 ? `已售 ${fmtSales(p.sales)}` : "在售"}
+                  </span>
+                  <Link
+                    to={calcUrl}
+                    className="text-[10px] font-semibold text-[var(--sb-brand)] underline-offset-2 hover:underline"
+                  >
+                    算到手价 →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /* 商品卡：产品优先 —— 图/标题/在售信号 + 出厂价主展示 + 阶梯档 + 工厂背书 + 到手价入口 */
 function ProductCard({
@@ -267,6 +355,7 @@ export default function BuyerChat() {
               content: res.reply,
               factories: res.factories,
               product: (res as any).product ?? null,
+              products: (res as any).products?.length ? (res as any).products : undefined,
               quantity: (res as any).intent?.quantity ?? null,
             },
           ]),
@@ -323,6 +412,11 @@ export default function BuyerChat() {
               {/* 商品卡：产品优先，到手价入口 */}
               {t.product && (
                 <ProductCard product={t.product} quantity={t.quantity} />
+              )}
+
+              {/* 搜索商品墙：真实在售货源，出厂价 */}
+              {t.products && t.products.length > 0 && (
+                <ProductStrip products={t.products} quantity={t.quantity} />
               )}
 
               {/* 工厂卡 */}

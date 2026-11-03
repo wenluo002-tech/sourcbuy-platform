@@ -4,6 +4,7 @@ import { z } from "zod";
 import { listModels } from "../lib/ai-client";
 import { matchFactories } from "./factories";
 import { extractOfferId, offerWithFactory } from "./products";
+import { searchOffers } from "../sourcing/offerService";
 import { expandQuery } from "../../contracts/lexicon";
 
 const kimiGw = createOpenAICompatible({
@@ -49,7 +50,9 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 7. 不要暴露内部术语（如 relaxedThreshold）；如果系统放宽了评分门槛，用"我把评分门槛放宽了些"这样的口语表达。
 8. 如果系统事实里有 linkedProduct：这是用户贴的商品链接的真实数据。要点评这个货——阶梯价什么水平、起订量合不合理；factoryInOurDb 非空时说明"这家厂就在我们严选库里"并给出评级，为空时提醒"这家店不在我们严选库，下单前建议验厂"。若 linkedProduct.fetchFailed=true，说明商品没拉到，让用户检查链接或货号。
 9. 不要在回复中提及任何货源平台名称（如 1688），统一说"货源平台"或"你贴的商品链接"。我们是采购代理，不给上游平台引流。
-10. 平台铁律：只代表买家，不收工厂返点；推荐按评分中立排序，评分算法公开（七维加权），工厂不可付费影响排名。`;
+10. 平台铁律：只代表买家，不收工厂返点；推荐按评分中立排序，评分算法公开（七维加权），工厂不可付费影响排名。
+11. 如果系统事实里有 searchProducts（真实搜到的在售商品，含价格/销量）：这些商品会以卡片形式展示在你的话下面。买家先看到货再谈厂——话术里可以点评整体价格带和销量表现（如"主流款出厂价在 ¥xx–xx，有款月销过万的"），不要逐个念标题。
+12. 如果 factoryCount=0 但 searchProducts 非空：诚实说"严选库里暂时还没有验过专做这个品的厂，我不拿不相干的厂糊弄你"，然后引导买家从商品卡里挑中意的款发我，我去查它背后的供应商底细（严选库比对，必要时安排验厂）。绝不允许把其他类目的工厂说成做这个品的——之前把做帐篷的厂推给要自行车的买家，这种事故不能再发生。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -115,11 +118,31 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
     }
   }
 
+  // 阶段二·五：真实商品搜索（产品优先——买家先看到货；万邦 item_search，30 分钟缓存防刷）
+  // 搜索源失败不阻塞对话：降级为仅工厂推荐
+  let searchProducts: { offerId: string; title: string; image: string | null; price: number; promotionPrice: number | null; sales: number }[] = [];
+  if (keyword && !productInfo) {
+    try {
+      const s = await searchOffers(keyword, 1);
+      searchProducts = s.items.slice(0, 8);
+    } catch {
+      searchProducts = [];
+    }
+  }
+
   // 阶段三：基于真实结果写话术
+  const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
   const facts = JSON.stringify({
     intent,
     factoryCount: factories.length,
     relaxedThreshold: relaxed,
+    searchProducts: searchProducts.length
+      ? {
+          count: searchProducts.length,
+          priceBand: prices.length ? { min: Math.min(...prices), max: Math.max(...prices) } : null,
+          top: searchProducts.slice(0, 5).map((p) => ({ price: p.promotionPrice ?? p.price, sales: p.sales })),
+        }
+      : null,
     linkedProduct: productInfo
       ? {
           offerId: productInfo.offer!.offerId,
@@ -161,9 +184,10 @@ export async function sourcingChat(message: string, history: ChatMsg[]) {
 
   return {
     reply,
-    understood: factories.length > 0 || !!productInfo,
+    understood: factories.length > 0 || !!productInfo || searchProducts.length > 0,
     intent: { product: intent.product, quantity: intent.quantity },
     factories,
+    products: searchProducts,
     product: productInfo
       ? { offer: productInfo.offer, factory: productInfo.factory }
       : null,
