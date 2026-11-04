@@ -113,6 +113,7 @@
 body {
   font-family: var(--sb-font-body);
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip; /* hero 背景 100vw 满屏出血防横向滚动 */
 }
 
 /* 双语堆叠标签签名：英文大写小字在上，中文在下 */

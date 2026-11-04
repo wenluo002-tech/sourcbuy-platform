@@ -41,21 +41,37 @@ export default function Home() {
     <div ref={pageRef} className="space-y-14 md:space-y-20">
       {/* ===== Hero：事务所版式——细线框架 + 右侧挺括图栏 + 衬线大标题 ===== */}
       <section className="sb-reveal relative border-y border-[var(--sb-rule)]">
-        {/* 背景：老站同款科技图平铺在文字之下，左实右虚渐变蒙版保可读（仅桌面端） */}
+        {/* 背景：太空科技图 100vw 满屏平铺（突破内容容器），左实右虚蒙版保文字可读 */}
         <div
-          className="absolute inset-0 hidden md:block"
+          className="absolute inset-y-0 left-1/2 hidden w-screen -translate-x-1/2 md:block"
           style={{
             backgroundImage: "url('/hero-bg.jpg')",
             backgroundSize: "cover",
             backgroundPosition: "right center",
           }}
         />
-        {/* 蒙版只保左侧文字区可读，右侧让图铺满透出 */}
+        {/* 桌面端蒙版：只保左侧文字区可读，右侧让图铺满透出 */}
         <div
-          className="absolute inset-0 hidden md:block"
+          className="absolute inset-y-0 left-1/2 hidden w-screen -translate-x-1/2 md:block"
           style={{
             background:
               "linear-gradient(90deg, rgba(243,248,252,0.97) 0%, rgba(243,248,252,0.92) 28%, rgba(243,248,252,0.62) 48%, rgba(243,248,252,0.18) 68%, rgba(243,248,252,0.02) 100%)",
+          }}
+        />
+        {/* 移动端：图同样 100vw 满屏平铺，均匀浅蒙版保整区可读 */}
+        <div
+          className="absolute inset-y-0 left-1/2 w-screen -translate-x-1/2 md:hidden"
+          style={{
+            backgroundImage: "url('/hero-bg.jpg')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        />
+        <div
+          className="absolute inset-y-0 left-1/2 w-screen -translate-x-1/2 md:hidden"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(243,248,252,0.95) 0%, rgba(243,248,252,0.88) 42%, rgba(243,248,252,0.68) 72%, rgba(243,248,252,0.45) 100%)",
           }}
         />
         {/* 文字与行动区 */}
@@ -150,29 +166,38 @@ export default function Home() {
       </section>
 
       {/* ===== 海外爆款雷达：需求信号 → 产能 → 出厂价带，每周更新 ===== */}
-      {!radar.isError && (radar.data?.items?.length ?? 0) > 0 && (
-        <section>
-          <div className="sb-reveal sb-rule flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-3">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
-              Hot signals · 海外爆款雷达
-            </h2>
-            <Link
-              to="/radar"
-              className="text-sm font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
-            >
-              查看完整榜单 →
-            </Link>
-          </div>
-          <p className="sb-reveal mt-2 text-xs text-[var(--sb-ink-40)]">
-            海外在爆什么（真实榜单出处）→ 国内工厂能不能造（出厂价带 + 严选产能）——每周更新
+      {/* 区域框架常驻：接口失败/加载中只换内容行，不让整个区块消失 */}
+      <section>
+        <div className="sb-reveal sb-rule flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
+            Hot signals · 海外爆款雷达
+          </h2>
+          <Link
+            to="/radar"
+            className="text-sm font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
+          >
+            查看完整榜单 →
+          </Link>
+        </div>
+        <p className="sb-reveal mt-2 text-xs text-[var(--sb-ink-40)]">
+          海外在爆什么（真实榜单出处）→ 国内工厂能不能造（出厂价带 + 严选产能）——每周更新
+        </p>
+        {radar.isError ? (
+          <p className="mt-6 border-t border-[var(--sb-line)] pt-5 text-sm text-[var(--sb-ink-60)]">
+            榜单数据刚才没拉回来——刷新试试；数据没回来我们不拿旧数据糊弄你。
           </p>
+        ) : (radar.data?.items?.length ?? 0) > 0 ? (
           <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {radar.data!.items.slice(0, 6).map((it, i) => (
               <RadarCard key={it.id} it={it} i={i} />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <p className="mt-6 border-t border-[var(--sb-line)] pt-5 text-sm text-[var(--sb-ink-40)]">
+            榜单加载中…
+          </p>
+        )}
+      </section>
 
       {/* ===== 实时数字：台账版式——衬线大数字 + 纵向细线分栏 ===== */}
       {!stats.isError && (
