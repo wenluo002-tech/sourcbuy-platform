@@ -90,10 +90,13 @@ export async function djGetOffer(offerId: string): Promise<OfferDetail | null> {
   if (!domain && !title) return null;
 
   // offerDomain 结构：sellerModel.winportUrl / tradeModel.tradeWithoutPromotion.skuMapOriginal
-  const winport: string = String(domain?.sellerModel?.winportUrl ?? "");
+  // v48 修正：join 严选库的钥匙是 sellerModel.memberId（b2b-xxx）或 loginId（老格式），winport 子域名（shopXXX）只作兜底
+  const sm: any = domain?.sellerModel ?? {};
+  const winport: string = String(sm?.winportUrl ?? "");
   const mm = winport.match(/https?:\/\/([a-z0-9-]+)\.1688\.com/i);
-  const memberId = mm ? mm[1] : null;
-  const sellerName = domain?.sellerModel?.loginId ? String(domain.sellerModel.loginId) : null;
+  const memberId = sm?.memberId ? String(sm.memberId) : mm ? mm[1] : null;
+  const sellerLoginId = sm?.loginId ? String(sm.loginId) : null;
+  const sellerName = sm?.companyName ? String(sm.companyName) : sellerLoginId;
   if (!title) title = String(domain?.offerModel?.title ?? domain?.title ?? "");
   if (images.length === 0) {
     const imgs = domain?.offerModel?.images ?? domain?.images;
@@ -140,6 +143,7 @@ export async function djGetOffer(offerId: string): Promise<OfferDetail | null> {
     unitWeightKg: null,
     sellerName,
     memberId,
+    sellerLoginId,
     dispatchHours: null,
     dispatchNote: null,
     specImages: {},

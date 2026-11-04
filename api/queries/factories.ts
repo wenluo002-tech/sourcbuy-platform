@@ -511,7 +511,10 @@ export interface MatchedFactory {
   tags: string[];
   reason: string;
   subScores: Record<string, number | null> | null;
-  matchBasis: "direct" | "bucket"; // direct=名称/评语/标签明确含这类产品词；bucket=仅大类桶成员，未核实做这款
+  // productLinked=该厂在严选库且有这款的在售货源（以货带厂，最硬证据）；
+  // direct=名称/评语/标签明确含这类产品词；bucket=仅大类桶成员，未核实做这款
+  matchBasis: "productLinked" | "direct" | "bucket";
+  linkedOffer: { offerId: string; title: string; price: number; sales: number } | null; // productLinked 时在售货快照
   categoryRank: { category: string; rank: number; total: number } | null;
   evidence: string[];
 }
@@ -614,6 +617,7 @@ export async function matchFactories(intent: {
       reason: buildReason(f),
       subScores: sub,
       matchBasis: direct ? ("direct" as const) : ("bucket" as const), // direct=名称/评语/标签含具体产品词；bucket=仅大类桶成员，没核实做这款
+      linkedOffer: null, // productLinked 档由 aiSourcing 以货带厂后注入
       categoryRank: direct && rk && category ? { category, rank: rk.rank, total: rk.total } : null, // 桶排名只给有直接证据的厂——皮带厂顶着"电子数码第 1"是误导
       evidence: buildEvidence(f, sub, direct ? rk : null, direct ? category : null),
     };

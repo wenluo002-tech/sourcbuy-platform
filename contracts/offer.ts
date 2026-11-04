@@ -23,7 +23,8 @@ export interface OfferDetail {
   sales: number | null;
   unitWeightKg: number | null; // 单件重量（取 SKU 重量中位数或值）
   sellerName: string | null; // 公司名
-  memberId: string | null; // 店铺子域名 = 严选库 factories.memberId join key
+  memberId: string | null; // 1688 会员 ID（b2b-xxx 新格式）= factories.member_id join key 之一
+  sellerLoginId: string | null; // 会员登录名（老格式，如 hnmeikan）= join key 之二（严选库 19% 用它）
   dispatchHours: number | null; // 承诺发货时效（小时）
   dispatchNote: string | null; // 原文，如 "承诺48小时发货·常发圆通快递"
   specImages: Record<string, string>; // 第一维规格值（如颜色名）→ 图片 URL（skuProps）

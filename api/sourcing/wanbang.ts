@@ -83,7 +83,8 @@ export async function wbSearchFactoryNick(companyName: string): Promise<string |
 // 交期=buyerProtectionModel[].agreeDeliveryHours + shippingServices.fields.deliveryLimitText
 export async function wbGetOfferApp(offerId: string): Promise<{ offer: OfferDetail | null; billed: boolean }> {
   const { data, billed } = await call("item_get_app", { num_iid: offerId });
-  const d: any = (data as any)?.item?.result?.data;
+  const result: any = (data as any)?.item?.result ?? {};
+  const d: any = result?.data;
   if (!d) return { offer: null, billed }; // 下架/不存在：也计费（billed=true）
 
   const dj: any = d?.Root?.fields?.dataJson ?? {};
@@ -96,12 +97,16 @@ export async function wbGetOfferApp(offerId: string): Promise<{ offer: OfferDeta
     .filter(Boolean)
     .slice(0, 10);
 
-  // 卖家
+  // 卖家身份（v48 修正）：join 严选库的钥匙是 sellerModel.memberId（b2b-xxx，严选库 81% 用这个格式），
+  // 老会员是 loginId（严选库 19%）——两个都存，join 时双键匹配。
+  // 之前错用 winport 店铺子域名（shopXXX），与严选库零交集，以货带厂永远 miss。
+  const sellerModel: any = result?.global?.globalData?.model?.sellerModel ?? {};
   const obi: any = dj?.offerBaseInfo ?? {};
-  const winport: string = String(obi?.sellerWinportUrl ?? "");
+  const winport: string = String(sellerModel?.winportUrl ?? obi?.sellerWinportUrl ?? "");
   const mm = winport.match(/https?:\/\/([a-z0-9-]+)\.1688\.com/i);
-  const memberId = mm ? mm[1] : null;
-  const sellerName = obi?.sellerLoginId ? String(obi.sellerLoginId) : null;
+  const memberId = sellerModel?.memberId ? String(sellerModel.memberId) : mm ? mm[1] : null;
+  const sellerLoginId = sellerModel?.loginId ? String(sellerModel.loginId) : obi?.sellerLoginId ? String(obi.sellerLoginId) : null;
+  const sellerName = sellerModel?.companyName ? String(sellerModel.companyName) : sellerLoginId;
 
   // 阶梯价（上游可能返回同 beginAmount 的重复档，按 minQty 去重留低价）
   const tierRaw = (mainPrice?.priceModel?.currentPrices ?? mainPrice?.originalPricesWithoutPromotion ?? [])
@@ -208,6 +213,7 @@ export async function wbGetOfferApp(offerId: string): Promise<{ offer: OfferDeta
     unitWeightKg,
     sellerName,
     memberId,
+    sellerLoginId,
     dispatchHours,
     dispatchNote,
     specImages,

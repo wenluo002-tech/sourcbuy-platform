@@ -17,7 +17,8 @@ interface MatchedFactory {
   productImages: string[];
   tags: string[];
   subScores: Record<string, number | null> | null;
-  matchBasis?: "direct" | "bucket"; // direct=名称/评语/标签明确含这类产品词；bucket=仅大类高分厂，未核实做这款
+  matchBasis?: "productLinked" | "direct" | "bucket"; // productLinked=严选库在册且有这款在售货（最硬）；direct=名称/评语/标签含这类产品词；bucket=仅大类高分厂，未核实做这款
+  linkedOffer?: { offerId: string; title: string; price: number; sales: number } | null;
   categoryRank: { category: string; rank: number; total: number } | null;
   evidence: string[];
 }
@@ -561,7 +562,9 @@ export default function BuyerChat() {
                           .join(" · ")}
                       </p>
                       <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
-                        {f.reason}
+                        {f.matchBasis === "productLinked" && f.linkedOffer
+                          ? `在售「${f.linkedOffer.title.slice(0, 30)}」`
+                          : f.reason}
                       </p>
                       {f.tags && f.tags.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
@@ -579,6 +582,12 @@ export default function BuyerChat() {
                         <p className="mt-2 text-xs font-semibold text-[var(--sb-brand)]">
                           {f.categoryRank.category}类目第 {f.categoryRank.rank} /{" "}
                           {f.categoryRank.total} 家
+                        </p>
+                      )}
+                      {f.matchBasis === "productLinked" && f.linkedOffer && (
+                        <p className="mt-2 rounded-md bg-[#fdf6e3] px-2 py-1.5 text-xs font-medium leading-relaxed text-[#92610a] ring-1 ring-[#e9d5a1]">
+                          ✓ 严选库在册 · 有这款在售：¥{f.linkedOffer.price} 起 · 销量{" "}
+                          {f.linkedOffer.sales.toLocaleString()}（已实时核对）
                         </p>
                       )}
                       {f.matchBasis === "bucket" && (

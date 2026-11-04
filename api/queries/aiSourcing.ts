@@ -4,7 +4,7 @@ import { z } from "zod";
 import { listModels } from "../lib/ai-client";
 import { matchFactories } from "./factories";
 import { extractOfferId, offerWithFactory } from "./products";
-import { searchOffers } from "../sourcing/offerService";
+import { searchOffers, linkTopOffersToFactories, poolSearch } from "../sourcing/offerService";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import { log } from "../lib/logger";
 import { listRadar, getRadarItem } from "./radar";
@@ -93,7 +93,11 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 13. 如果系统事实里有 radarContext：买家是从「海外爆款雷达」榜单点进来的。先用一两句确认这个品的海外信号（原样引用 radarContext 里的 signalText 和 signalDate，可说"榜单出处可验证"），再按上面的规则给货给厂。radarContext 里有 factoryPriceMin/Max 的话，这就是实时出厂价带，直接引用；有 retailPriceUsd 可对比海外零售价差。结尾提醒一句：榜单是需求信号不是保票，先小单试水再放大。
 14. 如果系统事实里有 linkContext：买家贴了海外零售平台的商品链接。先用一两句确认你从链接里读到了什么（平台 + 品名；有 priceText 就报海外售价），再给国内货源和工厂。priceText 与出厂价带的差可以点一句"毛利空间看着不错"，但必须提醒零售价不是净利润（平台佣金、广告、尾程运费都没算）。linkContext.source 为 slug 时说明"链接页面挡了抓取，我从链接路径认出来的，你核对下对不对"；fetchFailed=true 时老实说"这个链接我没打开"，让买家补一句品名或截个图，绝不要假装认识这个链接。
 15. 如果系统事实里有 imageContext：买家发来了商品图。先确认你从图里认出的品类和可见规格（原样引用 specsNote），补一句"认错了你纠正我"。imageContext.failed=true 时老实说图片没认出来，让买家补一句品名，绝不要假装看懂了。
-16. 工厂清单里每家带 matchBasis：direct=这家厂的名称/评语/标签里明确出现过这类产品词，可以说"做这类产品的"；bucket=它只是该类目大类下的高分厂，没有直接证据表明做过这款——你必须说清楚"这几家是大类下的高分厂，做没做过这款要拿图询价确认，我不打包票"，绝不暗示它们做这款。全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
+16. 工厂清单里每家带 matchBasis，三级证据口径必须严格区分：
+   - productLinked=这家厂就在我们严选库里、且有这款的在售货源（linkedOffer 给了标题/出厂价/销量，全是实时核对的真实数据）。这是最硬证据，你可以笃定地说"这家厂就在卖这款，在售链接、出厂价、销量我都核过了"，并引用 linkedOffer 里的真实价格与销量点评。
+   - direct=这家厂的名称/评语/标签里明确出现过这类产品词，可以说"做这类产品的"。
+   - bucket=它只是该类目大类下的高分厂，没有直接证据表明做过这款——你必须说清楚"这几家是大类下的高分厂，做没做过这款要拿图询价确认，我不打包票"，绝不暗示它们做这款。
+   清单全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
 17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。`;
 
 export interface ChatMsg {
@@ -144,7 +148,7 @@ function localIntentFallback(message: string): z.infer<typeof intentSchema> {
 // 话术生成超时/失败时的规则兜底——只用系统已拿到的真实数据，一句都不编
 function buildFallbackReply(
   intent: { product: string | null; quantity: number | null; destination: string | null },
-  factories: { name: string; tier: string | null; score: number | null; matchBasis?: "direct" | "bucket" }[],
+  factories: { name: string; tier: string | null; score: number | null; matchBasis?: "productLinked" | "direct" | "bucket"; linkedOffer?: { offerId: string; title: string; price: number; sales: number } | null }[],
   searchProducts: { price: number; promotionPrice: number | null; sales: number }[],
   relaxed: boolean,
   radarCtx?: { title: string; signalText: string; signalDate: string } | null,
@@ -178,8 +182,15 @@ function buildFallbackReply(
     parts.push(`「${radarCtx.title}」你在雷达榜上看到的没错——${radarCtx.signalText}（信号日期 ${radarCtx.signalDate}，榜单页有出处可验证）。`);
   }
   const what = intent.product ? `「${intent.product}」` : "这个品";
-  const directCount = factories.filter((f) => f.matchBasis !== "bucket").length;
-  if (factories.length > 0 && directCount > 0) {
+  const linkedCount = factories.filter((f) => f.matchBasis === "productLinked").length;
+  const directCount = factories.filter((f) => f.matchBasis === "direct").length;
+  if (linkedCount > 0) {
+    const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
+    const sample = l0?.linkedOffer ? `比如${l0.name}，这款它正在卖，出厂 ¥${l0.linkedOffer.price} 起、上游销量 ${l0.linkedOffer.sales.toLocaleString()}——在售数据我刚核过` : "";
+    parts.push(
+      `${what}有个硬证据：${linkedCount} 家严选厂就在卖这款，在售链接、出厂价、销量我都逐一核对过${sample ? "——" + sample : ""}。${directCount > 0 ? `另有 ${directCount} 家明确做这类产品的厂，` : ""}${factories.length - linkedCount - directCount > 0 ? `再附 ${factories.length - linkedCount - directCount} 家同大类高分厂做参考，` : ""}卡片在下面，证据都摊开着。`,
+    );
+  } else if (factories.length > 0 && directCount > 0) {
     parts.push(
       `${what}我筛出 ${directCount} 家明确做这类产品的严选厂${factories.length > directCount ? `，另外附了 ${factories.length - directCount} 家同大类高分厂做参考` : ""}，卡片在下面——评分、年限、证据都摊开着，你自己核对。${relaxed ? "这回我把评分门槛放宽了些，别嫌厂多。" : ""}`,
     );
@@ -371,6 +382,71 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     }
   }
 
+  // 以货带厂（v48）：从产品池全量匹配里找"严选厂在卖的货"（严选厂货排前），三键 join 严选库。
+  // 候选取自产品池而非本轮搜索结果——本轮可能命中 30min 缓存（未经严选排序），池子才是全量资产。
+  // 命中 = "这家严选厂就在卖这款货"——比名称撞词硬得多的证据，置顶配金标。
+  // 10s 封顶（池子与详情缓存命中时毫秒级），超时放弃不阻塞话术。
+  if (keyword) {
+    try {
+      const pooled = await poolSearch(keyword, 20).catch(() => [] as Awaited<ReturnType<typeof poolSearch>>);
+      const linked = pooled.length
+        ? await Promise.race([
+            linkTopOffersToFactories(pooled, 3),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
+          ])
+        : null;
+      if (linked?.length) {
+        const byFactory = new Map<number, (typeof linked)[number]>();
+        for (const l of linked) if (!byFactory.has(l.factory.id)) byFactory.set(l.factory.id, l);
+        // 已在推荐列表里的厂：升级 matchBasis + 挂在售货快照
+        factories = factories.map((f) => {
+          const l = byFactory.get(f.id);
+          if (!l) return f;
+          byFactory.delete(f.id);
+          return {
+            ...f,
+            matchBasis: "productLinked" as const,
+            linkedOffer: { offerId: l.offerId, title: l.title, price: l.price, sales: l.sales },
+            categoryRank: f.categoryRank, // 保留原排名（若有）
+            evidence: [
+              `在售这款货：「${l.title.slice(0, 40)}」¥${l.price} 起 · 上游销量 ${l.sales.toLocaleString()}（实时核对）`,
+              ...f.evidence,
+            ],
+          };
+        });
+        // 不在列表里的严选厂：补进来（有在售货就是最强相关证据），列表仍封顶 6 家
+        for (const l of byFactory.values()) {
+          factories.unshift({
+            id: l.factory.id,
+            name: l.factory.name,
+            tier: l.factory.tier,
+            score: l.factory.score != null ? Number(l.factory.score) : null,
+            years: l.factory.years != null ? Number(l.factory.years) : null,
+            location: l.factory.location,
+            cert: l.factory.cert,
+            repurchaseRate: null,
+            mainImage: null,
+            productImages: l.image && /^https?:\/\//i.test(l.image) ? [l.image] : [], // 卡片先让买家看到这款货
+            tags: [],
+            reason: "严选库在册 · 有这款在售货",
+            subScores: null,
+            matchBasis: "productLinked" as const,
+            linkedOffer: { offerId: l.offerId, title: l.title, price: l.price, sales: l.sales },
+            categoryRank: null,
+            evidence: [`在售这款货：「${l.title.slice(0, 40)}」¥${l.price} 起 · 上游销量 ${l.sales.toLocaleString()}（实时核对）`],
+          });
+        }
+        // productLinked 置前，其余保持 direct 前 bucket 后的原序；封顶 6 家
+        factories = [
+          ...factories.filter((f) => f.matchBasis === "productLinked"),
+          ...factories.filter((f) => f.matchBasis !== "productLinked"),
+        ].slice(0, 6);
+      }
+    } catch (e) {
+      log.warn("以货带厂失败，按原有厂单出", { error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
   // 阶段三：基于真实结果写话术
   const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
   const facts = JSON.stringify({
@@ -433,7 +509,8 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       years: f.years,
       location: f.location,
       reason: f.reason,
-      matchBasis: f.matchBasis, // direct=有做这类产品的直接证据；bucket=仅大类高分厂
+      matchBasis: f.matchBasis, // productLinked=严选库在册且有这款在售货（最硬）；direct=有做这类产品的直接证据；bucket=仅大类高分厂
+      linkedOffer: f.linkedOffer, // productLinked 时的在售货快照（标题/价格/销量，均已实时核对）
       categoryRank: f.categoryRank,
       evidence: f.evidence,
     })),

@@ -169,7 +169,8 @@ export const offers = mysqlTable(
     >(),
     specImages: json("spec_images").$type<Record<string, string>>(), // 第一维规格值→图片 URL
     sellerName: varchar("seller_name", { length: 255 }),
-    memberId: varchar("member_id", { length: 64 }), // 店铺子域名 = factories.member_id join key
+    memberId: varchar("member_id", { length: 64 }), // 1688 会员 ID（b2b-xxx）= factories.member_id join key 之一
+    sellerLoginId: varchar("seller_login_id", { length: 64 }), // 会员登录名（老格式）= join key 之二
     dispatchHours: int("dispatch_hours"), // 承诺发货小时数
     dispatchNote: varchar("dispatch_note", { length: 255 }),
     unitWeightKg: decimal("unit_weight_kg", { precision: 8, scale: 3 }),
@@ -199,6 +200,37 @@ export const offerSearchCache = mysqlTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("ix_search_qp").on(t.query, t.page)]
+);
+
+// 产品池（长期资产，v48）：每次真实搜索的在售货源逐条沉淀，同一 offerId 只存一行。
+// 与 offer_search_cache（30min 防刷层）的分工：缓存层防重复烧钱，产品池做跨查询复用与"以货带厂"——
+// 池子里的每条货都可能通过 memberId join 上严选库工厂，构成"这家厂就在卖这款"的最硬证据。
+export const offerPool = mysqlTable(
+  "offer_pool",
+  {
+    id: serial("id").primaryKey(),
+    offerId: varchar("offer_id", { length: 32 }).notNull(), // 1688 num_iid
+    title: varchar("title", { length: 512 }).notNull(),
+    image: text("image"),
+    price: decimal("price", { precision: 10, scale: 2 }),
+    promotionPrice: decimal("promotion_price", { precision: 10, scale: 2 }),
+    sales: int("sales").notNull().default(0), // 上游搜索级销量（取历史最大值）
+    memberId: varchar("member_id", { length: 64 }), // 1688 会员 ID（b2b-xxx）→ join factories
+    sellerLoginId: varchar("seller_login_id", { length: 64 }), // 会员登录名（老格式）→ join factories 兜底
+    sellerUserId: varchar("seller_user_id", { length: 32 }), // 卖家数字 userId（图片 CDN "!!{userId}" 零成本提取）→ b2b-{userId}% 前缀 join
+    detailFetchedAt: timestamp("detail_fetched_at"), // memberId 的数据时间
+    hitCount: int("hit_count").notNull().default(1), // 被不同搜索词命中次数（热度信号）
+    firstSeenAt: timestamp("first_seen_at").notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_pool_offer").on(t.offerId),
+    index("ix_pool_sales").on(t.sales),
+    index("ix_pool_member").on(t.memberId),
+    index("ix_pool_login").on(t.sellerLoginId),
+    index("ix_pool_uid").on(t.sellerUserId),
+    index("ix_pool_lastseen").on(t.lastSeenAt),
+  ]
 );
 
 // 货源 API 调用台账：每一次真实花钱的调用都记账（供应商/接口/成本/耗时/成败）
