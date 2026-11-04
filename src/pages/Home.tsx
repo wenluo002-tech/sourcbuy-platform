@@ -131,9 +131,14 @@ export default function Home() {
               </div>
             </form>
 
-            <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sb-ink-40)]">
-              试试这样问
-            </p>
+            <div className="mt-6 flex flex-wrap items-baseline gap-x-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sb-ink-40)]">
+                试试这样问
+              </p>
+              <p className="text-[11px] text-[var(--sb-ink-40)]">
+                也可以直接贴亚马逊 / TikTok / 独立站商品链接，我帮你找同款货源
+              </p>
+            </div>
             <div className="mt-1 grid max-w-2xl grid-cols-1 sm:grid-cols-2 sm:gap-x-8">
               {EXAMPLES.map((s, i) => (
                 <button

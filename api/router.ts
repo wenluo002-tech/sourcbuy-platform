@@ -128,11 +128,12 @@ export const appRouter = createRouter({
             .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() }))
             .max(20),
           radarId: z.number().int().positive().optional(), // 雷达卡 CTA 直达：钉死品类与信号上下文
+          imageData: z.string().max(6_000_000).optional(), // 商品图（base64 data URL，前端已压到 1024px JPEG）
         })
       )
       .mutation(async ({ input }) => {
         try {
-          return await sourcingChat(input.message, input.history, input.radarId);
+          return await sourcingChat(input.message, input.history, input.radarId, input.imageData);
         } catch (err) {
           const classified = classifyAiError(err);
           if (classified instanceof AiUnavailable) {

@@ -50,13 +50,55 @@ interface SearchProduct {
   sales: number;
 }
 
+interface LinkRef {
+  platform: string;
+  title: string | null;
+  image: string | null;
+  priceText: string | null;
+  url: string;
+  source: "page" | "slug" | null;
+  fetchFailed: boolean;
+}
+
 interface Turn {
   role: "user" | "assistant";
   content: string;
+  imageUrl?: string;
   factories?: MatchedFactory[];
   product?: LinkedProduct | null;
   products?: SearchProduct[];
+  linkRef?: LinkRef | null;
   quantity?: string | null;
+}
+
+/* 外链识别卡：买家贴的亚马逊/TikTok 等链接，系统读到的真实信息（读不到就明说） */
+function LinkRefCard({ link }: { link: LinkRef }) {
+  return (
+    <div className="flex max-w-[94%] items-center gap-3 rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] px-3.5 py-2.5">
+      {link.image ? (
+        <img
+          src={link.image}
+          alt=""
+          referrerPolicy="no-referrer"
+          className="h-11 w-11 shrink-0 rounded-lg border border-[var(--sb-line)] bg-white object-cover"
+          onError={(e) => (e.currentTarget.style.display = "none")}
+        />
+      ) : (
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--sb-line)] bg-white text-base">🔗</span>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--sb-ink-40)]">
+          {link.fetchFailed ? `${link.platform} · 链接没打开` : `${link.platform} · 已识别${link.source === "slug" ? "（从链接路径）" : ""}`}
+        </p>
+        <p className="mt-0.5 truncate text-[13px] font-medium text-[var(--sb-ink)]">
+          {link.title ?? "平台挡了抓取——补一句品名我马上查"}
+        </p>
+      </div>
+      {link.priceText && (
+        <span className="shrink-0 text-[13px] font-semibold tabular-nums text-[var(--sb-brand)]">{link.priceText}</span>
+      )}
+    </div>
+  );
 }
 
 const SUGGESTIONS = [
@@ -344,11 +386,29 @@ export default function BuyerChat() {
     },
   ]);
   const [input, setInput] = useState("");
+  const [pendingImage, setPendingImage] = useState<string | null>(null); // 待发送商品图（压缩后的 data URL）
+  const fileRef = useRef<HTMLInputElement>(null);
   const chat = trpc.ai.chat.useMutation();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [params, setParams] = useSearchParams();
   const prefilled = useRef(false);
+
+  // 图片压缩：最长边 1024、JPEG 0.82——够视觉模型识别，流量友好
+  async function pickImage(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    try {
+      const bmp = await createImageBitmap(file);
+      const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bmp.width * scale));
+      canvas.height = Math.max(1, Math.round(bmp.height * scale));
+      canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      setPendingImage(canvas.toDataURL("image/jpeg", 0.82));
+    } catch {
+      setPendingImage(null);
+    }
+  }
 
   // 只滚动聊天容器本身；scrollIntoView 会带着整页滚动，导致吸顶导航压住内容
   useEffect(() => {
@@ -357,18 +417,20 @@ export default function BuyerChat() {
   }, [turns, chat.isPending]);
 
   function send(text: string, radarId?: number) {
-    const msg = text.trim();
+    const msg = text.trim() || (pendingImage ? "帮我找图里这个产品的货源" : "");
     if (!msg || chat.isPending) return;
+    const img = pendingImage;
     const history = turns.map((t) => ({ role: t.role, content: t.content }));
-    setTurns((ts) => [...ts, { role: "user", content: msg }]);
+    setTurns((ts) => [...ts, { role: "user", content: msg, imageUrl: img ?? undefined }]);
     setInput("");
-    doMutate(msg, history, false, radarId);
+    setPendingImage(null);
+    doMutate(msg, history, false, radarId, img ?? undefined);
   }
 
   // 失败静默重试一次（网络/模型抖动大多是瞬时的）；再失败才诚实告诉买家
-  function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean, radarId?: number) {
+  function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean, radarId?: number, imageData?: string) {
     chat.mutate(
-      { message: msg, history, radarId },
+      { message: msg, history, radarId, imageData },
       {
         onSuccess: (res) =>
           setTurns((ts) => [
@@ -379,6 +441,7 @@ export default function BuyerChat() {
               factories: res.factories,
               product: (res as any).product ?? null,
               products: (res as any).products?.length ? (res as any).products : undefined,
+              linkRef: (res as any).linkContext ?? null,
               quantity: (res as any).intent?.quantity ?? null,
             },
           ]),
@@ -421,6 +484,9 @@ export default function BuyerChat() {
           t.role === "user" ? (
             <div key={i} className="flex justify-end">
               <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--sb-brand)] px-4 py-2.5 text-sm leading-relaxed text-[#eef4f5]">
+                {t.imageUrl && (
+                  <img src={t.imageUrl} alt="商品图" className="mb-2 max-h-44 rounded-lg border border-white/20 object-cover" />
+                )}
                 {t.content}
               </div>
             </div>
@@ -435,6 +501,9 @@ export default function BuyerChat() {
                   老采购
                 </span>
               </div>
+              {/* 外链识别卡：贴链接进来的，先摆读到的真实信息 */}
+              {t.linkRef && <LinkRefCard link={t.linkRef} />}
+
               <div className="max-w-[94%] border-l-2 border-[var(--sb-brand)]/60 pl-4 text-sm leading-[1.75] whitespace-pre-wrap text-[var(--sb-ink)]">
                 {t.content}
               </div>
@@ -595,16 +664,52 @@ export default function BuyerChat() {
           send(input);
         }}
       >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) pickImage(f);
+            e.target.value = "";
+          }}
+        />
+        {pendingImage && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--sb-line)] bg-white px-2.5 py-2">
+            <img src={pendingImage} alt="待发送商品图" className="h-10 w-10 rounded-lg border border-[var(--sb-line)] object-cover" />
+            <span className="text-xs text-[var(--sb-ink-60)]">商品图已就绪——补一句要求（数量/目的地）更准，也可直接发送</span>
+            <button
+              type="button"
+              onClick={() => setPendingImage(null)}
+              className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-[var(--sb-ink-40)] hover:text-[var(--sb-ink)]"
+            >
+              移除
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-2 rounded-2xl border border-[var(--sb-line)] bg-white p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05)]">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            title="发商品图给我认"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+          >
+            <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" strokeWidth="1.4" />
+              <circle cx="5.5" cy="6" r="1.2" fill="currentColor" />
+              <path d="m3 12 3.5-3.5 2.5 2.5 2-2 2 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="说出你要的品，或直接粘贴商品链接…"
+            placeholder="说出你要的品，或贴亚马逊 / TikTok 商品链接，也可发图…"
             className="h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
           />
           <button
             type="submit"
-            disabled={chat.isPending || !input.trim()}
+            disabled={chat.isPending || (!input.trim() && !pendingImage)}
             className="h-11 shrink-0 rounded-xl bg-[var(--sb-brand)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
           >
             发送

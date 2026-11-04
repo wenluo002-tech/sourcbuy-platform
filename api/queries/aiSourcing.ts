@@ -8,6 +8,7 @@ import { searchOffers } from "../sourcing/offerService";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import { log } from "../lib/logger";
 import { listRadar, getRadarItem } from "./radar";
+import { extractExternalUrl, resolveExternalLink, type LinkContext } from "./linkResolve";
 
 // ============ 选品意图：买家问"什么好卖/爆款/趋势" → 直接给真实雷达榜，不走 LLM ============
 const SELECTION_RE = /(好卖|爆款|热卖|畅销|趋势|选品|卖什么|什么.*(卖|火)|海外.*(流行|热)|trending|best[\s-]*seller|hot[\s-]*sell)/i;
@@ -65,6 +66,11 @@ const intentSchema = z.object({
   isGreeting: z.boolean(),
 });
 
+// 带商品图时的扩展意图：单次 LLM 调用同时出品类词与图上可见规格（省一次往返）
+const imageIntentSchema = intentSchema.extend({
+  specsNote: z.string().nullable(),
+});
+
 // ============ 阶段三：基于真实匹配结果生成话术 ============
 // 模型只能看到系统实际筛出来的工厂，说几家就是几家，物理上无法说空话。
 const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家把关的老采购"——专业、直接、诚实，像做了二十年的中国供应链采购经理。
@@ -84,7 +90,9 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 10. 平台铁律：只代表买家，不收工厂返点；推荐按评分中立排序，评分算法公开（七维加权），工厂不可付费影响排名。
 11. 如果系统事实里有 searchProducts（真实搜到的在售商品，含价格/销量）：这些商品会以卡片形式展示在你的话下面。买家先看到货再谈厂——话术里可以点评整体价格带和销量表现（如"主流款出厂价在 ¥xx–xx，有款月销过万的"），不要逐个念标题。
 12. 如果 factoryCount=0 但 searchProducts 非空：诚实说"严选库里暂时还没有验过专做这个品的厂，我不拿不相干的厂糊弄你"，然后引导买家从商品卡里挑中意的款发我，我去查它背后的供应商底细（严选库比对，必要时安排验厂）。绝不允许把其他类目的工厂说成做这个品的——之前把做帐篷的厂推给要自行车的买家，这种事故不能再发生。
-13. 如果系统事实里有 radarContext：买家是从「海外爆款雷达」榜单点进来的。先用一两句确认这个品的海外信号（原样引用 radarContext 里的 signalText 和 signalDate，可说"榜单出处可验证"），再按上面的规则给货给厂。radarContext 里有 factoryPriceMin/Max 的话，这就是实时出厂价带，直接引用；有 retailPriceUsd 可对比海外零售价差。结尾提醒一句：榜单是需求信号不是保票，先小单试水再放大。`;
+13. 如果系统事实里有 radarContext：买家是从「海外爆款雷达」榜单点进来的。先用一两句确认这个品的海外信号（原样引用 radarContext 里的 signalText 和 signalDate，可说"榜单出处可验证"），再按上面的规则给货给厂。radarContext 里有 factoryPriceMin/Max 的话，这就是实时出厂价带，直接引用；有 retailPriceUsd 可对比海外零售价差。结尾提醒一句：榜单是需求信号不是保票，先小单试水再放大。
+14. 如果系统事实里有 linkContext：买家贴了海外零售平台的商品链接。先用一两句确认你从链接里读到了什么（平台 + 品名；有 priceText 就报海外售价），再给国内货源和工厂。priceText 与出厂价带的差可以点一句"毛利空间看着不错"，但必须提醒零售价不是净利润（平台佣金、广告、尾程运费都没算）。linkContext.source 为 slug 时说明"链接页面挡了抓取，我从链接路径认出来的，你核对下对不对"；fetchFailed=true 时老实说"这个链接我没打开"，让买家补一句品名或截个图，绝不要假装认识这个链接。
+15. 如果系统事实里有 imageContext：买家发来了商品图。先确认你从图里认出的品类和可见规格（原样引用 specsNote），补一句"认错了你纠正我"。imageContext.failed=true 时老实说图片没认出来，让买家补一句品名，绝不要假装看懂了。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -138,8 +146,26 @@ function buildFallbackReply(
   searchProducts: { price: number; promotionPrice: number | null; sales: number }[],
   relaxed: boolean,
   radarCtx?: { title: string; signalText: string; signalDate: string } | null,
+  linkCtx?: LinkContext | null,
+  imageNote?: { specsNote: string | null; failed: boolean } | null,
 ): string {
   const parts: string[] = [];
+  if (imageNote) {
+    if (imageNote.failed) {
+      parts.push("你发的图片我没认出来是什么——补一句品名（中文英文都行），我马上查货源。");
+    } else if (imageNote.specsNote) {
+      parts.push(`图上这个我认出的是：${imageNote.specsNote}——认错了你纠正我。`);
+    }
+  }
+  if (linkCtx) {
+    if (linkCtx.fetchFailed || !linkCtx.title) {
+      parts.push(`你贴的这个${linkCtx.platform}链接我没打开（平台挡了抓取）——你直接告诉我这是什么品（中文英文都行），我马上查货源。`);
+    } else {
+      const price = linkCtx.priceText ? `，海外卖 ${linkCtx.priceText}` : "";
+      const how = linkCtx.source === "slug" ? "链接页面挡了抓取，我从链接路径认出来的，你核对下" : "链接我打开了";
+      parts.push(`你贴的${linkCtx.platform}这个「${linkCtx.title}」${price}——${how}。`);
+    }
+  }
   if (radarCtx) {
     parts.push(`「${radarCtx.title}」你在雷达榜上看到的没错——${radarCtx.signalText}（信号日期 ${radarCtx.signalDate}，榜单页有出处可验证）。`);
   }
@@ -162,7 +188,7 @@ function buildFallbackReply(
   return parts.join("\n\n");
 }
 
-async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number) {
+async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string) {
   // 雷达卡 CTA 直达：radarId 钉死品类与信号上下文，跳过 LLM 意图抽取（词库没收录的品也不受影响）
   // 必须在选品意图拦截之前——CTA 话术含"爆款"字样，否则会被误判成选品意图
   let radarCtx: Awaited<ReturnType<typeof getRadarItem>> | null = null;
@@ -174,45 +200,92 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     }
   }
 
+  // 外链识别：买家贴了亚马逊/TikTok/独立站等零售链接（1688 链接走 extractOfferId 老链路，不在此列）
+  // 与模型清单并行抓取，不阻塞意图抽取之后的链路
+  const extUrl = extractExternalUrl(message);
+
   // 选品意图（"什么好卖/爆款/趋势"）走真实雷达榜，零 LLM 延迟，绝不编数据
-  if (!radarCtx && SELECTION_RE.test(message) && !extractOfferId(message)) {
+  if (!radarCtx && !extUrl && SELECTION_RE.test(message) && !extractOfferId(message)) {
     const radar = await radarSelectionReply();
     if (radar) return radar;
   }
 
-  // 模型清单与意图抽取并行——省 2-4s 冷启动（雷达直达场景意图已钉死，不再调 LLM）
-  const [modelsRes, intentRes] = await Promise.allSettled([
+  // 模型清单与外链解析并行——省 2-4s 冷启动
+  const [modelsRes, linkRes] = await Promise.allSettled([
     listModels(),
-    radarCtx
-      ? Promise.resolve(null)
-      : generateObject({
-          model: kimiGw(process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking"),
-          system: INTENT_SYSTEM,
-          messages: [
-            ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
-            { role: "user" as const, content: message },
-          ],
-          schema: intentSchema,
-          abortSignal: AbortSignal.timeout(12_000), // 意图抽取 12s 封顶（预览网关超时紧，给后端全链留余量）
-        }),
+    extUrl ? resolveExternalLink(extUrl) : Promise.resolve(null),
   ]);
+  const linkCtx: LinkContext | null = linkRes.status === "fulfilled" ? linkRes.value : null;
+  if (linkRes.status === "rejected") {
+    log.warn("外链解析异常，按普通对话流程走", { error: linkRes.reason instanceof Error ? linkRes.reason.message : String(linkRes.reason) });
+  }
+
+  // 意图抽取：链接读到标题时，把标题一并给解析器（英文品名翻成中文品类词；雷达直达场景意图已钉死，不再调 LLM）
+  const intentInput = linkCtx?.title
+    ? `【买家贴了${linkCtx.platform}商品链接，页面标题：${linkCtx.title}${linkCtx.priceText ? `，海外售价约 ${linkCtx.priceText}` : ""}】买家原话：${message}`
+    : message;
   const defaultModelId = modelsRes.status === "fulfilled" ? modelsRes.value.defaultModelId : process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking";
   // 意图抽取失败绝不抛 500：降级到本地词库兜底，筛厂/搜货链路照跑
-  if (!radarCtx && intentRes.status === "rejected") {
-    log.warn("意图抽取失败，走本地词库兜底", { error: intentRes.reason instanceof Error ? intentRes.reason.message : String(intentRes.reason) });
+  let imageSpecsNote: string | null = null;
+  let imageFailed = false;
+  let intent: z.infer<typeof intentSchema>;
+  if (radarCtx) {
+    intent = { product: radarCtx.keyword, quantity: null, destination: null, budgetNote: null, followUp: null, isGreeting: false };
+  } else if (imageData) {
+    // 商品图识别与意图抽取合一：单次调用出品类词+可见规格（网关默认模型支持图片输入）
+    try {
+      const r = await generateObject({
+        model: kimiGw(defaultModelId),
+        system:
+          INTENT_SYSTEM +
+          "\n6. 买家消息附带商品图：product 从图里认（翻成中文品类词，尽量具体到产品）；specsNote 一句话写图上可见的规格/材质/颜色；实在看不出是什么，product 与 specsNote 都给 null。",
+        messages: [
+          ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
+          {
+            role: "user" as const,
+            content: [
+              { type: "image" as const, image: imageData },
+              { type: "text" as const, text: intentInput },
+            ],
+          },
+        ],
+        schema: imageIntentSchema,
+        abortSignal: AbortSignal.timeout(12_000),
+      });
+      intent = r.object;
+      imageSpecsNote = r.object.specsNote;
+      if (!intent.product) imageFailed = true; // 没认出品类=识别失败，话术里要诚实
+    } catch (e) {
+      log.warn("图片意图识别失败，走本地词库兜底", { error: e instanceof Error ? e.message : String(e) });
+      imageFailed = true;
+      intent = localIntentFallback(message.replace(/https?:\/\/\S+/g, " ")); // 数量只在买家原话里找——链接标题里的"50 Pack"是规格不是采购量
+    }
+  } else {
+    try {
+      const r = await generateObject({
+        model: kimiGw(process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking"),
+        system: INTENT_SYSTEM,
+        messages: [
+          ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
+          { role: "user" as const, content: intentInput },
+        ],
+        schema: intentSchema,
+        abortSignal: AbortSignal.timeout(12_000), // 意图抽取 12s 封顶（预览网关超时紧，给后端全链留余量）
+      });
+      intent = r.object;
+    } catch (e) {
+      log.warn("意图抽取失败，走本地词库兜底", { error: e instanceof Error ? e.message : String(e) });
+      intent = localIntentFallback(message.replace(/https?:\/\/\S+/g, " ")); // 数量只在买家原话里找——链接标题里的"50 Pack"是规格不是采购量
+    }
   }
-  const intent = radarCtx
-    ? { product: radarCtx.keyword, quantity: null, destination: null, budgetNote: null, followUp: null, isGreeting: false }
-    : intentRes.status === "fulfilled" && intentRes.value
-      ? intentRes.value.object
-      : localIntentFallback(message);
   const messages = [
     ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
     { role: "user" as const, content: message },
   ];
 
   // 阶段一·五：用户贴了 1688 链接/货号 → 实时拉取真实商品 + 背后工厂
-  const offerId = extractOfferId(message);
+  // 注意：外部零售链接（extUrl 非空）里的长数字串不是 1688 货号，必须跳过，否则 TikTok 商品 ID 会被拿去查上游
+  const offerId = extUrl ? null : extractOfferId(message);
   let productInfo: Awaited<ReturnType<typeof offerWithFactory>> | null = null;
   let productFetchFailed = false;
   if (offerId) {
@@ -225,8 +298,8 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     }
   }
 
-  // 纯闲聊（且没带链接）：直接回，不查库；LLM 失败时给静态开场白，不报错
-  if (intent.isGreeting && !intent.product && !productInfo) {
+  // 纯闲聊（且没带链接/商品）：直接回，不查库；LLM 失败时给静态开场白，不报错
+  if (intent.isGreeting && !intent.product && !productInfo && !linkCtx) {
     try {
       const { text } = await generateText({
         model: kimiGw(defaultModelId),
@@ -247,6 +320,10 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   if (!keyword && productInfo?.offer) {
     const titleHit = expandQuery(productInfo.offer.title);
     if (titleHit.category) keyword = productInfo.offer.title;
+  }
+  if (!keyword && linkCtx?.title) {
+    const titleHit = expandQuery(linkCtx.title);
+    if (titleHit.category) keyword = linkCtx.title; // 链接标题命中词库类目 → 用标题搜货
   }
   let factories: Awaited<ReturnType<typeof matchFactories>> = [];
   let relaxed = false;
@@ -300,6 +377,15 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       : null,
     factoryCount: factories.length,
     relaxedThreshold: relaxed,
+    linkContext: linkCtx
+      ? {
+          platform: linkCtx.platform,
+          title: linkCtx.title,
+          priceText: linkCtx.priceText,
+          source: linkCtx.source,
+          fetchFailed: linkCtx.fetchFailed ?? false,
+        }
+      : null,
     searchProducts: searchProducts.length
       ? {
           count: searchProducts.length,
@@ -326,6 +412,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       : productFetchFailed
         ? { fetchFailed: true }
         : null,
+    imageContext: imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null,
     factories: factories.map((f) => ({
       name: f.name,
       tier: f.tier,
@@ -352,7 +439,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     reply = r.text;
   } catch (e) {
     log.warn("reply 话术生成失败，走规则模板兜底", { error: e instanceof Error ? e.message : String(e) });
-    reply = buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx);
+    reply = buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null);
   }
 
   return {
@@ -361,6 +448,9 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     intent: { product: intent.product, quantity: intent.quantity },
     factories,
     products: searchProducts,
+    linkContext: linkCtx
+      ? { platform: linkCtx.platform, title: linkCtx.title, image: linkCtx.image, priceText: linkCtx.priceText, url: linkCtx.url, source: linkCtx.source, fetchFailed: linkCtx.fetchFailed ?? false }
+      : null,
     product: productInfo
       ? { offer: productInfo.offer, factory: productInfo.factory }
       : null,
@@ -368,9 +458,9 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
 }
 
 // 最外层保险：任何漏网异常都不让买家看到报错——返回诚实的降级话术（HTTP 200），并留日志可查
-export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number) {
+export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string) {
   try {
-    return await sourcingChatInner(message, history, radarId);
+    return await sourcingChatInner(message, history, radarId, imageData);
   } catch (e) {
     log.error("ai.chat 未捕获异常，走全兜底", { error: e instanceof Error ? e.message : String(e) });
     return {
