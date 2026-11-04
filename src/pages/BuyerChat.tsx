@@ -17,6 +17,7 @@ interface MatchedFactory {
   productImages: string[];
   tags: string[];
   subScores: Record<string, number | null> | null;
+  matchBasis?: "direct" | "bucket"; // direct=名称/评语/标签明确含这类产品词；bucket=仅大类高分厂，未核实做这款
   categoryRank: { category: string; rank: number; total: number } | null;
   evidence: string[];
 }
@@ -578,6 +579,11 @@ export default function BuyerChat() {
                         <p className="mt-2 text-xs font-semibold text-[var(--sb-brand)]">
                           {f.categoryRank.category}类目第 {f.categoryRank.rank} /{" "}
                           {f.categoryRank.total} 家
+                        </p>
+                      )}
+                      {f.matchBasis === "bucket" && (
+                        <p className="mt-2 text-xs font-medium text-[#b45309]">
+                          同大类高分厂 · 做这款请先拿图确认
                         </p>
                       )}
                       {f.evidence.length > 0 && (

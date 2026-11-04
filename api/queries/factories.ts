@@ -1,7 +1,7 @@
 import { getDb } from "./connection";
 import { factories, factoryScores, factoryCategories, commissionRules } from "../../db/schema";
 import { eq, and, desc, like, gte, lte, sql, type SQL } from "drizzle-orm";
-import { expandQuery } from "../../contracts/lexicon";
+import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import {
   volumetricRule,
   findDestination,
@@ -511,6 +511,7 @@ export interface MatchedFactory {
   tags: string[];
   reason: string;
   subScores: Record<string, number | null> | null;
+  matchBasis: "direct" | "bucket"; // direct=名称/评语/标签明确含这类产品词；bucket=仅大类桶成员，未核实做这款
   categoryRank: { category: string; rank: number; total: number } | null;
   evidence: string[];
 }
@@ -570,7 +571,22 @@ export async function matchFactories(intent: {
     }
   }
 
-  return res.rows.map((f) => {
+  // 直接证据词 = 查询词本身 + 该类目的具体产品词（"耳机/衣架/保温杯"这种）
+  // 不用类目通用词（"科技/电子/智能"）——中国厂名一半带"科技"，皮带厂也能混进电子数码桶（v46 耳机→皮带厂事故）
+  const catProducts = category && LEXICON[category] ? LEXICON[category].products : [];
+  const directTerms = [...new Set([...(intent.keyword ? [intent.keyword] : []), ...catProducts])].filter((t) => t.length >= 2);
+  const hasDirectEvidence = (f: (typeof res.rows)[number]): boolean => {
+    const blob = `${f.name} ${f.review ?? ""} ${Array.isArray(f.tags) ? (f.tags as string[]).join(" ") : ""}`;
+    return directTerms.some((t) => blob.includes(t));
+  };
+
+  return res.rows
+    .map((f) => {
+      const direct = hasDirectEvidence(f);
+      return { f, direct };
+    })
+    .sort((a, b) => Number(b.direct) - Number(a.direct)) // 有直接证据的排前，桶内高分但没证据的沉底
+    .map(({ f, direct }) => {
     const sub = scoreMap.get(f.id) ?? null;
     const rk = rankMap.get(f.id) ?? null;
     const imgs = (f.images as Record<string, string[]> | null) ?? {};
@@ -597,8 +613,9 @@ export async function matchFactories(intent: {
       tags: (f.tags as string[] | null) ?? [],
       reason: buildReason(f),
       subScores: sub,
-      categoryRank: rk && category ? { category, rank: rk.rank, total: rk.total } : null,
-      evidence: buildEvidence(f, sub, rk, category),
+      matchBasis: direct ? ("direct" as const) : ("bucket" as const), // direct=名称/评语/标签含具体产品词；bucket=仅大类桶成员，没核实做这款
+      categoryRank: direct && rk && category ? { category, rank: rk.rank, total: rk.total } : null, // 桶排名只给有直接证据的厂——皮带厂顶着"电子数码第 1"是误导
+      evidence: buildEvidence(f, sub, direct ? rk : null, direct ? category : null),
     };
   });
 }

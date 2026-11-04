@@ -92,7 +92,9 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 12. 如果 factoryCount=0 但 searchProducts 非空：诚实说"严选库里暂时还没有验过专做这个品的厂，我不拿不相干的厂糊弄你"，然后引导买家从商品卡里挑中意的款发我，我去查它背后的供应商底细（严选库比对，必要时安排验厂）。绝不允许把其他类目的工厂说成做这个品的——之前把做帐篷的厂推给要自行车的买家，这种事故不能再发生。
 13. 如果系统事实里有 radarContext：买家是从「海外爆款雷达」榜单点进来的。先用一两句确认这个品的海外信号（原样引用 radarContext 里的 signalText 和 signalDate，可说"榜单出处可验证"），再按上面的规则给货给厂。radarContext 里有 factoryPriceMin/Max 的话，这就是实时出厂价带，直接引用；有 retailPriceUsd 可对比海外零售价差。结尾提醒一句：榜单是需求信号不是保票，先小单试水再放大。
 14. 如果系统事实里有 linkContext：买家贴了海外零售平台的商品链接。先用一两句确认你从链接里读到了什么（平台 + 品名；有 priceText 就报海外售价），再给国内货源和工厂。priceText 与出厂价带的差可以点一句"毛利空间看着不错"，但必须提醒零售价不是净利润（平台佣金、广告、尾程运费都没算）。linkContext.source 为 slug 时说明"链接页面挡了抓取，我从链接路径认出来的，你核对下对不对"；fetchFailed=true 时老实说"这个链接我没打开"，让买家补一句品名或截个图，绝不要假装认识这个链接。
-15. 如果系统事实里有 imageContext：买家发来了商品图。先确认你从图里认出的品类和可见规格（原样引用 specsNote），补一句"认错了你纠正我"。imageContext.failed=true 时老实说图片没认出来，让买家补一句品名，绝不要假装看懂了。`;
+15. 如果系统事实里有 imageContext：买家发来了商品图。先确认你从图里认出的品类和可见规格（原样引用 specsNote），补一句"认错了你纠正我"。imageContext.failed=true 时老实说图片没认出来，让买家补一句品名，绝不要假装看懂了。
+16. 工厂清单里每家带 matchBasis：direct=这家厂的名称/评语/标签里明确出现过这类产品词，可以说"做这类产品的"；bucket=它只是该类目大类下的高分厂，没有直接证据表明做过这款——你必须说清楚"这几家是大类下的高分厂，做没做过这款要拿图询价确认，我不打包票"，绝不暗示它们做这款。全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
+17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -142,7 +144,7 @@ function localIntentFallback(message: string): z.infer<typeof intentSchema> {
 // 话术生成超时/失败时的规则兜底——只用系统已拿到的真实数据，一句都不编
 function buildFallbackReply(
   intent: { product: string | null; quantity: number | null; destination: string | null },
-  factories: { name: string; tier: string | null; score: number | null }[],
+  factories: { name: string; tier: string | null; score: number | null; matchBasis?: "direct" | "bucket" }[],
   searchProducts: { price: number; promotionPrice: number | null; sales: number }[],
   relaxed: boolean,
   radarCtx?: { title: string; signalText: string; signalDate: string } | null,
@@ -150,6 +152,12 @@ function buildFallbackReply(
   imageNote?: { specsNote: string | null; failed: boolean } | null,
 ): string {
   const parts: string[] = [];
+  const brandHit = /(bose|nike|apple|sony|disney|lego|adidas|dyson|supreme|lv|gucci|chanel)/i.test(
+    `${intent.product ?? ""} ${linkCtx?.title ?? ""}`,
+  );
+  if (brandHit) {
+    parts.push("先说个要紧的：这是品牌货。品牌正品只能走授权渠道，工厂只能做无牌白底同款——仿牌在海关和平台都有法律风险，这个我不碰，也不建议你做。下面按白底同款给你查。");
+  }
   if (imageNote) {
     if (imageNote.failed) {
       parts.push("你发的图片我没认出来是什么——补一句品名（中文英文都行），我马上查货源。");
@@ -170,9 +178,14 @@ function buildFallbackReply(
     parts.push(`「${radarCtx.title}」你在雷达榜上看到的没错——${radarCtx.signalText}（信号日期 ${radarCtx.signalDate}，榜单页有出处可验证）。`);
   }
   const what = intent.product ? `「${intent.product}」` : "这个品";
-  if (factories.length > 0) {
+  const directCount = factories.filter((f) => f.matchBasis !== "bucket").length;
+  if (factories.length > 0 && directCount > 0) {
     parts.push(
-      `${what}我筛出 ${factories.length} 家严选厂，卡片在下面——评分、年限、证据都摊开着，你自己核对。${relaxed ? "这回我把评分门槛放宽了些，别嫌厂多。" : ""}`,
+      `${what}我筛出 ${directCount} 家明确做这类产品的严选厂${factories.length > directCount ? `，另外附了 ${factories.length - directCount} 家同大类高分厂做参考` : ""}，卡片在下面——评分、年限、证据都摊开着，你自己核对。${relaxed ? "这回我把评分门槛放宽了些，别嫌厂多。" : ""}`,
+    );
+  } else if (factories.length > 0) {
+    parts.push(
+      `${what}，严选库里我没核实到专做这款的厂——下面列的是同大类的高分厂，能不能做这款得拿图询价确认，我不拿不相干的厂糊弄你。`,
     );
   } else {
     parts.push(`${what}，严选库里暂时没验过专做这个的厂，我不拿不相干的厂糊弄你。`);
@@ -420,6 +433,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       years: f.years,
       location: f.location,
       reason: f.reason,
+      matchBasis: f.matchBasis, // direct=有做这类产品的直接证据；bucket=仅大类高分厂
       categoryRank: f.categoryRank,
       evidence: f.evidence,
     })),
