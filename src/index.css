@@ -77,25 +77,41 @@
 /* ============ SourcBuy 设计系统 ============ */
 :root {
   /* 色板：老站天空蓝体系（image38 取色：按钮 #5EAFF3/#49B4FE、标题蓝 #184B8C、底 #E7F1FA） */
-  --sb-paper: #eef6fc;      /* 页面底：浅蓝白 */
+  --sb-paper: #f3f8fc;      /* 页面底：更干净的浅蓝白 */
   --sb-mist: #cfe5f7;       /* 主氛围区：天蓝雾 */
   --sb-mist-light: #e3f1fb; /* 次级氛围区 */
-  --sb-ink: #1c3245;        /* 深墨蓝正文 */
-  --sb-ink-60: rgba(28, 50, 69, 0.6);
-  --sb-ink-40: rgba(28, 50, 69, 0.4);
-  --sb-line: rgba(28, 50, 69, 0.12);
+  --sb-ink: #152531;        /* 深墨蓝正文（加深一档，提升印刷感对比） */
+  --sb-ink-60: rgba(21, 37, 49, 0.62);
+  --sb-ink-40: rgba(21, 37, 49, 0.42);
+  --sb-line: rgba(21, 37, 49, 0.1);
+  --sb-rule: rgba(21, 37, 49, 0.38);   /* 段落分隔细线：editorial hairline */
   --sb-brand: #2f9df0;       /* 唯一主行动色 = 老站亮天蓝 */
   --sb-brand-hover: #1b86dd;
   --sb-brand-soft: rgba(47, 157, 240, 0.1);
   --sb-warn: #92610f;       /* 老采购提醒 */
   --sb-warn-bg: #fdf6e7;
-  --sb-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --sb-ease: cubic-bezier(0.7, 0, 0.3, 1); /* 机构感缓动：果断、不弹跳 */
+  /* 双字体系统：衬线负责标题的权威，无衬线负责正文的效率 */
+  --sb-font-display: Georgia, "Times New Roman", "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", "Noto Serif SC", serif;
+  --sb-font-body: "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+
+/* 标题衬线：杂志级大标题 */
+.sb-display {
+  font-family: var(--sb-font-display);
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+/* 小节分隔细线 */
+.sb-rule { border-top: 1px solid var(--sb-rule); }
+/* 序号/索引：01 / 24 的台账感 */
+.sb-index {
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.08em;
 }
 
 body {
-  font-family:
-    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-family: var(--sb-font-body);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -221,7 +237,7 @@ body {
   position: absolute;
   width: 17px;
   height: 17px;
-  color: rgba(31, 74, 148, 0.45);
+  color: rgba(21, 37, 49, 0.4);
   pointer-events: none;
 }
 .sb-tick::before,

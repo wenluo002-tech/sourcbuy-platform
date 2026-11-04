@@ -137,7 +137,7 @@ export default function Calculator() {
       {/* 页头 */}
       <div>
         <span className="sb-eyebrow">Landed Cost Calculator</span>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">到手价试算</h1>
+        <h1 className="sb-display mt-4 text-3xl tracking-tight sm:text-[40px]">到手价试算</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-black/55">
           出厂价、国内段、国际运费、关税、尾程、履约佣金，逐行列示，没有隐藏费用。
         </p>

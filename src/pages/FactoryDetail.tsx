@@ -85,7 +85,7 @@ function FactoryDetailView({ f }: { f: any }) {
       <div className="rounded-xl border border-black/10 bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">{f.name}</h1>
+            <h1 className="sb-display text-2xl sm:text-3xl">{f.name}</h1>
             <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
               {f.tier && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 font-medium text-[var(--sb-brand)]">{f.tier}</span>}
               {f.isSuper && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-[var(--sb-brand)]">超级工厂</span>}

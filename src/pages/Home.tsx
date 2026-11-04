@@ -39,70 +39,49 @@ export default function Home() {
 
   return (
     <div ref={pageRef} className="space-y-14 md:space-y-20">
-      {/* ===== Hero：老站同款科技背景图 + 左侧文字区浅底蒙版 ===== */}
-      <section
-        className="relative overflow-hidden rounded-[24px] px-5 py-11 sm:px-6 sm:py-14 md:px-16 md:py-24"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, rgba(238,246,252,0.94) 0%, rgba(238,246,252,0.72) 42%, rgba(238,246,252,0.08) 72%), url('/hero-bg.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        {/* 工程刻度十字：blueprint 仪式感 */}
-        <span className="sb-tick left-4 top-4" />
-        <span className="sb-tick right-4 top-4" />
-        <span className="sb-tick bottom-4 left-4" />
-        <span className="sb-tick bottom-4 right-4" />
+      {/* ===== Hero：事务所版式——细线框架 + 右侧挺括图栏 + 衬线大标题 ===== */}
+      <section className="sb-reveal border-y border-[var(--sb-rule)]">
+        <div className="grid md:grid-cols-12">
+          {/* 左：文字与行动区 */}
+          <div className="relative px-1 py-10 sm:py-14 md:col-span-7 md:py-20 md:pr-12">
+            <span className="sb-tick left-0 top-3" />
+            <span className="sb-eyebrow flex items-center gap-2">
+              <span className="sb-dot-live inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
+              SourcBuy · AI 采购代理事务所
+            </span>
 
-        <div className="relative">
-          <span className="sb-eyebrow flex items-center gap-2">
-            <span className="sb-dot-live inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
-            AI Sourcing Agent · 只代表买方
-          </span>
+            <h1 className="sb-display mt-6 text-[clamp(30px,7vw,44px)] leading-[1.14] tracking-tight md:text-[64px] md:leading-[1.08]">
+              <span className="sb-line-mask"><span className="whitespace-nowrap">说出采购需求，</span></span>
+              <span className="sb-line-mask"><span className="whitespace-nowrap" style={{ ["--sb-delay" as string]: "100ms" }}>好货与底价一次给齐。</span></span>
+            </h1>
 
-          <h1 className="mt-5 max-w-3xl text-[clamp(23px,6.8vw,30px)] font-bold leading-[1.12] tracking-tight sm:text-[44px] md:text-[60px]">
-            <span className="sb-line-mask"><span className="whitespace-nowrap">说出采购需求，</span></span>
-            <span className="sb-line-mask"><span className="whitespace-nowrap" style={{ ["--sb-delay" as string]: "100ms" }}>好货与底价一次给齐。</span></span>
-          </h1>
-
-          {/* 信任信号：三个短词，阶梯入场 */}
-          <div className="mt-6 flex flex-wrap items-center gap-x-3.5 gap-y-2 text-[12px] text-[var(--sb-ink-60)] sm:gap-x-5 sm:text-[13px]">
-            {["数千家严选工厂", "评分公开可核验", "全程只站你这边"].map((t, i) => (
-              <span
-                key={t}
-                className="sb-line-mask flex items-center gap-2"
-                style={{ ["--sb-delay" as string]: `${220 + i * 100}ms` }}
-              >
-                <span className="flex items-center gap-1.5 sm:gap-2">
-                  <span className="h-1 w-1 rounded-[2px] bg-[var(--sb-brand)] sm:h-1.5 sm:w-1.5" />
+            {/* 信任信号：细线分隔的行内条目 */}
+            <div className="mt-7 flex flex-wrap items-center gap-x-0 gap-y-2 text-[12px] text-[var(--sb-ink-60)] sm:text-[13px]">
+              {["数千家严选工厂", "评分公开可核验", "全程只站你这边"].map((t, i) => (
+                <span key={t} className="flex items-center">
+                  {i > 0 && <span className="mx-3.5 h-3 w-px bg-[var(--sb-rule)]" />}
                   {t}
                 </span>
-              </span>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <form
-            className="mt-8 max-w-2xl sm:mt-10"
-            onSubmit={(e) => {
-              e.preventDefault();
-              goChat(kw);
-            }}
-          >
-            <div
-              className="sb-line-mask rounded-full"
-              style={{ ["--sb-delay" as string]: "480ms" }}
+            <form
+              className="mt-9 max-w-2xl"
+              onSubmit={(e) => {
+                e.preventDefault();
+                goChat(kw);
+              }}
             >
-              <div className="flex items-center gap-2 rounded-full border border-[var(--sb-line)] bg-white/95 p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05),0_12px_32px_-16px_rgba(31,74,148,0.25)] backdrop-blur-sm">
+              <div className="flex items-stretch border border-[var(--sb-rule)] bg-white">
                 <input
                   value={kw}
                   onChange={(e) => setKw(e.target.value)}
                   placeholder="例如：LED 灯带 500 卷，暖白，欧规插头，发德国…"
-                  className="h-12 min-w-0 flex-1 bg-transparent px-4 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
+                  className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
                 />
                 <button
                   type="submit"
-                  className="sb-pill flex h-12 shrink-0 items-center gap-2 bg-[var(--sb-brand)] px-6 text-sm font-semibold text-white hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)]"
+                  className="flex shrink-0 items-center gap-2 bg-[var(--sb-brand)] px-5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)] sm:px-7"
                 >
                   开始采购
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -110,41 +89,48 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
-            </div>
-          </form>
+            </form>
 
-          <div
-            className="sb-line-mask mt-4"
-            style={{ ["--sb-delay" as string]: "580ms" }}
-          >
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-x-1 gap-y-1.5">
               {EXAMPLES.map((s) => (
                 <button
                   key={s}
                   onClick={() => goChat(s)}
-                  className="rounded-full border border-[var(--sb-line)] bg-white/70 px-3.5 py-1.5 text-xs text-[var(--sb-ink-60)] transition-colors duration-150 hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+                  className="px-2 py-1 text-xs text-[var(--sb-ink-60)] underline decoration-transparent underline-offset-4 transition-colors duration-150 hover:text-[var(--sb-brand)] hover:decoration-[var(--sb-brand)]"
                 >
                   {s} →
                 </button>
               ))}
             </div>
+
+            <p className="mt-10 border-t border-[var(--sb-line)] pt-4 text-[11px] text-[var(--sb-ink-60)] sm:text-xs">
+              只代表买方 · 不收卖方返点 · 佣金费率公开 · 货损先行赔付
+            </p>
           </div>
 
-          <p
-            className="sb-line-mask mt-9"
-            style={{ ["--sb-delay" as string]: "680ms" }}
-          >
-            <span className="text-[11px] text-[var(--sb-ink-60)] sm:text-xs">
-              只代表买方 · 不收卖方返点 · 佣金费率公开 · 货损先行赔付
-            </span>
-          </p>
+          {/* 右：挺括图栏（硬边、细线框、图注） */}
+          <div className="relative hidden border-l border-[var(--sb-rule)] md:col-span-5 md:block">
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: "url('/hero-bg.jpg')",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            />
+            <span className="sb-tick right-3 top-3" style={{ color: "rgba(255,255,255,0.7)" }} />
+            <span className="sb-tick bottom-3 right-3" style={{ color: "rgba(255,255,255,0.7)" }} />
+            <div className="absolute bottom-3 left-4 text-[10px] uppercase tracking-[0.2em] text-white/85">
+              China Supply Network · Live
+            </div>
+          </div>
         </div>
       </section>
 
       {/* ===== 海外爆款雷达：需求信号 → 产能 → 出厂价带，每周更新 ===== */}
       {!radar.isError && (radar.data?.items?.length ?? 0) > 0 && (
         <section>
-          <div className="sb-reveal flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <div className="sb-reveal sb-rule flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-3">
             <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
               Hot signals · 海外爆款雷达
             </h2>
@@ -158,7 +144,7 @@ export default function Home() {
           <p className="sb-reveal mt-2 text-xs text-[var(--sb-ink-40)]">
             海外在爆什么（真实榜单出处）→ 国内工厂能不能造（出厂价带 + 严选产能）——每周更新
           </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid gap-x-6 border-t border-[var(--sb-line)] sm:grid-cols-2 lg:grid-cols-3">
             {radar.data!.items.slice(0, 6).map((it, i) => (
               <RadarCard key={it.id} it={it} i={i} />
             ))}
@@ -166,31 +152,31 @@ export default function Home() {
         </section>
       )}
 
-      {/* ===== 实时数字：滚动揭示 + 数字滚动；接口彻底失败时整块隐藏，不摆一排"…"装死 ===== */}
+      {/* ===== 实时数字：台账版式——衬线大数字 + 纵向细线分栏 ===== */}
       {!stats.isError && (
       <section>
-        <div className="sb-reveal flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div className="sb-reveal sb-rule flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-3">
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
             Live from our database
           </h2>
           <span className="whitespace-nowrap text-xs text-[var(--sb-ink-40)]">实时统计自工厂数据库</span>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-y-7 border-t border-[var(--sb-line)] pt-6 sm:grid-cols-3 sm:gap-y-10 sm:pt-7 lg:grid-cols-6">
-          <div className="sb-reveal">
-            <div className="text-[30px] font-bold leading-none tracking-tight sm:text-[34px]">
+        <div className="mt-4 grid grid-cols-2 gap-y-7 border-t border-[var(--sb-line)] sm:grid-cols-3 lg:grid-cols-6">
+          <div className="sb-reveal pt-6 sm:pt-7">
+            <div className="sb-display text-[34px] leading-none tracking-tight sm:text-[40px]">
               {stats.data ? <CountUp value={stats.data.total} /> : "…"}
             </div>
-            <div className="mt-2 text-xs font-medium text-[var(--sb-ink)]">严选源头工厂</div>
+            <div className="mt-2.5 text-xs font-medium text-[var(--sb-ink)]">严选源头工厂</div>
             <div className="mt-1 text-[11px] leading-snug text-[var(--sb-ink-40)]">
               资质 · 产能 · 履约三重筛查
             </div>
           </div>
           {TIER_ORDER.map((t, i) => (
-            <div key={t} className="sb-reveal" style={{ ["--sb-delay" as string]: `${(i + 1) * 90}ms` }}>
-              <div className="text-[30px] font-bold leading-none tracking-tight sm:text-[34px]">
+            <div key={t} className="sb-reveal border-l border-[var(--sb-line)] pl-4 pt-6 sm:pl-5 sm:pt-7" style={{ ["--sb-delay" as string]: `${(i + 1) * 90}ms` }}>
+              <div className="sb-display text-[34px] leading-none tracking-tight sm:text-[40px]">
                 {stats.data ? <CountUp value={tierCount(t)} /> : "…"}
               </div>
-              <div className="mt-2 text-xs font-medium text-[var(--sb-ink)]">{t}工厂</div>
+              <div className="mt-2.5 text-xs font-medium text-[var(--sb-ink)]">{t}工厂</div>
               <div className="mt-1 text-[11px] leading-snug text-[var(--sb-ink-40)]">
                 {TIER_DESC[t]}
               </div>
@@ -202,7 +188,7 @@ export default function Home() {
 
       {/* ===== 服务方式（叙事三步） ===== */}
       <section>
-        <h2 className="sb-reveal text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
+        <h2 className="sb-reveal sb-rule pt-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
           How it works · 服务如何进行
         </h2>
         <div className="mt-4 border-t border-[var(--sb-line)]">
@@ -213,14 +199,14 @@ export default function Home() {
           ].map(([title, desc], i) => (
             <div
               key={title}
-              className="sb-reveal group grid gap-1.5 border-b border-[var(--sb-line)] py-5 transition-colors duration-300 hover:bg-white/50 md:grid-cols-[120px_200px_1fr] md:gap-6 md:py-7"
+              className="sb-reveal group grid gap-1.5 border-b border-[var(--sb-line)] py-5 transition-colors duration-300 hover:bg-white/60 md:grid-cols-[120px_200px_1fr] md:gap-6 md:py-7"
               style={{ ["--sb-delay" as string]: `${i * 90}ms` }}
             >
               <div className="flex items-baseline gap-3 md:contents">
-                <span className="sb-num text-xs font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)] transition-colors duration-300 group-hover:text-[var(--sb-brand)]">
+                <span className="sb-index text-xs font-semibold uppercase text-[var(--sb-ink-40)] transition-colors duration-300 group-hover:text-[var(--sb-brand)]">
                   Step {i + 1}
                 </span>
-                <h3 className="font-semibold">{title}</h3>
+                <h3 className="sb-display text-[17px]">{title}</h3>
               </div>
               <p className="text-sm leading-relaxed text-[var(--sb-ink-60)]">{desc}</p>
             </div>
@@ -230,7 +216,7 @@ export default function Home() {
 
       {/* ===== 三不承诺 ===== */}
       <section>
-        <h2 className="sb-reveal text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
+        <h2 className="sb-reveal sb-rule pt-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
           Our promise · 三条铁律
         </h2>
         <div className="mt-4 border-t border-[var(--sb-line)]">
@@ -241,14 +227,14 @@ export default function Home() {
           ].map(([title, desc], i) => (
             <div
               key={title}
-              className="sb-reveal grid gap-1.5 border-b border-[var(--sb-line)] py-5 transition-colors duration-300 hover:bg-white/50 md:grid-cols-[120px_200px_1fr] md:gap-6 md:py-7"
+              className="sb-reveal grid gap-1.5 border-b border-[var(--sb-line)] py-5 transition-colors duration-300 hover:bg-white/60 md:grid-cols-[120px_200px_1fr] md:gap-6 md:py-7"
               style={{ ["--sb-delay" as string]: `${i * 90}ms` }}
             >
               <div className="flex items-baseline gap-3 md:contents">
-                <span className="sb-num text-xs font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)]">
+                <span className="sb-index text-xs font-semibold uppercase text-[var(--sb-ink-40)]">
                   0{i + 1}
                 </span>
-                <h3 className="font-semibold">{title}</h3>
+                <h3 className="sb-display text-[17px]">{title}</h3>
               </div>
               <p className="text-sm leading-relaxed text-[var(--sb-ink-60)]">{desc}</p>
             </div>
@@ -256,9 +242,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== 头部工厂 ===== */}
+      {/* ===== 头部工厂：台账卡——细线顶规 + 衬线厂名 + 索引号 ===== */}
       <section>
-        <div className="sb-reveal flex items-baseline justify-between">
+        <div className="sb-reveal sb-rule flex items-baseline justify-between pt-3">
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
             Top rated · 头部严选工厂
           </h2>
@@ -269,26 +255,29 @@ export default function Home() {
             查看全部 →
           </Link>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-4 grid gap-x-6 gap-y-0 border-t border-[var(--sb-line)] sm:grid-cols-2 lg:grid-cols-3">
           {(featured.data ?? []).map((f, i) => (
             <Link
               key={f.id}
               to={`/factories/${f.id}`}
-              className="sb-reveal group rounded-xl border border-[var(--sb-line)] bg-white p-4 transition-all duration-300 hover:border-[var(--sb-brand)]/40 hover:shadow-[0_8px_24px_-12px_rgba(31,74,148,0.18)]"
+              className="sb-reveal group border-b border-[var(--sb-line)] py-4 transition-colors duration-200 hover:bg-white/60"
               style={{ ["--sb-delay" as string]: `${i * 70}ms` }}
             >
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="line-clamp-1 text-sm font-semibold text-[var(--sb-ink)] [@media(hover:hover)]:group-hover:text-[var(--sb-brand)]">
-                  {f.name}
-                </h3>
-                <span className="sb-num shrink-0 rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="sb-index text-[11px] text-[var(--sb-ink-40)]">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="sb-num shrink-0 text-xs font-semibold text-[var(--sb-brand)]">
                   {f.tier} {f.score}
                 </span>
               </div>
-              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
+              <h3 className="sb-display mt-1.5 line-clamp-1 text-[16px] leading-snug text-[var(--sb-ink)] [@media(hover:hover)]:group-hover:text-[var(--sb-brand)]">
+                {f.name}
+              </h3>
+              <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
                 {f.reason}
               </p>
-              <p className="sb-num mt-2 text-xs text-[var(--sb-ink-40)]">
+              <p className="sb-num mt-2 text-[11px] text-[var(--sb-ink-40)]">
                 {f.location}
                 {f.years ? ` · ${f.years} 年` : ""}
               </p>

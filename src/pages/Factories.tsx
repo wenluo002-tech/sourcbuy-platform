@@ -35,10 +35,10 @@ export default function Factories() {
   return (
     <div className="space-y-6">
       {/* 页头 */}
-      <div>
+      <div className="sb-rule pt-4">
         <span className="sb-eyebrow">Vetted Factory Index</span>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">严选工厂库</h1>
-        <p className="mt-2 max-w-xl text-sm leading-relaxed text-black/55">
+        <h1 className="sb-display mt-4 text-3xl tracking-tight sm:text-[40px]">严选工厂库</h1>
+        <p className="mt-4 max-w-xl text-sm leading-relaxed text-black/55">
           每一家都验过资质、产能、履约记录。评分公式公开，工厂花钱买不到名次。
         </p>
       </div>
