@@ -118,9 +118,10 @@ export default function Home() {
                 backgroundPosition: "center",
               }}
             />
-            <span className="sb-tick right-3 top-3" style={{ color: "rgba(255,255,255,0.7)" }} />
-            <span className="sb-tick bottom-3 right-3" style={{ color: "rgba(255,255,255,0.7)" }} />
-            <div className="absolute bottom-3 left-4 text-[10px] uppercase tracking-[0.2em] text-white/85">
+            <span className="sb-tick right-3 top-3" style={{ color: "rgba(21,37,49,0.55)" }} />
+            <span className="sb-tick bottom-3 right-3" style={{ color: "rgba(21,37,49,0.55)" }} />
+            <div className="absolute bottom-3 left-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(21,37,49,0.75)]">
+              <span className="sb-dot-live inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
               China Supply Network · Live
             </div>
           </div>
