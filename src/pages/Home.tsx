@@ -126,65 +126,6 @@ export default function Home() {
             </p>
           </div>
 
-          {/* 本周信号台账：超宽屏时悬于右侧图上，全部真实数据 */}
-          {(radar.data?.items?.length ?? 0) > 0 && (
-            <div className="absolute right-8 top-1/2 hidden w-[400px] -translate-y-1/2 border border-[var(--sb-rule)] bg-white/85 backdrop-blur-sm xl:block">
-              <div className="flex items-center justify-between gap-3 border-b border-[var(--sb-line)] px-4 py-2.5">
-                <span className="sb-eyebrow">
-                  <span className="sb-dot-live inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
-                  Live signals · 本周海外信号
-                </span>
-                <Link
-                  to="/radar"
-                  className="shrink-0 text-[11px] font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
-                >
-                  完整榜单 →
-                </Link>
-              </div>
-              {radar.data!.items.slice(0, 3).map((it, i) => (
-                <Link
-                  key={it.id}
-                  to="/radar"
-                  className="group flex items-baseline gap-3 border-b border-[var(--sb-line)] px-4 py-2.5 transition-colors duration-150 hover:bg-white/80"
-                >
-                  <span className="sb-index text-[10px] text-[var(--sb-ink-40)]">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="sb-display block truncate text-[14px] leading-snug text-[var(--sb-ink)] group-hover:text-[var(--sb-brand)]">
-                      {it.title}
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--sb-ink-40)]">
-                      <span
-                        className="inline-block h-1 w-1 rounded-full"
-                        style={{ background: it.signalSource === "amazon" ? "#e07b39" : "#6d28d9" }}
-                      />
-                      {it.signalSource === "amazon" ? "Amazon 信号" : "TikTok 信号"} · {it.signalDate}
-                    </span>
-                  </span>
-                  <span className="sb-num shrink-0 text-[12px] font-semibold text-[var(--sb-ink)]">
-                    {it.factoryPriceMin != null && it.factoryPriceMax != null
-                      ? `¥${it.factoryPriceMin}–${it.factoryPriceMax}`
-                      : "询价"}
-                  </span>
-                </Link>
-              ))}
-              <div className="flex items-center justify-between gap-2 px-4 py-2.5 text-[10px] text-[var(--sb-ink-60)]">
-                <span>
-                  <span className="sb-num font-semibold text-[var(--sb-ink)]">
-                    {stats.data ? stats.data.total.toLocaleString() : "…"}
-                  </span>{" "}
-                  严选工厂
-                </span>
-                <span>
-                  <span className="sb-num font-semibold text-[var(--sb-ink)]">{radar.data!.items.length}</span>{" "}
-                  本期在榜
-                </span>
-                <span>履约佣金 3.5%–11%</span>
-              </div>
-            </div>
-          )}
-
           <div className="absolute bottom-3 left-4 hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(21,37,49,0.75)] md:flex">
             <span className="sb-dot-live inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
             China Supply Network · Live
