@@ -57,10 +57,6 @@ export default function Home() {
               "linear-gradient(90deg, rgba(243,248,252,0.97) 0%, rgba(243,248,252,0.92) 32%, rgba(243,248,252,0.72) 55%, rgba(243,248,252,0.38) 78%, rgba(243,248,252,0.2) 100%)",
           }}
         />
-        <span className="sb-tick left-0 top-3" />
-        <span className="sb-tick right-3 top-3 hidden md:block" style={{ color: "rgba(21,37,49,0.55)" }} />
-        <span className="sb-tick bottom-3 right-3 hidden md:block" style={{ color: "rgba(21,37,49,0.55)" }} />
-
         {/* 文字与行动区 */}
         <div className="relative px-1 py-10 sm:py-14 md:py-20 lg:max-w-[62%]">
           <span className="sb-eyebrow flex items-center gap-2">
@@ -70,17 +66,15 @@ export default function Home() {
 
             <h1 className="sb-display mt-6 text-[clamp(30px,7vw,44px)] leading-[1.14] tracking-tight md:text-[64px] md:leading-[1.08]">
               <span className="sb-line-mask"><span className="whitespace-nowrap">说出采购需求，</span></span>
-              <span className="sb-line-mask"><span className="whitespace-nowrap" style={{ ["--sb-delay" as string]: "100ms" }}>好货与底价一次给齐。</span></span>
+              <span className="sb-line-mask"><span className="whitespace-nowrap" style={{ ["--sb-delay" as string]: "100ms" }}>好货与<span className="text-[var(--sb-brand)]">底价</span>一次给齐<span className="text-[var(--sb-brand)]">。</span></span></span>
             </h1>
 
-            {/* 信任信号：细线分隔的行内条目 */}
-            <div className="mt-7 flex flex-wrap items-center gap-x-0 gap-y-2 text-[12px] text-[var(--sb-ink-60)] sm:text-[13px]">
-              {["数千家严选工厂", "评分公开可核验", "全程只站你这边"].map((t, i) => (
-                <span key={t} className="flex items-center">
-                  {i > 0 && <span className="mx-3.5 h-3 w-px bg-[var(--sb-rule)]" />}
-                  {t}
-                </span>
-              ))}
+            {/* 信任信号：品牌蓝短线 + 一句承诺 */}
+            <div className="mt-7 flex items-center gap-3.5">
+              <span className="h-px w-10 shrink-0 bg-[var(--sb-brand)]" />
+              <span className="text-[14px] font-medium tracking-[0.08em] text-[var(--sb-ink)] sm:text-[15px]">
+                AI 严选直连源头工厂
+              </span>
             </div>
 
             <form
@@ -109,14 +103,25 @@ export default function Home() {
               </div>
             </form>
 
-            <div className="mt-4 flex flex-wrap gap-x-1 gap-y-1.5">
-              {EXAMPLES.map((s) => (
+            <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--sb-ink-40)]">
+              试试这样问
+            </p>
+            <div className="mt-1 grid max-w-2xl grid-cols-1 sm:grid-cols-2 sm:gap-x-8">
+              {EXAMPLES.map((s, i) => (
                 <button
                   key={s}
                   onClick={() => goChat(s)}
-                  className="px-2 py-1 text-xs text-[var(--sb-ink-60)] underline decoration-transparent underline-offset-4 transition-colors duration-150 hover:text-[var(--sb-brand)] hover:decoration-[var(--sb-brand)]"
+                  className="group flex items-baseline gap-2.5 border-b border-[var(--sb-line)] py-2.5 text-left transition-colors duration-150"
                 >
-                  {s} →
+                  <span className="sb-index shrink-0 text-[10px] text-[var(--sb-ink-40)] transition-colors duration-150 group-hover:text-[var(--sb-brand)]">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="text-[13px] text-[var(--sb-ink-60)] transition-colors duration-150 group-hover:text-[var(--sb-brand)]">
+                    {s}
+                  </span>
+                  <span className="ml-auto shrink-0 text-[11px] text-[var(--sb-ink-40)] opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--sb-brand)] group-hover:opacity-100">
+                    →
+                  </span>
                 </button>
               ))}
             </div>
@@ -149,7 +154,7 @@ export default function Home() {
           <p className="sb-reveal mt-2 text-xs text-[var(--sb-ink-40)]">
             海外在爆什么（真实榜单出处）→ 国内工厂能不能造（出厂价带 + 严选产能）——每周更新
           </p>
-          <div className="mt-4 grid gap-x-6 border-t border-[var(--sb-line)] sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {radar.data!.items.slice(0, 6).map((it, i) => (
               <RadarCard key={it.id} it={it} i={i} />
             ))}

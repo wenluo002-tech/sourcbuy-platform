@@ -37,10 +37,11 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
   const sales = fmtSales(it.topSales);
   return (
     <article
-      className="sb-reveal flex flex-col border-t border-[var(--sb-rule)] bg-white/0 px-1 pb-5 pt-4 transition-colors duration-200 hover:bg-white/70"
+      className="sb-reveal flex flex-col border border-[var(--sb-rule)] bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--sb-brand)] hover:shadow-[0_14px_34px_-16px_rgba(21,37,49,0.35)]"
       style={{ ["--sb-delay" as string]: `${Math.min(i, 8) * 60}ms` }}
     >
-      <div className="flex items-baseline justify-between gap-3">
+      {/* 顶行：台账序号 + 信号源 */}
+      <div className="flex items-center justify-between gap-3">
         <span className="sb-index text-[11px] text-[var(--sb-ink-40)]">
           {String(i + 1).padStart(2, "0")}
         </span>
@@ -50,11 +51,14 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
         </span>
       </div>
 
-      <h3 className="sb-display mt-2 text-[19px] leading-snug text-[var(--sb-ink)]">{it.title}</h3>
-      {it.titleEn && <p className="mt-0.5 line-clamp-1 text-[11px] text-[var(--sb-ink-40)]">{it.titleEn}</p>}
+      {/* 品名 */}
+      <h3 className="sb-display mt-3 text-[21px] leading-snug text-[var(--sb-ink)]">{it.title}</h3>
+      {it.titleEn && (
+        <p className="mt-1 line-clamp-1 text-[11px] tracking-[0.04em] text-[var(--sb-ink-40)]">{it.titleEn}</p>
+      )}
 
       {/* 海外信号：真实出处 + 日期，可点击验证 */}
-      <p className="mt-2.5 text-xs leading-relaxed text-[var(--sb-ink-60)]">
+      <p className="mt-3 line-clamp-2 min-h-[2.6em] text-xs leading-relaxed text-[var(--sb-ink-60)]">
         {it.signalUrl ? (
           <a href={it.signalUrl} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-[var(--sb-brand)]">
             {it.signalText}
@@ -64,46 +68,51 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
         )}
       </p>
 
-      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-[var(--sb-line)] pt-3 text-[11px]">
+      {/* 价格底板：纸色数据块，两栏大数字 */}
+      <div className="mt-4 grid grid-cols-2 gap-x-3 bg-[var(--sb-paper)] px-3.5 py-3">
         {it.factoryPriceMin != null && it.factoryPriceMax != null ? (
           <div>
-            <span className="text-[var(--sb-ink-40)]">源头出厂价带</span>
-            <div className="sb-num mt-0.5 text-[15px] font-semibold text-[var(--sb-ink)]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--sb-ink-40)]">源头出厂价带</span>
+            <div className="sb-num mt-1 text-[17px] font-semibold leading-none text-[var(--sb-ink)]">
               ¥{it.factoryPriceMin}–{it.factoryPriceMax}
             </div>
           </div>
         ) : (
           <div>
-            <span className="text-[var(--sb-ink-40)]">源头出厂价</span>
-            <div className="mt-0.5 text-[15px] font-semibold text-[var(--sb-ink)]">询我查实价</div>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--sb-ink-40)]">源头出厂价</span>
+            <div className="mt-1 text-[15px] font-semibold leading-none text-[var(--sb-ink)]">询我查实价</div>
           </div>
         )}
         <div>
-          <span className="text-[var(--sb-ink-40)]">{it.retailPriceUsd != null ? "海外零售参考" : "严选库相关工厂"}</span>
-          <div className="sb-num mt-0.5 text-[15px] font-semibold text-[var(--sb-ink)]">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--sb-ink-40)]">
+            {it.retailPriceUsd != null ? "海外零售参考" : "严选库相关工厂"}
+          </span>
+          <div className="sb-num mt-1 text-[17px] font-semibold leading-none text-[var(--sb-ink)]">
             {it.retailPriceUsd != null ? `$${it.retailPriceUsd}` : `${it.vettedCount ?? 0} 家`}
           </div>
         </div>
       </div>
 
       {it.note && (
-        <p className="mt-3 border-l-2 border-[var(--sb-brand)]/50 pl-3 text-[11px] leading-relaxed text-[var(--sb-ink-60)]">
+        <p className="mt-3.5 border-l-2 border-[var(--sb-brand)]/50 pl-3 text-[11px] leading-relaxed text-[var(--sb-ink-60)]">
           <span className="font-semibold text-[var(--sb-ink)]">老采购：</span>
           {it.note}
         </p>
       )}
 
-      <div className="mt-auto flex items-center justify-between gap-2 pt-4">
-        <span className="text-[10px] text-[var(--sb-ink-40)]">
-          信号 {it.signalDate}
-          {sales ? ` · 头部在售 ${sales}` : ""}
-        </span>
-        <Link
-          to={`/buyer?prefill=${encodeURIComponent(`我在爆款雷达上看到「${it.title}」，帮我查对口工厂和到手价`)}`}
-          className="shrink-0 border border-[var(--sb-rule)] px-3.5 py-1.5 text-xs font-semibold text-[var(--sb-ink)] transition-colors duration-150 hover:border-[var(--sb-brand)] hover:bg-[var(--sb-brand)] hover:text-white"
-        >
-          问老采购这款 →
-        </Link>
+      <div className="mt-auto pt-4">
+        <div className="flex items-center justify-between gap-2 border-t border-[var(--sb-line)] pt-3.5">
+          <span className="text-[10px] text-[var(--sb-ink-40)]">
+            信号 {it.signalDate}
+            {sales ? ` · 头部在售 ${sales}` : ""}
+          </span>
+          <Link
+            to={`/buyer?prefill=${encodeURIComponent(`我在爆款雷达上看到「${it.title}」，帮我查对口工厂和到手价`)}`}
+            className="shrink-0 border border-[var(--sb-rule)] px-3.5 py-1.5 text-xs font-semibold text-[var(--sb-ink)] transition-colors duration-150 hover:border-[var(--sb-brand)] hover:bg-[var(--sb-brand)] hover:text-white"
+          >
+            问老采购这款 →
+          </Link>
+        </div>
       </div>
     </article>
   );
@@ -161,7 +170,7 @@ export default function Radar() {
           榜单数据加载失败，请刷新重试——数据没回来我们不会拿旧数据糊弄你。
         </p>
       ) : (
-        <div className="grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((it, i) => (
             <RadarCard key={it.id} it={it} i={i} />
           ))}
