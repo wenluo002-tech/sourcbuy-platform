@@ -356,19 +356,19 @@ export default function BuyerChat() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [turns, chat.isPending]);
 
-  function send(text: string) {
+  function send(text: string, radarId?: number) {
     const msg = text.trim();
     if (!msg || chat.isPending) return;
     const history = turns.map((t) => ({ role: t.role, content: t.content }));
     setTurns((ts) => [...ts, { role: "user", content: msg }]);
     setInput("");
-    doMutate(msg, history, false);
+    doMutate(msg, history, false, radarId);
   }
 
   // 失败静默重试一次（网络/模型抖动大多是瞬时的）；再失败才诚实告诉买家
-  function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean) {
+  function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean, radarId?: number) {
     chat.mutate(
-      { message: msg, history },
+      { message: msg, history, radarId },
       {
         onSuccess: (res) =>
           setTurns((ts) => [
@@ -384,7 +384,7 @@ export default function BuyerChat() {
           ]),
         onError: () => {
           if (!isRetry) {
-            setTimeout(() => doMutate(msg, history, true), 2000);
+            setTimeout(() => doMutate(msg, history, true, radarId), 2000);
             return;
           }
           setTurns((ts) => [
@@ -400,13 +400,15 @@ export default function BuyerChat() {
     );
   }
 
-  // 从首页带过来的第一句话，自动发出
+  // 从首页带过来的第一句话，自动发出；雷达卡直达会带 radar 参数（品类钉死，不依赖意图抽取）
   useEffect(() => {
     const pre = params.get("prefill");
     if (pre && !prefilled.current) {
       prefilled.current = true;
+      const radarIdRaw = params.get("radar");
+      const radarId = radarIdRaw && /^\d+$/.test(radarIdRaw) ? Number(radarIdRaw) : undefined;
       setParams({}, { replace: true });
-      send(pre);
+      send(pre, radarId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

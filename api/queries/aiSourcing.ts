@@ -7,7 +7,7 @@ import { extractOfferId, offerWithFactory } from "./products";
 import { searchOffers } from "../sourcing/offerService";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import { log } from "../lib/logger";
-import { listRadar } from "./radar";
+import { listRadar, getRadarItem } from "./radar";
 
 // ============ 选品意图：买家问"什么好卖/爆款/趋势" → 直接给真实雷达榜，不走 LLM ============
 const SELECTION_RE = /(好卖|爆款|热卖|畅销|趋势|选品|卖什么|什么.*(卖|火)|海外.*(流行|热)|trending|best[\s-]*seller|hot[\s-]*sell)/i;
@@ -83,7 +83,8 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 9. 不要在回复中提及任何货源平台名称（如 1688），统一说"货源平台"或"你贴的商品链接"。我们是采购代理，不给上游平台引流。
 10. 平台铁律：只代表买家，不收工厂返点；推荐按评分中立排序，评分算法公开（七维加权），工厂不可付费影响排名。
 11. 如果系统事实里有 searchProducts（真实搜到的在售商品，含价格/销量）：这些商品会以卡片形式展示在你的话下面。买家先看到货再谈厂——话术里可以点评整体价格带和销量表现（如"主流款出厂价在 ¥xx–xx，有款月销过万的"），不要逐个念标题。
-12. 如果 factoryCount=0 但 searchProducts 非空：诚实说"严选库里暂时还没有验过专做这个品的厂，我不拿不相干的厂糊弄你"，然后引导买家从商品卡里挑中意的款发我，我去查它背后的供应商底细（严选库比对，必要时安排验厂）。绝不允许把其他类目的工厂说成做这个品的——之前把做帐篷的厂推给要自行车的买家，这种事故不能再发生。`;
+12. 如果 factoryCount=0 但 searchProducts 非空：诚实说"严选库里暂时还没有验过专做这个品的厂，我不拿不相干的厂糊弄你"，然后引导买家从商品卡里挑中意的款发我，我去查它背后的供应商底细（严选库比对，必要时安排验厂）。绝不允许把其他类目的工厂说成做这个品的——之前把做帐篷的厂推给要自行车的买家，这种事故不能再发生。
+13. 如果系统事实里有 radarContext：买家是从「海外爆款雷达」榜单点进来的。先用一两句确认这个品的海外信号（原样引用 radarContext 里的 signalText 和 signalDate，可说"榜单出处可验证"），再按上面的规则给货给厂。radarContext 里有 factoryPriceMin/Max 的话，这就是实时出厂价带，直接引用；有 retailPriceUsd 可对比海外零售价差。结尾提醒一句：榜单是需求信号不是保票，先小单试水再放大。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -136,8 +137,12 @@ function buildFallbackReply(
   factories: { name: string; tier: string | null; score: number | null }[],
   searchProducts: { price: number; promotionPrice: number | null; sales: number }[],
   relaxed: boolean,
+  radarCtx?: { title: string; signalText: string; signalDate: string } | null,
 ): string {
   const parts: string[] = [];
+  if (radarCtx) {
+    parts.push(`「${radarCtx.title}」你在雷达榜上看到的没错——${radarCtx.signalText}（信号日期 ${radarCtx.signalDate}，榜单页有出处可验证）。`);
+  }
   const what = intent.product ? `「${intent.product}」` : "这个品";
   if (factories.length > 0) {
     parts.push(
@@ -157,32 +162,50 @@ function buildFallbackReply(
   return parts.join("\n\n");
 }
 
-async function sourcingChatInner(message: string, history: ChatMsg[]) {
+async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number) {
+  // 雷达卡 CTA 直达：radarId 钉死品类与信号上下文，跳过 LLM 意图抽取（词库没收录的品也不受影响）
+  // 必须在选品意图拦截之前——CTA 话术含"爆款"字样，否则会被误判成选品意图
+  let radarCtx: Awaited<ReturnType<typeof getRadarItem>> | null = null;
+  if (radarId) {
+    try {
+      radarCtx = await getRadarItem(radarId);
+    } catch (e) {
+      log.warn("雷达条目查询失败，按普通对话流程走", { error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
   // 选品意图（"什么好卖/爆款/趋势"）走真实雷达榜，零 LLM 延迟，绝不编数据
-  if (SELECTION_RE.test(message) && !extractOfferId(message)) {
+  if (!radarCtx && SELECTION_RE.test(message) && !extractOfferId(message)) {
     const radar = await radarSelectionReply();
     if (radar) return radar;
   }
-  // 模型清单与意图抽取并行——省 2-4s 冷启动
+
+  // 模型清单与意图抽取并行——省 2-4s 冷启动（雷达直达场景意图已钉死，不再调 LLM）
   const [modelsRes, intentRes] = await Promise.allSettled([
     listModels(),
-    generateObject({
-      model: kimiGw(process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking"),
-      system: INTENT_SYSTEM,
-      messages: [
-        ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
-        { role: "user" as const, content: message },
-      ],
-      schema: intentSchema,
-      abortSignal: AbortSignal.timeout(12_000), // 意图抽取 12s 封顶（预览网关超时紧，给后端全链留余量）
-    }),
+    radarCtx
+      ? Promise.resolve(null)
+      : generateObject({
+          model: kimiGw(process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking"),
+          system: INTENT_SYSTEM,
+          messages: [
+            ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
+            { role: "user" as const, content: message },
+          ],
+          schema: intentSchema,
+          abortSignal: AbortSignal.timeout(12_000), // 意图抽取 12s 封顶（预览网关超时紧，给后端全链留余量）
+        }),
   ]);
   const defaultModelId = modelsRes.status === "fulfilled" ? modelsRes.value.defaultModelId : process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking";
   // 意图抽取失败绝不抛 500：降级到本地词库兜底，筛厂/搜货链路照跑
-  if (intentRes.status === "rejected") {
+  if (!radarCtx && intentRes.status === "rejected") {
     log.warn("意图抽取失败，走本地词库兜底", { error: intentRes.reason instanceof Error ? intentRes.reason.message : String(intentRes.reason) });
   }
-  const intent = intentRes.status === "fulfilled" ? intentRes.value.object : localIntentFallback(message);
+  const intent = radarCtx
+    ? { product: radarCtx.keyword, quantity: null, destination: null, budgetNote: null, followUp: null, isGreeting: false }
+    : intentRes.status === "fulfilled" && intentRes.value
+      ? intentRes.value.object
+      : localIntentFallback(message);
   const messages = [
     ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
     { role: "user" as const, content: message },
@@ -262,6 +285,19 @@ async function sourcingChatInner(message: string, history: ChatMsg[]) {
   const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
   const facts = JSON.stringify({
     intent,
+    radarContext: radarCtx
+      ? {
+          title: radarCtx.title,
+          titleEn: radarCtx.titleEn,
+          signalText: radarCtx.signalText,
+          signalDate: radarCtx.signalDate,
+          retailPriceUsd: radarCtx.retailPriceUsd,
+          factoryPriceMin: radarCtx.factoryPriceMin,
+          factoryPriceMax: radarCtx.factoryPriceMax,
+          upstreamCount: radarCtx.upstreamCount,
+          vettedCount: radarCtx.vettedCount,
+        }
+      : null,
     factoryCount: factories.length,
     relaxedThreshold: relaxed,
     searchProducts: searchProducts.length
@@ -316,7 +352,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[]) {
     reply = r.text;
   } catch (e) {
     log.warn("reply 话术生成失败，走规则模板兜底", { error: e instanceof Error ? e.message : String(e) });
-    reply = buildFallbackReply(intent, factories, searchProducts, relaxed);
+    reply = buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx);
   }
 
   return {
@@ -332,9 +368,9 @@ async function sourcingChatInner(message: string, history: ChatMsg[]) {
 }
 
 // 最外层保险：任何漏网异常都不让买家看到报错——返回诚实的降级话术（HTTP 200），并留日志可查
-export async function sourcingChat(message: string, history: ChatMsg[]) {
+export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number) {
   try {
-    return await sourcingChatInner(message, history);
+    return await sourcingChatInner(message, history, radarId);
   } catch (e) {
     log.error("ai.chat 未捕获异常，走全兜底", { error: e instanceof Error ? e.message : String(e) });
     return {

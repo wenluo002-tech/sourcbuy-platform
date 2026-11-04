@@ -127,11 +127,12 @@ export const appRouter = createRouter({
           history: z
             .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() }))
             .max(20),
+          radarId: z.number().int().positive().optional(), // 雷达卡 CTA 直达：钉死品类与信号上下文
         })
       )
       .mutation(async ({ input }) => {
         try {
-          return await sourcingChat(input.message, input.history);
+          return await sourcingChat(input.message, input.history, input.radarId);
         } catch (err) {
           const classified = classifyAiError(err);
           if (classified instanceof AiUnavailable) {

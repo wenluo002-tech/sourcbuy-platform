@@ -57,6 +57,7 @@ async function main() {
   console.log(`回填 ${rows.length} 条…`);
   for (const row of rows) {
     let pMin: string | null = null, pMax: string | null = null, topSales: number | null = null, upstream: number | null = row.upstreamCount;
+    let imageUrl: string | null = null;
     try {
       const r = await searchOffers(row.keyword, 1);
       upstream = r.total ?? upstream;
@@ -70,6 +71,8 @@ async function main() {
       }
       const sales = r.items.map((p) => p.sales).filter((n) => n > 0);
       if (sales.length) topSales = Math.max(...sales);
+      // 产品代表图：取第一条有图的上游商品首图（不编图，没图就留空）
+      imageUrl = r.items.find((p) => p.image)?.image ?? null;
     } catch (e: any) {
       console.log(`  [货源查询失败保留原值] ${row.title}: ${String(e?.message ?? e).slice(0, 80)}`);
     }
@@ -77,9 +80,9 @@ async function main() {
     const vetted = cat ? await categoryVettedCount(cat) : 0;
     await db
       .update(radarItems)
-      .set({ factoryPriceMin: pMin, factoryPriceMax: pMax, topSales, upstreamCount: upstream, vettedCount: vetted })
+      .set({ factoryPriceMin: pMin, factoryPriceMax: pMax, topSales, upstreamCount: upstream, vettedCount: vetted, ...(imageUrl ? { imageUrl } : {}) })
       .where(eq(radarItems.id, row.id));
-    console.log(`  ✓ ${row.title} | ${cat ?? "∅"} 严选 ${vetted} | 出厂 ¥${pMin ?? "?"}-${pMax ?? "?"} | 销 ${topSales ?? "?"}`);
+    console.log(`  ✓ ${row.title} | ${cat ?? "∅"} 严选 ${vetted} | 出厂 ¥${pMin ?? "?"}-${pMax ?? "?"} | 销 ${topSales ?? "?"} | 图 ${imageUrl ? "✓" : "∅"}`);
   }
   process.exit(0);
 }

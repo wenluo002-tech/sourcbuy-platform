@@ -234,6 +234,7 @@ export const radarItems = mysqlTable(
     signalText: varchar("signal_text", { length: 255 }).notNull(), // "亚马逊美国站家居厨畅销榜 #1"
     signalUrl: text("signal_url"), // 买家可点击验证的链接
     signalDate: varchar("signal_date", { length: 16 }).notNull(), // 信号采集日期 YYYY-MM-DD
+    imageUrl: varchar("image_url", { length: 512 }), // 产品代表图（上游搜索首图，外链直用）
     retailPriceUsd: decimal("retail_price_usd", { precision: 8, scale: 2 }), // 海外零售价（信号来源标价）
     factoryPriceMin: decimal("factory_price_min", { precision: 8, scale: 2 }), // 出厂价带（上游实时搜索）
     factoryPriceMax: decimal("factory_price_max", { precision: 8, scale: 2 }),

@@ -228,6 +228,7 @@ async function main() {
     let pMin: number | null = null;
     let pMax: number | null = null;
     let topSales: number | null = null;
+    let imageUrl: string | null = null;
     try {
       const r = await searchOffers(c.keyword, 1);
       upstreamCount = r.total ?? null;
@@ -244,6 +245,7 @@ async function main() {
       }
       const sales = r.items.map((p) => p.sales).filter((n) => n > 0);
       if (sales.length) topSales = Math.max(...sales);
+      imageUrl = r.items.find((p) => p.image)?.image ?? null;
     } catch (e: any) {
       console.log(`  [上游查询失败，留空] ${c.title}: ${e?.message ?? e}`);
     }
@@ -261,6 +263,7 @@ async function main() {
       signalText: c.signalText,
       signalUrl: c.signalUrl,
       signalDate: c.signalDate,
+      imageUrl,
       retailPriceUsd: c.retailPriceUsd != null ? String(c.retailPriceUsd) : null,
       factoryPriceMin: pMin != null ? String(pMin) : null,
       factoryPriceMax: pMax != null ? String(pMax) : null,

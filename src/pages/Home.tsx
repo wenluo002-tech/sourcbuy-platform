@@ -47,14 +47,15 @@ export default function Home() {
           style={{
             backgroundImage: "url('/hero-bg.jpg')",
             backgroundSize: "cover",
-            backgroundPosition: "center",
+            backgroundPosition: "right center",
           }}
         />
+        {/* 蒙版只保左侧文字区可读，右侧让图铺满透出 */}
         <div
           className="absolute inset-0 hidden md:block"
           style={{
             background:
-              "linear-gradient(90deg, rgba(243,248,252,0.97) 0%, rgba(243,248,252,0.92) 32%, rgba(243,248,252,0.72) 55%, rgba(243,248,252,0.38) 78%, rgba(243,248,252,0.2) 100%)",
+              "linear-gradient(90deg, rgba(243,248,252,0.97) 0%, rgba(243,248,252,0.92) 28%, rgba(243,248,252,0.62) 48%, rgba(243,248,252,0.18) 68%, rgba(243,248,252,0.02) 100%)",
           }}
         />
         {/* 文字与行动区 */}
@@ -69,12 +70,23 @@ export default function Home() {
               <span className="sb-line-mask"><span className="whitespace-nowrap" style={{ ["--sb-delay" as string]: "100ms" }}>好货与<span className="text-[var(--sb-brand)]">底价</span>一次给齐<span className="text-[var(--sb-brand)]">。</span></span></span>
             </h1>
 
-            {/* 信任信号：品牌蓝短线 + 一句承诺 */}
+            {/* 信任信号：主线一句 + 三条优势（对勾精致版） */}
             <div className="mt-7 flex items-center gap-3.5">
               <span className="h-px w-10 shrink-0 bg-[var(--sb-brand)]" />
               <span className="text-[14px] font-medium tracking-[0.08em] text-[var(--sb-ink)] sm:text-[15px]">
                 AI 严选直连源头工厂
               </span>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-2">
+              {["数千家严选工厂", "评分公开可核验", "全程只站你这边"].map((t) => (
+                <span key={t} className="flex items-center gap-2 text-[13px] text-[var(--sb-ink-60)]">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0 text-[var(--sb-brand)]">
+                    <circle cx="8" cy="8" r="7.25" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M5 8.2 7.2 10.4 11 5.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {t}
+                </span>
+              ))}
             </div>
 
             <form

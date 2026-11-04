@@ -11,6 +11,7 @@ type RadarItem = {
   signalText: string;
   signalUrl: string | null;
   signalDate: string;
+  imageUrl: string | null;
   retailPriceUsd: number | null;
   factoryPriceMin: number | null;
   factoryPriceMax: number | null;
@@ -40,6 +41,23 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
       className="sb-reveal flex flex-col border border-[var(--sb-rule)] bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--sb-brand)] hover:shadow-[0_14px_34px_-16px_rgba(21,37,49,0.35)]"
       style={{ ["--sb-delay" as string]: `${Math.min(i, 8) * 60}ms` }}
     >
+      {/* 产品代表图：上游实时搜索首图，加载失败整块隐藏（宁可没图，不摆破图） */}
+      {it.imageUrl && (
+        <div className="-mx-5 -mt-5 mb-4 h-40 overflow-hidden border-b border-[var(--sb-line)] bg-[var(--sb-paper)]">
+          <img
+            src={it.imageUrl}
+            alt={it.title}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              const wrap = e.currentTarget.parentElement;
+              if (wrap) wrap.style.display = "none";
+            }}
+          />
+        </div>
+      )}
+
       {/* 顶行：台账序号 + 信号源 */}
       <div className="flex items-center justify-between gap-3">
         <span className="sb-index text-[11px] text-[var(--sb-ink-40)]">
@@ -107,7 +125,7 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
             {sales ? ` · 头部在售 ${sales}` : ""}
           </span>
           <Link
-            to={`/buyer?prefill=${encodeURIComponent(`我在爆款雷达上看到「${it.title}」，帮我查对口工厂和到手价`)}`}
+            to={`/buyer?radar=${it.id}&prefill=${encodeURIComponent(`我在爆款雷达上看到「${it.title}」，帮我查对口工厂和到手价`)}`}
             className="shrink-0 border border-[var(--sb-rule)] px-3.5 py-1.5 text-xs font-semibold text-[var(--sb-ink)] transition-colors duration-150 hover:border-[var(--sb-brand)] hover:bg-[var(--sb-brand)] hover:text-white"
           >
             问老采购这款 →
