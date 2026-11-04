@@ -21,7 +21,7 @@ const EXAMPLES = [
 ];
 
 export default function Home() {
-  const stats = trpc.factories.stats.useQuery();
+  const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
   const featured = trpc.factories.match.useQuery({ minScore: 90, limit: 6 });
   const [kw, setKw] = useState("");
   const navigate = useNavigate();
@@ -139,7 +139,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== 实时数字：滚动揭示 + 数字滚动 ===== */}
+      {/* ===== 实时数字：滚动揭示 + 数字滚动；接口彻底失败时整块隐藏，不摆一排"…"装死 ===== */}
+      {!stats.isError && (
       <section>
         <div className="sb-reveal flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
@@ -170,6 +171,7 @@ export default function Home() {
           ))}
         </div>
       </section>
+      )}
 
       {/* ===== 服务方式（叙事三步） ===== */}
       <section>
