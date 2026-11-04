@@ -4,6 +4,7 @@ import logoMark from "@/assets/logo-mark.png";
 
 const NAV = [
   { to: "/buyer", zh: "开始采购", en: "SOURCING" },
+  { to: "/radar", zh: "爆款雷达", en: "RADAR" },
   { to: "/factories", zh: "严选工厂库", en: "FACTORIES" },
   { to: "/calculator", zh: "到手价试算", en: "LANDED COST" },
 ];

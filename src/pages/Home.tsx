@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router";
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { CountUp, useReveal } from "@/hooks/useReveal";
+import { RadarCard } from "@/pages/Radar";
 
 const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
 
@@ -23,6 +24,7 @@ const EXAMPLES = [
 export default function Home() {
   const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
   const featured = trpc.factories.match.useQuery({ minScore: 90, limit: 6 });
+  const radar = trpc.radar.list.useQuery(undefined, { staleTime: 60_000 });
   const [kw, setKw] = useState("");
   const navigate = useNavigate();
   const pageRef = useReveal<HTMLDivElement>();
@@ -138,6 +140,31 @@ export default function Home() {
           </p>
         </div>
       </section>
+
+      {/* ===== 海外爆款雷达：需求信号 → 产能 → 出厂价带，每周更新 ===== */}
+      {!radar.isError && (radar.data?.items?.length ?? 0) > 0 && (
+        <section>
+          <div className="sb-reveal flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
+              Hot signals · 海外爆款雷达
+            </h2>
+            <Link
+              to="/radar"
+              className="text-sm font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
+            >
+              查看完整榜单 →
+            </Link>
+          </div>
+          <p className="sb-reveal mt-2 text-xs text-[var(--sb-ink-40)]">
+            海外在爆什么（真实榜单出处）→ 国内工厂能不能造（出厂价带 + 严选产能）——每周更新
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {radar.data!.items.slice(0, 6).map((it, i) => (
+              <RadarCard key={it.id} it={it} i={i} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ===== 实时数字：滚动揭示 + 数字滚动；接口彻底失败时整块隐藏，不摆一排"…"装死 ===== */}
       {!stats.isError && (

@@ -5,6 +5,7 @@ import FactoryDetail from './pages/FactoryDetail'
 import Calculator from './pages/Calculator'
 import BuyerChat from './pages/BuyerChat'
 import ProductDetail from './pages/ProductDetail'
+import Radar from './pages/Radar'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
         <Route path="/buyer" element={<BuyerChat />} />
+        <Route path="/radar" element={<Radar />} />
         <Route path="/factories" element={<Factories />} />
         <Route path="/factories/:id" element={<FactoryDetail />} />
         <Route path="/products/:offerId" element={<ProductDetail />} />

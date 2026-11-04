@@ -7,6 +7,36 @@ import { extractOfferId, offerWithFactory } from "./products";
 import { searchOffers } from "../sourcing/offerService";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import { log } from "../lib/logger";
+import { listRadar } from "./radar";
+
+// ============ 选品意图：买家问"什么好卖/爆款/趋势" → 直接给真实雷达榜，不走 LLM ============
+const SELECTION_RE = /(好卖|爆款|热卖|畅销|趋势|选品|卖什么|什么.*(卖|火)|海外.*(流行|热)|trending|best[\s-]*seller|hot[\s-]*sell)/i;
+
+async function radarSelectionReply() {
+  try {
+    const { items } = await listRadar();
+    if (!items.length) return null;
+    const top = items.slice(0, 5);
+    const lines = top.map((it, i) => {
+      const price = it.factoryPriceMin != null && it.factoryPriceMax != null ? `出厂价带 ¥${it.factoryPriceMin}–${it.factoryPriceMax}` : "出厂价询我查实价";
+      const retail = it.retailPriceUsd != null ? `，海外零售约 $${it.retailPriceUsd}` : "";
+      return `${i + 1}. ${it.title}${it.titleEn ? `（${it.titleEn}）` : ""}\n   ${it.signalText}${retail}\n   ${price}，严选库相关工厂 ${it.vettedCount ?? 0} 家`;
+    });
+    const reply = `问对人了——这周海外在涨的品，我挑了 ${items.length} 个工厂能造的放在「海外爆款雷达」里，每一条都有真实榜单出处。先说前 5 个：\n\n${lines.join("\n\n")}\n\n完整榜单在「海外爆款雷达」页，每个品我都写了句实在话（该避的坑也写了）。看中哪个直接告诉我，我帮你查对口工厂、算到目的国的到手价。提醒一句：榜单是需求信号不是保票，先小单试水再放大。`;
+    return {
+      reply,
+      understood: true,
+      intent: { product: null, quantity: null },
+      factories: [],
+      products: [],
+      product: null,
+    };
+  } catch (e) {
+    log.warn("雷达榜查询失败，按普通对话流程走", { error: e instanceof Error ? e.message : String(e) });
+    return null;
+  }
+}
+
 
 const kimiGw = createOpenAICompatible({
   name: "kimi-gw",
@@ -128,6 +158,11 @@ function buildFallbackReply(
 }
 
 async function sourcingChatInner(message: string, history: ChatMsg[]) {
+  // 选品意图（"什么好卖/爆款/趋势"）走真实雷达榜，零 LLM 延迟，绝不编数据
+  if (SELECTION_RE.test(message) && !extractOfferId(message)) {
+    const radar = await radarSelectionReply();
+    if (radar) return radar;
+  }
   // 模型清单与意图抽取并行——省 2-4s 冷启动
   const [modelsRes, intentRes] = await Promise.allSettled([
     listModels(),

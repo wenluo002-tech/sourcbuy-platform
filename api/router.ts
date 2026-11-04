@@ -8,6 +8,7 @@ import {
   matchFactories,
 } from "./queries/factories";
 import { sourcingChat } from "./queries/aiSourcing";
+import { listRadar } from "./queries/radar";
 import { offerWithFactory } from "./queries/products";
 import { getOfferDetail, searchOffers } from "./sourcing/offerService";
 import { classifyAiError, AiUnavailable } from "./lib/ai-client";
@@ -113,6 +114,10 @@ export const appRouter = createRouter({
     search: publicQuery
       .input(z.object({ q: z.string().min(1).max(80), page: z.number().int().min(1).max(20).default(1) }))
       .query(({ input }) => searchOffers(input.q, input.page)),
+  }),
+
+  radar: createRouter({
+    list: publicQuery.query(() => listRadar()),
   }),
 
   ai: createRouter({chat: publicQuery

@@ -219,3 +219,32 @@ export const sourcingApiLogs = mysqlTable(
   },
   (t) => [index("ix_apilogs_created").on(t.createdAt)]
 );
+
+// ============ 海外爆款雷达（选品台信号层）============
+// 每条 = 一个"海外有真实热度信号 + 国内工厂能造"的品。
+// 信号必须真实可溯源（来源/日期/链接），价格带来自上游实时搜索，不编数据。
+export const radarItems = mysqlTable(
+  "radar_items",
+  {
+    id: serial("id").primaryKey(),
+    title: varchar("title", { length: 128 }).notNull(), // 中文品名，如"植绒防滑衣架"
+    titleEn: varchar("title_en", { length: 255 }), // 海外对应品名
+    keyword: varchar("keyword", { length: 128 }).notNull(), // 上游搜货关键词
+    signalSource: mysqlEnum("signal_source", ["amazon", "tiktok"]).notNull(),
+    signalText: varchar("signal_text", { length: 255 }).notNull(), // "亚马逊美国站家居厨畅销榜 #1"
+    signalUrl: text("signal_url"), // 买家可点击验证的链接
+    signalDate: varchar("signal_date", { length: 16 }).notNull(), // 信号采集日期 YYYY-MM-DD
+    retailPriceUsd: decimal("retail_price_usd", { precision: 8, scale: 2 }), // 海外零售价（信号来源标价）
+    factoryPriceMin: decimal("factory_price_min", { precision: 8, scale: 2 }), // 出厂价带（上游实时搜索）
+    factoryPriceMax: decimal("factory_price_max", { precision: 8, scale: 2 }),
+    upstreamCount: int("upstream_count"), // 上游在售货源数
+    vettedCount: int("vetted_count").notNull().default(0), // 严选库命中工厂数
+    topSales: int("top_sales"), // 上游头部在售量（参考）
+    note: text("note"), // 老采购一句话点评（含风险/认证提示）
+    sortOrder: int("sort_order").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_radar_active").on(t.active, t.sortOrder)]
+);
