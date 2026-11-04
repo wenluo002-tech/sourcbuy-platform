@@ -41,14 +41,13 @@ export default function Home() {
     <div ref={pageRef} className="space-y-14 md:space-y-20">
       {/* ===== Hero：事务所版式——细线框架 + 右侧挺括图栏 + 衬线大标题 ===== */}
       <section className="sb-reveal border-y border-[var(--sb-rule)]">
-        <div className="grid md:grid-cols-12">
-          {/* 左：文字与行动区 */}
-          <div className="relative px-1 py-10 sm:py-14 md:col-span-7 md:py-20 md:pr-12">
-            <span className="sb-tick left-0 top-3" />
-            <span className="sb-eyebrow flex items-center gap-2">
-              <span className="sb-dot-live inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
-              SourcBuy · AI 采购代理事务所
-            </span>
+        {/* 上：文字与行动区（通栏） */}
+        <div className="relative px-1 py-10 sm:py-14 md:py-16">
+          <span className="sb-tick left-0 top-3" />
+          <span className="sb-eyebrow flex items-center gap-2">
+            <span className="sb-dot-live inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
+            SourcBuy · AI 采购代理事务所
+          </span>
 
             <h1 className="sb-display mt-6 text-[clamp(30px,7vw,44px)] leading-[1.14] tracking-tight md:text-[64px] md:leading-[1.08]">
               <span className="sb-line-mask"><span className="whitespace-nowrap">说出采购需求，</span></span>
@@ -108,8 +107,8 @@ export default function Home() {
             </p>
           </div>
 
-          {/* 右：挺括图栏（硬边、细线框、图注）+ 本周信号台账（真实数据） */}
-          <div className="relative hidden border-l border-[var(--sb-rule)] md:col-span-5 md:block">
+          {/* 下：通栏图带平铺在文字下方（硬边、细线框、图注）+ 本周信号台账（真实数据） */}
+          <div className="relative hidden h-[300px] border-t border-[var(--sb-rule)] md:block">
             <div
               className="absolute inset-0"
               style={{
@@ -121,9 +120,9 @@ export default function Home() {
             <span className="sb-tick right-3 top-3" style={{ color: "rgba(21,37,49,0.55)" }} />
             <span className="sb-tick bottom-3 right-3" style={{ color: "rgba(21,37,49,0.55)" }} />
 
-            {/* 本周信号台账：悬于图栏之上，全部真实数据 */}
+            {/* 本周信号台账：悬于图带右侧，全部真实数据 */}
             {(radar.data?.items?.length ?? 0) > 0 && (
-              <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 border border-[var(--sb-rule)] bg-white/85 backdrop-blur-sm">
+              <div className="absolute right-8 top-1/2 w-[420px] -translate-y-1/2 border border-[var(--sb-rule)] bg-white/85 backdrop-blur-sm">
                 <div className="flex items-center justify-between gap-3 border-b border-[var(--sb-line)] px-4 py-2.5">
                   <span className="sb-eyebrow">
                     <span className="sb-dot-live inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
@@ -140,7 +139,7 @@ export default function Home() {
                   <Link
                     key={it.id}
                     to="/radar"
-                    className="group flex items-baseline gap-3 border-b border-[var(--sb-line)] px-4 py-3 transition-colors duration-150 hover:bg-white/80"
+                    className="group flex items-baseline gap-3 border-b border-[var(--sb-line)] px-4 py-2.5 transition-colors duration-150 hover:bg-white/80"
                   >
                     <span className="sb-index text-[10px] text-[var(--sb-ink-40)]">
                       {String(i + 1).padStart(2, "0")}
@@ -149,7 +148,7 @@ export default function Home() {
                       <span className="sb-display block truncate text-[14px] leading-snug text-[var(--sb-ink)] group-hover:text-[var(--sb-brand)]">
                         {it.title}
                       </span>
-                      <span className="mt-1 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--sb-ink-40)]">
+                      <span className="mt-0.5 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--sb-ink-40)]">
                         <span
                           className="inline-block h-1 w-1 rounded-full"
                           style={{ background: it.signalSource === "amazon" ? "#e07b39" : "#6d28d9" }}
@@ -185,7 +184,6 @@ export default function Home() {
               China Supply Network · Live
             </div>
           </div>
-        </div>
       </section>
 
       {/* ===== 海外爆款雷达：需求信号 → 产能 → 出厂价带，每周更新 ===== */}
