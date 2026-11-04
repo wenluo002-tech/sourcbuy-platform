@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "react-router";
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
-import NetworkCanvas from "@/components/NetworkCanvas";
 import { CountUp, useReveal } from "@/hooks/useReveal";
 
 const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
@@ -38,13 +37,16 @@ export default function Home() {
 
   return (
     <div ref={pageRef} className="space-y-14 md:space-y-20">
-      {/* ===== Hero：生成式网络画布 + 遮罩行标题 ===== */}
+      {/* ===== Hero：老站同款科技背景图 + 左侧文字区浅底蒙版 ===== */}
       <section
         className="relative overflow-hidden rounded-[24px] px-5 py-11 sm:px-6 sm:py-14 md:px-16 md:py-24"
-        style={{ background: "linear-gradient(135deg, var(--sb-mist) 0%, var(--sb-mist-light) 55%, #e8f3fc 100%)" }}
+        style={{
+          backgroundImage:
+            "linear-gradient(90deg, rgba(238,246,252,0.94) 0%, rgba(238,246,252,0.72) 42%, rgba(238,246,252,0.08) 72%), url('/hero-bg.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
       >
-        {/* 环境层：漂移的供应网络 */}
-        <NetworkCanvas />
         {/* 工程刻度十字：blueprint 仪式感 */}
         <span className="sb-tick left-4 top-4" />
         <span className="sb-tick right-4 top-4" />
