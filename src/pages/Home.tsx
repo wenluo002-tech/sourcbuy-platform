@@ -41,7 +41,7 @@ export default function Home() {
       {/* ===== Hero：生成式网络画布 + 遮罩行标题 ===== */}
       <section
         className="relative overflow-hidden rounded-[24px] px-5 py-11 sm:px-6 sm:py-14 md:px-16 md:py-24"
-        style={{ background: "linear-gradient(135deg, var(--sb-mist) 0%, var(--sb-mist-light) 55%, #eaf2f6 100%)" }}
+        style={{ background: "linear-gradient(135deg, var(--sb-mist) 0%, var(--sb-mist-light) 55%, #e8f3fc 100%)" }}
       >
         {/* 环境层：漂移的供应网络 */}
         <NetworkCanvas />

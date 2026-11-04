@@ -76,17 +76,17 @@
 
 /* ============ SourcBuy 设计系统 ============ */
 :root {
-  /* 色板：浅蓝灰氛围 + SourcBuy 品牌蓝（取自 logo 字标） */
-  --sb-paper: #eef4f5;      /* 页面底 */
-  --sb-mist: #c4dbe0;       /* 主氛围区 */
-  --sb-mist-light: #ddedf0; /* 次级氛围区 */
-  --sb-ink: #0b0b0b;        /* 近黑正文 */
-  --sb-ink-60: rgba(11, 11, 11, 0.6);
-  --sb-ink-40: rgba(11, 11, 11, 0.4);
-  --sb-line: rgba(11, 11, 11, 0.12);
-  --sb-brand: #1f4a94;       /* 唯一主行动色 = logo 蓝 */
-  --sb-brand-hover: #173a78;
-  --sb-brand-soft: rgba(31, 74, 148, 0.08);
+  /* 色板：老站天空蓝体系（image38 取色：按钮 #5EAFF3/#49B4FE、标题蓝 #184B8C、底 #E7F1FA） */
+  --sb-paper: #eef6fc;      /* 页面底：浅蓝白 */
+  --sb-mist: #cfe5f7;       /* 主氛围区：天蓝雾 */
+  --sb-mist-light: #e3f1fb; /* 次级氛围区 */
+  --sb-ink: #1c3245;        /* 深墨蓝正文 */
+  --sb-ink-60: rgba(28, 50, 69, 0.6);
+  --sb-ink-40: rgba(28, 50, 69, 0.4);
+  --sb-line: rgba(28, 50, 69, 0.12);
+  --sb-brand: #2f9df0;       /* 唯一主行动色 = 老站亮天蓝 */
+  --sb-brand-hover: #1b86dd;
+  --sb-brand-soft: rgba(47, 157, 240, 0.1);
   --sb-warn: #92610f;       /* 老采购提醒 */
   --sb-warn-bg: #fdf6e7;
   --sb-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -140,11 +140,11 @@ body {
 
 /* ============ 试算器视觉系统 ============ */
 :root {
-  /* 深海军蓝面板：品牌蓝的暗阶，用于「老采购推荐」方案卡 */
-  --sb-navy: #10254d;
+  /* 深面板：老站标题蓝 #184B8C 的暗阶，用于「老采购推荐」方案卡 */
+  --sb-navy: #184b8c;
   --sb-navy-ink: rgba(255, 255, 255, 0.6);   /* navy 上次级文字 */
   --sb-navy-line: rgba(255, 255, 255, 0.14); /* navy 上分隔线 */
-  --sb-sky: #a8c0ea;                          /* navy 上高亮 */
+  --sb-sky: #9fd0f9;                          /* navy 上高亮：浅天蓝 */
 }
 
 /* 数字双声部：所有金额/重量用表格数字，逐位对齐 */

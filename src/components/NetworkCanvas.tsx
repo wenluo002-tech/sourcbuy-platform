@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 /**
  * 环境网络画布：供应链网络隐喻——缓慢漂移的节点 + 邻近节点连线。
  * 纯 Canvas 2D 渲染循环，DPR 感知，指针轻微视差，reduced-motion 时只画一帧静态图。
- * 颜色取自品牌蓝（--sb-brand #1f4a94），在浅底上以低透明度呈现。
+ * 颜色取自品牌蓝（--sb-brand #2f9df0），在浅底上以低透明度呈现。
  */
 export default function NetworkCanvas({ className = "" }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -81,7 +81,7 @@ export default function NetworkCanvas({ className = "" }: { className?: string }
 
       // 连线：近邻两点，透明度随距离衰减
       const maxD = LINK_DIST * Math.max(w, h);
-      ctx!.strokeStyle = "rgba(31, 74, 148, 1)";
+      ctx!.strokeStyle = "rgba(47, 157, 240, 1)";
       ctx!.lineWidth = 1;
       for (let i = 0; i < P.length; i++) {
         for (let j = i + 1; j < P.length; j++) {
@@ -100,7 +100,7 @@ export default function NetworkCanvas({ className = "" }: { className?: string }
 
       // 节点圆点
       ctx!.globalAlpha = 1;
-      ctx!.fillStyle = "rgba(31, 74, 148, 0.35)";
+      ctx!.fillStyle = "rgba(47, 157, 240, 0.35)";
       for (const p of P) {
         ctx!.beginPath();
         ctx!.arc(p.x, p.y, p.r, 0, Math.PI * 2);
