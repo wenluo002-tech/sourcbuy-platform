@@ -71,6 +71,106 @@ interface Turn {
   products?: SearchProduct[];
   linkRef?: LinkRef | null;
   quantity?: string | null;
+  followUp?: FollowUpCardData | null;
+  followUpDone?: string | null; // 已提交/已跳过后的摘要（卡片变一行灰字）
+}
+
+/* 补充问题卡（追问卡优化版：多题同卡一次提交 + 跳过直寻，非阻塞——结果已先出） */
+interface FollowUpQuestion {
+  key: string;
+  label: string;
+  why: string; // "为什么问这个"——老采购口吻
+  options: string[];
+}
+interface FollowUpCardData {
+  questions: FollowUpQuestion[];
+}
+
+/* 补充问题卡：多题同卡、chips 只选不发、选完一次提交；常驻"跳过，直接寻源"。非阻塞——结果已先出 */
+const FOLLOWUP_KEY_LABEL: Record<string, string> = { quantity: "数量", destination: "目的地", deadline: "交期" };
+function FollowUpCard({
+  card,
+  doneSummary,
+  onSubmit,
+  onSkip,
+}: {
+  card: FollowUpCardData;
+  doneSummary?: string | null;
+  onSubmit: (msg: string, doneSummary: string) => void;
+  onSkip: () => void;
+}) {
+  const [sel, setSel] = useState<Record<string, string>>({});
+  if (doneSummary) {
+    return (
+      <div className="max-w-[94%] text-[11px] text-[var(--sb-ink-40)]">
+        {doneSummary}
+      </div>
+    );
+  }
+  const toggle = (k: string, o: string) =>
+    setSel((prev) => {
+      const n = { ...prev };
+      if (n[k] === o) delete n[k];
+      else n[k] = o;
+      return n;
+    });
+  const picked = Object.keys(sel).length;
+  const submit = () => {
+    const parts = card.questions
+      .filter((q) => sel[q.key])
+      .map((q) => `${FOLLOWUP_KEY_LABEL[q.key] ?? q.label}:${sel[q.key]}`);
+    const summary = parts.join(" · ");
+    onSubmit(`[补充] ${parts.join("；")}`, `已补充：${summary}`);
+  };
+  return (
+    <div className="max-w-[94%] rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] p-4">
+      <div className="text-[13px] font-semibold text-[var(--sb-ink)]">
+        补齐这几个，我配得更准<span className="ml-1.5 font-normal text-[var(--sb-ink-40)]">（不补也行，先看上面的结果）</span>
+      </div>
+      {card.questions.map((q) => (
+        <div key={q.key} className="mt-3">
+          <div className="text-[13px] font-medium text-[var(--sb-ink)]">{q.label}</div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {q.options.map((o) => {
+              const on = sel[q.key] === o;
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => toggle(q.key, o)}
+                  className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
+                    on
+                      ? "border-[var(--sb-brand)] bg-[var(--sb-brand)] text-white"
+                      : "border-[var(--sb-line)] bg-white text-[var(--sb-ink)] hover:border-[var(--sb-brand)]/50"
+                  }`}
+                >
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-1 text-[11px] leading-relaxed text-[var(--sb-ink-40)]">{q.why}</div>
+        </div>
+      ))}
+      <div className="mt-3.5 flex flex-wrap items-center gap-2.5 border-t border-[var(--sb-line)] pt-3">
+        <button
+          type="button"
+          disabled={!picked}
+          onClick={submit}
+          className="rounded-lg bg-[var(--sb-brand)] px-4 py-1.5 text-[12.5px] font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          提交补充{picked ? `（已选 ${picked} 项）` : ""}
+        </button>
+        <button
+          type="button"
+          onClick={onSkip}
+          className="rounded-lg border border-[var(--sb-line)] bg-white px-4 py-1.5 text-[12.5px] text-[var(--sb-ink-60,#666)] transition-colors hover:border-[var(--sb-brand)]/50"
+        >
+          跳过，直接寻源
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /* 外链识别卡：买家贴的亚马逊/TikTok 等链接，系统读到的真实信息（读不到就明说） */
@@ -445,6 +545,7 @@ export default function BuyerChat() {
               products: (res as any).products?.length ? (res as any).products : undefined,
               linkRef: (res as any).linkContext ?? null,
               quantity: (res as any).intent?.quantity ?? null,
+              followUp: (res as any).followUp ?? null,
             },
           ]),
         onError: () => {
@@ -489,7 +590,7 @@ export default function BuyerChat() {
                 {t.imageUrl && (
                   <img src={t.imageUrl} alt="商品图" className="mb-2 max-h-44 rounded-lg border border-white/20 object-cover" />
                 )}
-                {t.content}
+                {t.content.replace(/^\[(?:补充|跳过补充)\]\s*/, "")}
               </div>
             </div>
           ) : (
@@ -509,6 +610,22 @@ export default function BuyerChat() {
               <div className="max-w-[94%] border-l-2 border-[var(--sb-brand)]/60 pl-4 text-sm leading-[1.75] whitespace-pre-wrap text-[var(--sb-ink)]">
                 {t.content}
               </div>
+
+              {/* 补充问题卡：多题同卡一次提交 / 跳过直寻 */}
+              {t.followUp && (
+                <FollowUpCard
+                  card={t.followUp}
+                  doneSummary={t.followUpDone}
+                  onSubmit={(msg, doneSummary) => {
+                    setTurns((ts) => ts.map((x, xi) => (xi === i ? { ...x, followUpDone: doneSummary } : x)));
+                    send(msg);
+                  }}
+                  onSkip={() => {
+                    setTurns((ts) => ts.map((x, xi) => (xi === i ? { ...x, followUpDone: "已跳过补充，直接寻源" } : x)));
+                    send("[跳过补充] 这些先不谈，按现在了解的直接帮我配");
+                  }}
+                />
+              )}
 
               {/* 商品卡：产品优先，到手价入口 */}
               {t.product && (

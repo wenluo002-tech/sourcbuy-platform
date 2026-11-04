@@ -1,0 +1,11 @@
+process.loadEnvFile();
+import { getDb } from "../api/queries/connection";
+import { sql } from "drizzle-orm";
+const db = getDb();
+const [rows]: any = await db.execute(sql`SELECT provider, endpoint, COUNT(*) c, SUM(cost_cny) cost FROM sourcing_api_logs WHERE created_at >= CURDATE() GROUP BY provider, endpoint`);
+console.log("今日已用：", rows);
+const [pool]: any = await db.execute(sql`SELECT COUNT(*) total, COUNT(DISTINCT member_id) members, COUNT(DISTINCT seller_user_id) uids FROM offer_pool`);
+console.log("当前池：", pool);
+const [yx]: any = await db.execute(sql`SELECT COUNT(*) c, COUNT(DISTINCT f.id) fc FROM offer_pool p JOIN factories f ON f.member_id = p.member_id`);
+console.log("严选厂在册货(memberId直挂)：", yx);
+process.exit(0);

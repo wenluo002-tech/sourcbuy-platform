@@ -31,6 +31,7 @@ async function radarSelectionReply() {
       factories: [],
       products: [],
       product: null,
+      followUp: null,
     };
   } catch (e) {
     log.warn("雷达榜查询失败，按普通对话流程走", { error: e instanceof Error ? e.message : String(e) });
@@ -98,7 +99,8 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
    - direct=这家厂的名称/评语/标签里明确出现过这类产品词，可以说"做这类产品的"。
    - bucket=它只是该类目大类下的高分厂，没有直接证据表明做过这款——你必须说清楚"这几家是大类下的高分厂，做没做过这款要拿图询价确认，我不打包票"，绝不暗示它们做这款。
    清单全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
-17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。`;
+17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。
+18. 买家消息以"[补充]"开头 = 他在回答界面上的补充问题卡：把答案并入理解，照着更新判断，别重复问已答过的项。以"[跳过补充]"开头 = 他明确不想补这些，按现有信息直接配，话术里别再追问这些信息。界面若附了补充问题卡（结构化选项由界面呈现），你话术里最多一句带过（如"数量和目的地顺手补上，我算得更准"），绝不逐条罗列问题。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -146,6 +148,59 @@ function localIntentFallback(message: string): z.infer<typeof intentSchema> {
 }
 
 // 话术生成超时/失败时的规则兜底——只用系统已拿到的真实数据，一句都不编
+// ============ 补充问题卡（规则驱动，零 LLM）：缺关键信息时随回复附一张结构化卡 ============
+// 与参考站差异：非阻塞（匹配结果照出，卡附在下面）+ 多题同卡一次提交 + 常驻"跳过直接寻源"。
+// 一个采购需求只问一轮：买家答过（[补充]）或跳过（[跳过补充]）后，本轮会话不再出卡。
+export interface FollowUpQuestion {
+  key: "quantity" | "destination" | "deadline";
+  label: string;
+  why: string; // 老采购口吻解释"为什么问这个"——参考站的 Why I ask 是好设计，照抄
+  options: string[];
+}
+export interface FollowUpCard {
+  questions: FollowUpQuestion[];
+}
+function buildFollowUpCard(
+  intent: { product: string | null; quantity: number | null; destination: string | null; isGreeting: boolean },
+  message: string,
+  history: ChatMsg[]
+): FollowUpCard | null {
+  if (!intent.product || intent.isGreeting) return null;
+  if (message.startsWith("[补充]") || message.startsWith("[跳过补充]")) return null; // 本轮就是答卡/跳卡
+  const answered = history.some(
+    (m) => m.role === "user" && (m.content.startsWith("[补充]") || m.content.startsWith("[跳过补充]"))
+  );
+  if (answered) return null; // 答过/跳过，不再追问
+  const qs: FollowUpQuestion[] = [];
+  if (!intent.quantity) {
+    qs.push({
+      key: "quantity",
+      label: "大概先要多少量？",
+      why: "量决定走哪档服务费，也决定能不能拼柜省运费",
+      options: ["先拿样看看", "100–500 件", "500–2,000 件", "2,000 件以上"],
+    });
+  }
+  if (!intent.destination) {
+    qs.push({
+      key: "destination",
+      label: "发往哪个市场？",
+      why: "有了目的地我才能算到手价（运费清关全含），不然只能报出厂价",
+      options: ["美国", "欧洲", "东南亚", "中东", "拉美", "其他"],
+    });
+  }
+  const allUserText = message + history.filter((m) => m.role === "user").map((m) => m.content).join(" ");
+  if (!/[天周月个]内|交期|交货|尽快|越快|急|urgent|deadline|asap/i.test(allUserText)) {
+    qs.push({
+      key: "deadline",
+      label: "希望多久能到？",
+      why: "交期紧就走不了海运，方案和价格完全不一样",
+      options: ["越快越好", "1 个月内", "1–2 个月", "还没定"],
+    });
+  }
+  if (!qs.length) return null;
+  return { questions: qs.slice(0, 3) };
+}
+
 function buildFallbackReply(
   intent: { product: string | null; quantity: number | null; destination: string | null },
   factories: { name: string; tier: string | null; score: number | null; matchBasis?: "productLinked" | "direct" | "bucket"; linkedOffer?: { offerId: string; title: string; price: number; sales: number } | null }[],
@@ -331,10 +386,10 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
         prompt: `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
         abortSignal: AbortSignal.timeout(12_000),
       });
-      return { reply: text, understood: false, intent, factories: [], product: null };
+      return { reply: text, understood: false, intent, factories: [], product: null, followUp: null };
     } catch (e) {
       log.warn("greeting 话术生成失败，用静态开场白", { error: e instanceof Error ? e.message : String(e) });
-      return { reply: GREETING_FALLBACK, understood: false, intent, factories: [], product: null };
+      return { reply: GREETING_FALLBACK, understood: false, intent, factories: [], product: null, followUp: null };
     }
   }
 
@@ -533,6 +588,9 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     reply = buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null);
   }
 
+  // 补充问题卡：规则驱动（非阻塞——结果照出，卡附在下面；答过/跳过就不再问）
+  const followUp = buildFollowUpCard(intent, message, history);
+
   return {
     reply,
     understood: factories.length > 0 || !!productInfo || searchProducts.length > 0,
@@ -545,6 +603,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     product: productInfo
       ? { offer: productInfo.offer, factory: productInfo.factory }
       : null,
+    followUp,
   };
 }
 
@@ -562,6 +621,7 @@ export async function sourcingChat(message: string, history: ChatMsg[], radarId?
       factories: [],
       products: [],
       product: null,
+      followUp: null,
     };
   }
 }
