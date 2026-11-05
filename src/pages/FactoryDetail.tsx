@@ -34,7 +34,8 @@ function FactoryDetailView({ f }: { f: any }) {
       for (const src of list) out.push({ src, group: label });
     }
     return out;
-  }, [f.images]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.images, t]);
 
   useEffect(() => {
     if (viewer === null) return;
@@ -120,10 +121,7 @@ function FactoryDetailView({ f }: { f: any }) {
       </div>
 
       {/* 实拍图集：产品/车间/设备/仓库/大门/产品册 */}
-      {f.images &&
-        (["product", "workshop", "equipment", "warehouse", "gate", "catalog"] as const).some(
-          (k) => (f.images as Record<string, string[]>)[k]?.length
-        ) && (
+      {flatImages.length > 0 && (
           <div className="rounded-xl border border-black/10 bg-white p-6">
             <h2 className="mb-4 font-semibold">{t("factoryDetail.photosTitle")}</h2>
             <div className="space-y-4">
