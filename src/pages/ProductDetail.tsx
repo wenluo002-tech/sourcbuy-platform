@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/auth";
 import { FX_SETTLEMENT } from "@contracts/fx";
 import { DESTINATIONS } from "@contracts/freight";
 import { useT } from "@/i18n";
@@ -38,6 +39,11 @@ function FulfillmentChain({ dispatchNote }: { dispatchNote: string | null }) {
 export default function ProductDetail() {
   const { offerId = "" } = useParams();
   const { lang, t } = useT();
+  const { me } = useAuth();
+  const nav = useNavigate();
+  const inquireMut = trpc.orders.create.useMutation({
+    onSuccess: (r) => nav(`/orders/${r.orderId}`),
+  });
   const q = trpc.products.detailV2.useQuery({ offerId }, { retry: false });
   const offer = q.data?.offer ?? null;
   const factory = q.data?.factory ?? null;
@@ -300,6 +306,22 @@ export default function ProductDetail() {
 
           {/* CTA */}
           <div className="mt-4 flex flex-wrap gap-2.5">
+            <button
+              type="button"
+              disabled={inquireMut.isPending}
+              onClick={() => {
+                if (!me) { nav(`/login?next=/products/${offer.offerId}`); return; }
+                inquireMut.mutate({
+                  offerId: String(offer.offerId),
+                  productTitle: offer.title,
+                  productImage: offer.images?.[0] ?? undefined,
+                  quantity: qtyN || undefined,
+                });
+              }}
+              className="sb-pill bg-[var(--sb-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
+            >
+              {t("orders.ctaInquire")}
+            </button>
             <Link
               to={`/buyer?prefill=${encodeURIComponent(t("product.ctaFollowMsg", { id: offer.offerId, title: offer.title.slice(0, 30) }))}`}
               className="sb-pill px-5 py-2.5 text-sm"

@@ -16,6 +16,7 @@ import { getOfferDetail, searchOffers } from "./sourcing/offerService";
 import { classifyAiError, AiUnavailable } from "./lib/ai-client";
 import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } from "../contracts/freightRates";
 import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, appendMessage, listThreads, getThreadMessages } from "./queries/auth";
+import { createInquiry, listMyOrders, getOrderDetail, transitionOrder } from "./queries/orders";
 import { destroySession, sessionCookieHeader, clearSessionCookieHeader } from "./lib/auth";
 import { log } from "./lib/logger";
 
@@ -233,6 +234,38 @@ export const appRouter = createRouter({
     detail: publicQuery
       .input(z.object({ threadId: z.number().int().positive(), anonId: z.string().max(36).optional() }))
       .query(({ input, ctx }) => getThreadMessages(input.threadId, ctx.user?.id ?? null, input.anonId)),
+  }),
+
+  // ---- M3b 订单：询价即建档，全部挂在账号下；流转走状态机，非法流转一律拒绝 ----
+  orders: createRouter({
+    create: authedQuery
+      .input(z.object({
+        threadId: z.number().int().positive().optional(),
+        offerId: z.string().max(32).optional(),
+        productTitle: z.string().max(500).optional(),
+        productImage: z.string().max(1024).optional(),
+        quantity: z.number().int().positive().max(10_000_000).optional(),
+        destination: z.string().max(120).optional(),
+        demand: z.string().max(5000).optional(),
+      }))
+      .mutation(({ input, ctx }) => createInquiry({ ...input, userId: ctx.user.id })),
+    list: authedQuery.query(({ ctx }) => listMyOrders(ctx.user.id)),
+    detail: authedQuery
+      .input(z.object({ orderId: z.number().int().positive() }))
+      .query(({ input, ctx }) => getOrderDetail(input.orderId, ctx.user.id)),
+    // 买家动作：确认报价（quoted→pending_payment）/ 确认收货（shipped→received）/ 取消（付款前）
+    act: authedQuery
+      .input(z.object({
+        orderId: z.number().int().positive(),
+        action: z.enum(["confirmQuote", "confirmReceive", "cancel"]),
+        note: z.string().max(500).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const to = input.action === "confirmQuote" ? "pending_payment" : input.action === "confirmReceive" ? "received" : "cancelled";
+        const r = await transitionOrder({ orderId: input.orderId, to, actor: "buyer", note: input.note, userId: ctx.user.id });
+        if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
+        return r;
+      }),
   }),
 });
 

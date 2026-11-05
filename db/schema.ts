@@ -340,3 +340,41 @@ export const chatMessages = mysqlTable(
   },
   (t) => [index("ix_msgs_thread").on(t.threadId, t.id)]
 );
+
+// ============ M3b 订单状态机（2026-11-05 罗总指示开工）============
+// 状态机冻结口径：询价 → 已报价 → 待付款（支付挂"即将开通"诚实标注）→ 采购中 → 质检 → 发货 → 收货
+// 状态流转全部留痕进 order_events（谁转的、什么时候、备注），可审计，不覆写历史
+export const orders = mysqlTable(
+  "orders",
+  {
+    id: serial("id").primaryKey(),
+    orderNo: varchar("order_no", { length: 24 }).notNull(), // 展示编号 SB260105-XXXX
+    userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(), // 订单必须挂账号——询价即建档
+    threadId: bigint("thread_id", { mode: "number", unsigned: true }), // 来源会话（可追溯当时聊了什么）
+    offerId: varchar("offer_id", { length: 32 }), // 关联货源货号（可空：纯文字描述的需求）
+    productTitle: varchar("product_title", { length: 512 }),
+    productImage: varchar("product_image", { length: 1024 }),
+    quantity: int("quantity"),
+    destination: varchar("destination", { length: 128 }),
+    demand: text("demand"), // 买家原话需求
+    status: mysqlEnum("status", ["inquiry", "quoted", "pending_payment", "sourcing", "inspecting", "shipped", "received", "cancelled"]).notNull().default("inquiry"),
+    quote: json("quote"), // 报价单快照：出厂价/运费/关税/佣金/总额/汇率/渠道/时效/报价时间——报价一旦给出就是快照，不随后台数据漂移
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("uq_orders_no").on(t.orderNo), index("ix_orders_user").on(t.userId, t.updatedAt)]
+);
+
+export const orderEvents = mysqlTable(
+  "order_events",
+  {
+    id: serial("id").primaryKey(),
+    orderId: bigint("order_id", { mode: "number", unsigned: true }).notNull(),
+    fromStatus: varchar("from_status", { length: 24 }), // 首单创建时 from=null
+    toStatus: varchar("to_status", { length: 24 }).notNull(),
+    actor: mysqlEnum("actor", ["buyer", "ops", "system"]).notNull(),
+    note: varchar("note", { length: 512 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_oevents_order").on(t.orderId, t.id)]
+);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
 import { FX_SETTLEMENT } from "@contracts/fx";
@@ -384,6 +384,11 @@ function ProductCard({
   const offer = product.offer;
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
   const { t } = useT();
+  const { me } = useAuth();
+  const nav = useNavigate();
+  const inquireMut = trpc.orders.create.useMutation({
+    onSuccess: (r) => nav(`/orders/${r.orderId}`),
+  });
   // 佣金费率表 v1.0（单一事实源在后端 commission_rules 表；卡片按 B 档估，显式标注）
   const commissionQ = trpc.pricing.commissionTable.useQuery(undefined, { staleTime: 60 * 60_000 });
   const feeRule = (amtUsd: number) =>
@@ -496,6 +501,22 @@ function ProductCard({
         >
           {t("chat.viewDetails")}
         </Link>
+        <button
+          type="button"
+          disabled={inquireMut.isPending}
+          onClick={() => {
+            if (!me) { nav("/login?next=/buyer"); return; }
+            inquireMut.mutate({
+              offerId: String(offer.offerId),
+              productTitle: offer.title,
+              productImage: offer.images[0] ?? undefined,
+              quantity: qty || undefined,
+            });
+          }}
+          className="shrink-0 rounded-md bg-[var(--sb-brand)] px-2.5 py-1 text-xs font-semibold text-[#eef4f5] hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
+        >
+          {t("orders.ctaInquire")}
+        </button>
         <Link
           to={calcUrl}
           className="shrink-0 text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"

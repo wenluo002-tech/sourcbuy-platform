@@ -68,6 +68,12 @@ export default function Layout() {
             })}
             {me ? (
               <span className="ml-1 flex shrink-0 items-center gap-1.5 sm:ml-2">
+                <Link
+                  to="/orders"
+                  className="border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+                >
+                  {t("orders.title")}
+                </Link>
                 <span className="hidden max-w-28 truncate text-xs font-medium text-[var(--sb-ink-60)] md:block">
                   {me.displayName || me.email.split("@")[0]}
                 </span>

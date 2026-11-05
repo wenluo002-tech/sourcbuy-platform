@@ -138,6 +138,63 @@ console.log("\n[7] M3a 账号与会话记忆");
   check("重新登录成功", login.status === 200 && login.json?.result?.data?.json?.user?.email === em);
 }
 
+console.log("\n[8] M3b 订单状态机");
+{
+  const em = `qa-${Date.now()}@sourcbuy.test`;
+  const pw = "qa-pass-123456";
+  const call = async (path: string, body?: any, cookie?: string, method: "POST" | "GET" = "POST") => {
+    const url = method === "GET"
+      ? `${BASE}/api/trpc/${path}${body !== undefined ? `?input=${encodeURIComponent(JSON.stringify({ json: body }))}` : ""}`
+      : `${BASE}/api/trpc/${path}`;
+    const r = await fetch(url, {
+      method, headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+      body: method === "POST" && body !== undefined ? JSON.stringify({ json: body }) : undefined,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const m = (r.headers.get("set-cookie") ?? "").match(/sb_session=([^;]*)/);
+    const json: any = await r.json().catch(() => null);
+    return { status: r.status, json, cookie: m && m[1] ? `sb_session=${m[1]}` : null };
+  };
+  const reg = await call("auth.register", { email: em, password: pw, displayName: "QA订单", locale: "zh" });
+  const cookie = reg.cookie ?? "";
+  // 1. 发起询价（手动需求）
+  const c = await call("orders.create", { demand: "QA 测试：瑜伽裤 500 条发德国", quantity: 500, destination: "德国" }, cookie);
+  const oid = c.json?.result?.data?.json?.orderId;
+  check("发起询价建档成功", typeof oid === "number" && oid > 0);
+  // 2. 列表含该单
+  const lst = await call("orders.list", undefined, cookie, "GET");
+  const myOrders = lst.json?.result?.data?.json ?? [];
+  check("订单列表含本单", Array.isArray(myOrders) && myOrders.some((x: any) => x.id === oid));
+  // 3. 详情含创建事件
+  const d1 = await call("orders.detail", { orderId: oid }, cookie, "GET");
+  const det = d1.json?.result?.data?.json;
+  check("详情含询价事件留痕", det?.events?.length >= 1 && det.events[0].toStatus === "inquiry");
+  // 4. 越权：另一用户读不到
+  const reg2 = await call("auth.register", { email: `qa2-${Date.now()}@sourcbuy.test`, password: pw, locale: "zh" });
+  const d2 = await call("orders.detail", { orderId: oid }, reg2.cookie ?? "", "GET");
+  check("他人读订单被拒（返回 null）", d2.json?.result?.data?.json === null);
+  // 5. 非法流转：inquiry 状态买家直接确认收货 → 拒绝
+  const bad = await call("orders.act", { orderId: oid, action: "confirmReceive" }, cookie);
+  check("非法流转被拒（inquiry→received）", bad.json?.error != null);
+  // 6. 运营报价：inquiry→quoted 带报价快照（直接调查询层，等价 CLI）
+  const { transitionOrder } = await import("../api/queries/orders");
+  const tq = await transitionOrder({ orderId: oid, to: "quoted", actor: "ops", note: "QA 核价", quote: { goodsTotalCny: 14310, commissionUsd: 157.9, commissionRate: 0.07, totalUsd: 2835, fxRate: 6.34, quotedAt: new Date().toISOString() } });
+  check("运营报价流转成功", tq.ok === true);
+  // 7. 报价快照落库
+  const d3 = await call("orders.detail", { orderId: oid }, cookie, "GET");
+  const det3 = d3.json?.result?.data?.json;
+  check("报价快照落库（含佣金拆解）", det3?.quote?.commissionRate === 0.07 && det3?.quote?.totalUsd === 2835);
+  // 8. 买家确认报价 → 待付款
+  const ok1 = await call("orders.act", { orderId: oid, action: "confirmQuote" }, cookie);
+  check("买家确认报价→待付款", ok1.json?.result?.data?.json?.to === "pending_payment");
+  // 9. 重复/越级流转仍被拒（pending_payment→received）
+  const bad2 = await call("orders.act", { orderId: oid, action: "confirmReceive" }, cookie);
+  check("越级流转仍被拒（pending_payment→received）", bad2.json?.error != null);
+  // 10. 事件留痕完整：inquiry→quoted→pending_payment 三条
+  const d4 = await call("orders.detail", { orderId: oid }, cookie, "GET");
+  check("事件链完整（3 条留痕）", (d4.json?.result?.data?.json?.events?.length ?? 0) === 3);
+}
+
 console.log(`\n═══ 验收结果：${pass} PASS / ${fail} FAIL ═══`);
 if (fail) { console.log("失败项：", fails.join(" | ")); process.exit(1); }
 console.log("检查单全过，允许存版本。");

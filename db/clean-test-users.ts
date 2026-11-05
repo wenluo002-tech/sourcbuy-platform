@@ -9,6 +9,12 @@ const ids = (u as any[]).map((r) => r.id);
 console.log("test users:", ids.length);
 if (ids.length) {
   await db.execute(sql`DELETE FROM auth_sessions WHERE user_id IN (${sql.join(ids.map((i: number) => sql`${i}`), sql`,`)})`);
+  const [o]: any = await db.execute(sql`SELECT id FROM orders WHERE user_id IN (${sql.join(ids.map((i: number) => sql`${i}`), sql`,`)})`);
+  const oids = (o as any[]).map((r) => r.id);
+  if (oids.length) {
+    await db.execute(sql`DELETE FROM order_events WHERE order_id IN (${sql.join(oids.map((i: number) => sql`${i}`), sql`,`)})`);
+    await db.execute(sql`DELETE FROM orders WHERE id IN (${sql.join(oids.map((i: number) => sql`${i}`), sql`,`)})`);
+  }
   const [t]: any = await db.execute(sql`SELECT id FROM chat_threads WHERE user_id IN (${sql.join(ids.map((i: number) => sql`${i}`), sql`,`)})`);
   const tids = (t as any[]).map((r) => r.id);
   if (tids.length) {
