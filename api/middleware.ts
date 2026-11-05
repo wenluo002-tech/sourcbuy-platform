@@ -1,4 +1,4 @@
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { log } from "./lib/logger";
@@ -28,3 +28,9 @@ const t = initTRPC.context<TrpcContext>().create({
 
 export const createRouter = t.router;
 export const publicQuery = t.procedure;
+
+// M3a：需要登录的 procedure（买家侧账号体系）
+export const authedQuery = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: "login required" });
+  return next({ ctx: { ...ctx, user: ctx.user } });
+});

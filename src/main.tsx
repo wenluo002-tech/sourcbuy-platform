@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router'
 import './index.css'
 import { TRPCProvider } from "@/providers/trpc"
 import { I18nProvider } from "@/i18n"
+import { AuthProvider } from "@/auth"
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
@@ -12,7 +13,9 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <TRPCProvider>
           <I18nProvider>
-            <App />
+            <AuthProvider>
+              <App />
+            </AuthProvider>
           </I18nProvider>
         </TRPCProvider>
     </BrowserRouter>

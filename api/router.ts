@@ -1,5 +1,6 @@
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import {
   findFactories,
   findFactoryById,
@@ -14,6 +15,9 @@ import { offerWithFactory } from "./queries/products";
 import { getOfferDetail, searchOffers } from "./sourcing/offerService";
 import { classifyAiError, AiUnavailable } from "./lib/ai-client";
 import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } from "../contracts/freightRates";
+import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, appendMessage, listThreads, getThreadMessages } from "./queries/auth";
+import { destroySession, sessionCookieHeader, clearSessionCookieHeader } from "./lib/auth";
+import { log } from "./lib/logger";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -133,15 +137,18 @@ export const appRouter = createRouter({
           radarId: z.number().int().positive().optional(), // 雷达卡 CTA 直达：钉死品类与信号上下文
           imageData: z.string().max(6_000_000).optional(), // 商品图（base64 data URL，前端已压到 1024px JPEG）
           locale: z.enum(["zh", "en"]).optional(), // 界面语言：英文买家走英文话术体系
+          threadId: z.number().int().positive().optional(), // M3a：续写已有会话
+          anonId: z.string().max(36).optional(), // M3a：匿名设备 ID，登录后归并
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        let result: any;
         try {
-          return await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale);
+          result = await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale);
         } catch (err) {
           const classified = classifyAiError(err);
           if (classified instanceof AiUnavailable) {
-            return {
+            result = {
               reply: input.locale === "en"
                 ? "The AI sourcing assistant is temporarily unavailable (service quota exhausted). Please try again later, or use the search above to find factories by category."
                 : "AI 采购助手暂时不可用（服务额度已用尽），请稍后再试，或先用上方搜索框按品类查找工厂。",
@@ -150,10 +157,82 @@ export const appRouter = createRouter({
               factories: [],
               degraded: true,
             };
+          } else {
+            throw err;
           }
-          throw err;
         }
+        // M3a 会话落库：落库失败绝不挡聊天（买家体验优先，日志留证）
+        let threadId: number | null = null;
+        try {
+          threadId = await ensureThread({ threadId: input.threadId, anonId: input.anonId, userId: ctx.user?.id ?? null, locale: input.locale, firstMessage: input.message });
+          await appendMessage(threadId, "user", input.message, input.imageData ? { hasImage: true } : null);
+          await appendMessage(threadId, "assistant", result.reply, {
+            intent: result.intent ?? null,
+            factories: result.factories ?? [],
+            products: result.products ?? [],
+            product: result.product ?? null,
+            linkContext: result.linkContext ?? null,
+            followUp: result.followUp ?? null,
+          });
+        } catch (e) {
+          log.error("chat 落库失败（聊天本身已返回）", { error: e instanceof Error ? e.message : String(e) });
+        }
+        return { ...result, threadId };
       }),
+  }),
+
+  // ---- M3a 账号体系（邮箱+密码；会话 cookie httpOnly，库内只存 sha256）----
+  auth: createRouter({
+    me: publicQuery.query(({ ctx }) => ctx.user),
+    register: publicQuery
+      .input(z.object({
+        email: z.string().max(191),
+        password: z.string().min(8).max(72),
+        displayName: z.string().max(64).optional(),
+        locale: z.enum(["zh", "en"]).optional(),
+        anonId: z.string().max(36).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        let r: Awaited<ReturnType<typeof registerUser>>;
+        try {
+          r = await registerUser(input.email, input.password, input.displayName, input.locale);
+        } catch (e) {
+          if (e instanceof AuthError) throw new TRPCError({ code: "BAD_REQUEST", message: e.code });
+          throw e;
+        }
+        const { user, token, expiresAt } = r;
+        await claimAnonThreads(input.anonId, user.id);
+        ctx.resHeaders.append("Set-Cookie", sessionCookieHeader(token, expiresAt, ctx.req.url.startsWith("https:")));
+        return { user };
+      }),
+    login: publicQuery
+      .input(z.object({ email: z.string().max(191), password: z.string().min(1).max(72), anonId: z.string().max(36).optional() }))
+      .mutation(async ({ input, ctx }) => {
+        let r: Awaited<ReturnType<typeof loginUser>>;
+        try {
+          r = await loginUser(input.email, input.password);
+        } catch (e) {
+          if (e instanceof AuthError) throw new TRPCError({ code: "BAD_REQUEST", message: e.code });
+          throw e;
+        }
+        const { user, token, expiresAt } = r;
+        await claimAnonThreads(input.anonId, user.id);
+        ctx.resHeaders.append("Set-Cookie", sessionCookieHeader(token, expiresAt, ctx.req.url.startsWith("https:")));
+        return { user };
+      }),
+    logout: publicQuery.mutation(async ({ ctx }) => {
+      await destroySession(ctx.sessionToken);
+      ctx.resHeaders.append("Set-Cookie", clearSessionCookieHeader());
+      return { ok: true };
+    }),
+  }),
+
+  // ---- M3a 会话记忆：列表要登录；详情允许本人或匿名归属者读 ----
+  threads: createRouter({
+    list: authedQuery.query(({ ctx }) => listThreads(ctx.user.id)),
+    detail: publicQuery
+      .input(z.object({ threadId: z.number().int().positive(), anonId: z.string().max(36).optional() }))
+      .query(({ input, ctx }) => getThreadMessages(input.threadId, ctx.user?.id ?? null, input.anonId)),
   }),
 });
 

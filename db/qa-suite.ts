@@ -93,6 +93,50 @@ console.log("\n[6] 数据口径对账");
   console.log(`  ℹ 今日 API 调用 ${logs[0].c} 次 / ¥${Number(logs[0].cost).toFixed(2)}`);
 }
 
+console.log("\n[7] M3a 账号与会话记忆");
+{
+  const em = `qa-${Date.now()}@sourcbuy.test`;
+  const pw = "qa-pass-123456";
+  const call = async (path: string, body?: any, cookie?: string, method: "POST" | "GET" = "POST") => {
+    // tRPC v11：mutation 走 POST，query 走 GET（input 在 query 参数里）
+    const url = method === "GET"
+      ? `${BASE}/api/trpc/${path}${body !== undefined ? `?input=${encodeURIComponent(JSON.stringify({ json: body }))}` : ""}`
+      : `${BASE}/api/trpc/${path}`;
+    const r = await fetch(url, {
+      method, headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+      body: method === "POST" && body !== undefined ? JSON.stringify({ json: body }) : undefined,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const setCookie = r.headers.get("set-cookie") ?? "";
+    const m = setCookie.match(/sb_session=([^;]*)/);
+    return { status: r.status, json: await r.json().catch(() => null), cookie: m && m[1] ? `sb_session=${m[1]}` : null };
+  };
+  const reg = await call("auth.register", { email: em, password: pw, displayName: "QA", locale: "zh" });
+  check("注册成功且下发会话 cookie", reg.status === 200 && !!reg.cookie && !!reg.json?.result?.data?.json?.user?.id);
+  const cookie = reg.cookie ?? "";
+  const me1 = await call("auth.me", undefined, cookie, "GET");
+  check("me 返回刚注册的邮箱", me1.json?.result?.data?.json?.email === em);
+  const chat1 = await call("ai.chat", { message: "衣架 500个 发美国", history: [], locale: "zh" }, cookie);
+  const tid = chat1.json?.result?.data?.json?.threadId;
+  check("聊天返回 threadId（落库成功）", typeof tid === "number" && tid > 0);
+  const list = await call("threads.list", undefined, cookie, "GET");
+  const listed = list.json?.result?.data?.json ?? [];
+  check("会话列表含本次会话", Array.isArray(listed) && listed.some((x: any) => x.id === tid));
+  const detail = await call("threads.detail", { threadId: tid }, cookie, "GET");
+  const msgs = detail.json?.result?.data?.json?.messages ?? [];
+  check("会话回放消息≥2条且含卡片快照", msgs.length >= 2 && msgs[1]?.payload != null, `${msgs.length} 条`);
+  // 越权检查：别人的 cookie 读不到这个会话
+  const reg2 = await call("auth.register", { email: `qa2-${Date.now()}@sourcbuy.test`, password: pw, locale: "zh" });
+  const detail2 = await call("threads.detail", { threadId: tid }, reg2.cookie ?? "", "GET");
+  check("他人读会话被拒（返回 null）", detail2.json?.result?.data?.json === null);
+  const out = await call("auth.logout", {}, cookie);
+  const me2 = await call("auth.me", undefined, cookie, "GET");
+  check("退出后 me 为空", out.status === 200 && (me2.json?.result?.data?.json === null));
+  // 登录老账号能取回
+  const login = await call("auth.login", { email: em, password: pw });
+  check("重新登录成功", login.status === 200 && login.json?.result?.data?.json?.user?.email === em);
+}
+
 console.log(`\n═══ 验收结果：${pass} PASS / ${fail} FAIL ═══`);
 if (fail) { console.log("失败项：", fails.join(" | ")); process.exit(1); }
 console.log("检查单全过，允许存版本。");

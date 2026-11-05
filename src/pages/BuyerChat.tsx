@@ -4,6 +4,7 @@ import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
 import { FX_SETTLEMENT } from "@contracts/fx";
 import { useT } from "@/i18n";
+import { getAnonId, useAuth } from "@/auth";
 
 interface MatchedFactory {
   id: number;
@@ -516,6 +517,14 @@ export default function BuyerChat() {
   ]);
   const [input, setInput] = useState("");
   const [pendingImage, setPendingImage] = useState<string | null>(null); // 待发送商品图（压缩后的 data URL）
+  // M3a 会话记忆：threadId 续写；anonId 匿名设备 ID（登录后服务端归并）
+  const { me } = useAuth();
+  const anonIdRef = useRef<string | undefined>(undefined);
+  if (anonIdRef.current === undefined) anonIdRef.current = getAnonId();
+  const [threadId, setThreadId] = useState<number | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const threadsQ = trpc.threads.list.useQuery(undefined, { enabled: !!me && showHistory, staleTime: 10_000 });
+  const utils = trpc.useUtils();
   const fileRef = useRef<HTMLInputElement>(null);
   const chat = trpc.ai.chat.useMutation();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -559,9 +568,11 @@ export default function BuyerChat() {
   // 失败静默重试一次（网络/模型抖动大多是瞬时的）；再失败才诚实告诉买家
   function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean, radarId?: number, imageData?: string) {
     chat.mutate(
-      { message: msg, history, radarId, imageData, locale: lang },
+      { message: msg, history, radarId, imageData, locale: lang, threadId: threadId ?? undefined, anonId: anonIdRef.current },
       {
-        onSuccess: (res) =>
+        onSuccess: (res) => {
+          const tid = (res as any).threadId;
+          if (typeof tid === "number") setThreadId(tid);
           setTurns((ts) => [
             ...ts,
             {
@@ -574,7 +585,8 @@ export default function BuyerChat() {
               quantity: (res as any).intent?.quantity ?? null,
               followUp: (res as any).followUp ?? null,
             },
-          ]),
+          ]);
+        },
         onError: () => {
           if (!isRetry) {
             setTimeout(() => doMutate(msg, history, true, radarId), 2000);
@@ -592,6 +604,39 @@ export default function BuyerChat() {
     );
   }
 
+  // M3a：载入历史会话——卡片数据从 payload 快照原样回放（不重新花钱查询）；追问卡不回放（会话已过期，防旧卡误提交）
+  async function loadThread(id: number) {
+    try {
+      const data = await utils.threads.detail.fetch({ threadId: id, anonId: anonIdRef.current });
+      if (!data) return;
+      setTurns(
+        data.messages.map((m: any) => {
+          const p = m.payload ?? {};
+          return m.role === "user"
+            ? { role: "user" as const, content: m.content }
+            : {
+                role: "assistant" as const,
+                content: m.content,
+                factories: p.factories?.length ? p.factories : undefined,
+                product: p.product ?? null,
+                products: p.products?.length ? p.products : undefined,
+                linkRef: p.linkContext ?? null,
+                quantity: p.intent?.quantity ?? null,
+                followUp: null,
+              };
+        }),
+      );
+      setThreadId(id);
+      setShowHistory(false);
+    } catch { /* 载入失败就停在当前会话 */ }
+  }
+
+  function newChat() {
+    setTurns([{ role: "assistant", content: t("chat.greeting") }]);
+    setThreadId(null);
+    setShowHistory(false);
+  }
+
   // 从首页带过来的第一句话，自动发出；雷达卡直达会带 radar 参数（品类钉死，不依赖意图抽取）
   useEffect(() => {
     const pre = params.get("prefill");
@@ -607,6 +652,48 @@ export default function BuyerChat() {
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-12rem)] max-w-3xl flex-col">
+      {/* M3a 会话工具条：历史回放 + 新对话 */}
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          onClick={() => setShowHistory((v) => !v)}
+          className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
+        >
+          {t("history.title")}
+        </button>
+        <button
+          onClick={newChat}
+          className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
+        >
+          {t("history.newChat")}
+        </button>
+      </div>
+      {showHistory && (
+        <div className="mb-2 max-h-56 overflow-y-auto rounded-xl border border-[var(--sb-line)] bg-white p-2">
+          {!me ? (
+            <p className="px-2 py-3 text-center text-xs text-[var(--sb-ink-40)]">
+              <Link to="/login" className="font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline">{t("nav.signIn")}</Link>
+              {" · "}{t("history.loginHint")}
+            </p>
+          ) : threadsQ.isLoading ? (
+            <p className="px-2 py-3 text-center text-xs text-[var(--sb-ink-40)]">…</p>
+          ) : !threadsQ.data?.length ? (
+            <p className="px-2 py-3 text-center text-xs text-[var(--sb-ink-40)]">{t("history.empty")}</p>
+          ) : (
+            threadsQ.data.map((th) => (
+              <button
+                key={th.id}
+                onClick={() => loadThread(th.id)}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-[var(--sb-brand-soft)] ${th.id === threadId ? "bg-[var(--sb-brand-soft)] font-medium" : ""}`}
+              >
+                <span className="truncate">{th.title || `#${th.id}`}</span>
+                <span className="shrink-0 text-[10px] text-[var(--sb-ink-40)]">
+                  {new Date(th.updatedAt).toLocaleDateString(lang === "en" ? "en-US" : "zh-CN")}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
       {/* 对话区 */}
       <div ref={scrollRef} className="sb-scroll flex-1 space-y-6 overflow-y-auto rounded-[20px] border border-[var(--sb-line)] bg-white p-4 md:p-7">
         {turns.map((turn, i) =>

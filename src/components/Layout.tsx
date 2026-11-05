@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from "react-router";
 import logoHorizontal from "@/assets/logo-horizontal.png";
 import logoMark from "@/assets/logo-mark.png";
 import { useT } from "@/i18n";
+import { useAuth } from "@/auth";
 
 const NAV = [
   { to: "/buyer", key: "nav.sourcing", tag: "SOURCING" },
@@ -13,6 +14,7 @@ const NAV = [
 export default function Layout() {
   const { pathname } = useLocation();
   const { lang, setLang, t } = useT();
+  const { me, logout } = useAuth();
   return (
     <div className="min-h-dvh bg-[var(--sb-paper)] text-[var(--sb-ink)]">
       <header className="sticky top-0 z-40 border-b border-[var(--sb-rule)] bg-[var(--sb-paper)]">
@@ -64,6 +66,26 @@ export default function Layout() {
                 </Link>
               );
             })}
+            {me ? (
+              <span className="ml-1 flex shrink-0 items-center gap-1.5 sm:ml-2">
+                <span className="hidden max-w-28 truncate text-xs font-medium text-[var(--sb-ink-60)] md:block">
+                  {me.displayName || me.email.split("@")[0]}
+                </span>
+                <button
+                  onClick={() => logout()}
+                  className="border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+                >
+                  {t("nav.signOut")}
+                </button>
+              </span>
+            ) : (
+              <Link
+                to="/login"
+                className="ml-1 shrink-0 border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)] sm:ml-2"
+              >
+                {t("nav.signIn")}
+              </Link>
+            )}
             <button
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}
               className="ml-1 shrink-0 border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)] sm:ml-2"

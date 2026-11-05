@@ -281,3 +281,62 @@ export const radarItems = mysqlTable(
   },
   (t) => [index("ix_radar_active").on(t.active, t.sortOrder)]
 );
+
+// ============ M3a 账号体系 + 会话记忆（2026-11-05 罗总批准开工）============
+// 买家账号：目标客户是海外中小 B 端买家，用邮箱+密码（scrypt），不用手机号。
+export const users = mysqlTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    email: varchar("email", { length: 191 }).notNull(),
+    passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+    displayName: varchar("display_name", { length: 64 }),
+    locale: varchar("locale", { length: 8 }), // 显式选择的语言，登录后跨设备跟随
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    lastLoginAt: timestamp("last_login_at"),
+  },
+  (t) => [uniqueIndex("uq_users_email").on(t.email)]
+);
+
+// 登录态：cookie 里是原始 token，库里只存 sha256——库泄露也换不出会话
+export const authSessions = mysqlTable(
+  "auth_sessions",
+  {
+    id: serial("id").primaryKey(),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("uq_auth_token").on(t.tokenHash), index("ix_auth_user").on(t.userId)]
+);
+
+// 会话：匿名期用 anonId（浏览器 localStorage），登录后 claim 到 userId——对话跟着人走
+export const chatThreads = mysqlTable(
+  "chat_threads",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("user_id", { mode: "number", unsigned: true }),
+    anonId: varchar("anon_id", { length: 36 }),
+    title: varchar("title", { length: 255 }),
+    locale: varchar("locale", { length: 8 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_threads_user").on(t.userId, t.updatedAt), index("ix_threads_anon").on(t.anonId, t.updatedAt)]
+);
+
+// 消息：卡片数据（商品墙/工厂卡/追问卡/单品卡）原样快照进 payload，回放不重新花钱查询
+export const chatMessages = mysqlTable(
+  "chat_messages",
+  {
+    id: serial("id").primaryKey(),
+    threadId: bigint("thread_id", { mode: "number", unsigned: true }).notNull(),
+    role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+    content: text("content").notNull(),
+    payload: json("payload"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_msgs_thread").on(t.threadId, t.id)]
+);

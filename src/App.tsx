@@ -6,6 +6,7 @@ import Calculator from './pages/Calculator'
 import BuyerChat from './pages/BuyerChat'
 import ProductDetail from './pages/ProductDetail'
 import Radar from './pages/Radar'
+import Login from './pages/Login'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/factories/:id" element={<FactoryDetail />} />
         <Route path="/products/:offerId" element={<ProductDetail />} />
         <Route path="/calculator" element={<Calculator />} />
+        <Route path="/login" element={<Login />} />
       </Route>
     </Routes>
   )
