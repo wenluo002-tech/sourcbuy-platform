@@ -517,6 +517,7 @@ export default function BuyerChat() {
   ]);
   const [input, setInput] = useState("");
   const [pendingImage, setPendingImage] = useState<string | null>(null); // 待发送商品图（压缩后的 data URL）
+  const [imgError, setImgError] = useState<string | null>(null); // 图片问题必须显式可见，绝不静默
   // M3a 会话记忆：threadId 续写；anonId 匿名设备 ID（登录后服务端归并）
   const { me } = useAuth();
   const anonIdRef = useRef<string | undefined>(undefined);
@@ -533,19 +534,54 @@ export default function BuyerChat() {
   const prefilled = useRef(false);
 
   // 图片压缩：最长边 1024、JPEG 0.82——够视觉模型识别，流量友好
+  // 两条解码路径：createImageBitmap 优先，失败回退 <img>+canvas（iPhone 拍照默认 HEIC，
+  // iOS Safari 的 <img> 能解但 createImageBitmap 不稳）；两条都挂必须明确告诉买家，绝不静默
   async function pickImage(file: File) {
-    if (!file.type.startsWith("image/")) return;
+    setImgError(null);
+    if (file.size > 20 * 1024 * 1024) {
+      setPendingImage(null);
+      setImgError(t("chat.imageTooLarge", { n: 20 }));
+      return;
+    }
+    if (!file.type.startsWith("image/") && !/\.hei[cf]$/i.test(file.name)) {
+      setPendingImage(null);
+      setImgError(t("chat.imageBadFormat"));
+      return;
+    }
     try {
       const bmp = await createImageBitmap(file);
-      const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(bmp.width * scale));
-      canvas.height = Math.max(1, Math.round(bmp.height * scale));
-      canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-      setPendingImage(canvas.toDataURL("image/jpeg", 0.82));
+      paintToCanvas(bmp.width, bmp.height, (ctx, w, h) => ctx.drawImage(bmp, 0, 0, w, h));
     } catch {
-      setPendingImage(null);
+      try {
+        const url = URL.createObjectURL(file);
+        await new Promise<void>((resolve, reject) => {
+          const im = new Image();
+          im.onload = () => {
+            URL.revokeObjectURL(url);
+            if (!im.naturalWidth) return reject(new Error("empty"));
+            paintToCanvas(im.naturalWidth, im.naturalHeight, (ctx, w, h) => ctx.drawImage(im, 0, 0, w, h));
+            resolve();
+          };
+          im.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("decode failed"));
+          };
+          im.src = url;
+        });
+      } catch {
+        setPendingImage(null);
+        setImgError(t("chat.imageBadFormat"));
+      }
     }
+  }
+
+  function paintToCanvas(srcW: number, srcH: number, draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void) {
+    const scale = Math.min(1, 1024 / Math.max(srcW, srcH));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(srcW * scale));
+    canvas.height = Math.max(1, Math.round(srcH * scale));
+    draw(canvas.getContext("2d")!, canvas.width, canvas.height);
+    setPendingImage(canvas.toDataURL("image/jpeg", 0.82));
   }
 
   // 只滚动聊天容器本身；scrollIntoView 会带着整页滚动，导致吸顶导航压住内容
@@ -928,6 +964,18 @@ export default function BuyerChat() {
               type="button"
               onClick={() => setPendingImage(null)}
               className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-[var(--sb-ink-40)] hover:text-[var(--sb-ink)]"
+            >
+              {t("chat.remove")}
+            </button>
+          </div>
+        )}
+        {imgError && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-[#e9d5a1] bg-[#fdf6e3] px-3 py-2">
+            <span className="text-xs leading-relaxed text-[#92610a]">{imgError}</span>
+            <button
+              type="button"
+              onClick={() => setImgError(null)}
+              className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-[#92610a]/70 hover:text-[#92610a]"
             >
               {t("chat.remove")}
             </button>
