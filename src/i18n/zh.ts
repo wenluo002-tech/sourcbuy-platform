@@ -87,6 +87,12 @@ export const zhRadar = {
   loading: "加载中…",
   error: "榜单数据加载失败，请刷新重试——数据没回来我们不会拿旧数据糊弄你。",
   sourceAmazon: "AMAZON 信号",
+  gtLink: "Google Trends 五年趋势 ↗",
+  trend: {
+    rising: "↑ 需求在涨",
+    flat: "→ 需求横盘",
+    falling: "↓ 需求在降",
+  } as Record<string, string>,
   sourceTiktok: "TIKTOK 信号",
   exwBand: "源头出厂价带",
   exwAsk: "源头出厂价",

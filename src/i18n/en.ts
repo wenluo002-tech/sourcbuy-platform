@@ -90,6 +90,12 @@ const enRadar: Messages["radar"] = {
   loading: "Loading…",
   error: "The board failed to load — please refresh. We don't pad it with stale data.",
   sourceAmazon: "AMAZON SIGNAL",
+  gtLink: "Google Trends · 5-year ↗",
+  trend: {
+    rising: "↑ Demand rising",
+    flat: "→ Demand flat",
+    falling: "↓ Demand falling",
+  } as Record<string, string>,
   sourceTiktok: "TIKTOK SIGNAL",
   exwBand: "EXW price band",
   exwAsk: "EXW price",

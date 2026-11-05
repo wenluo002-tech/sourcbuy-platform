@@ -274,6 +274,8 @@ export const radarItems = mysqlTable(
     vettedCount: int("vetted_count").notNull().default(0), // 严选库命中工厂数
     topSales: int("top_sales"), // 上游头部在售量（参考）
     note: text("note"), // 老采购一句话点评（含风险/认证提示）
+    trendDirection: varchar("trend_direction", { length: 12 }), // Google Trends 人工标注：rising/flat/falling，无值不显示（不编数据）
+    trendCheckedAt: varchar("trend_checked_at", { length: 16 }), // 趋势检查日期 YYYY-MM-DD
     sortOrder: int("sort_order").notNull().default(0),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),

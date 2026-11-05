@@ -22,6 +22,8 @@ export async function getRadarItem(id: number) {
     upstreamCount: r.upstreamCount,
     vettedCount: r.vettedCount,
     note: r.note,
+    trendDirection: r.trendDirection,
+    trendCheckedAt: r.trendCheckedAt,
   };
 }
 
@@ -50,6 +52,8 @@ export async function listRadar() {
       vettedCount: r.vettedCount,
       topSales: r.topSales,
       note: r.note,
+      trendDirection: r.trendDirection,
+      trendCheckedAt: r.trendCheckedAt,
     })),
   };
 }

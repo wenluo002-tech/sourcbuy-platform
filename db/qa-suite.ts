@@ -82,6 +82,13 @@ for (const path of ["/", "/buyer", "/radar", "/factories"]) {
   } catch (e: any) { check(`GET ${path}`, false, String(e?.message).slice(0, 40)); }
 }
 
+// 雷达卡 GT 链接依赖 titleEn——为空则链接指向中文词，海外买家视角不准
+{
+  const { listRadar } = await import("../api/queries/radar");
+  const radar = await listRadar();
+  check("雷达条目均带英文品名（GT 链接可用）", radar.items.length > 0 && radar.items.every((it: any) => !!it.titleEn), `${radar.items.length} 条`);
+}
+
 console.log("\n[6] 数据口径对账");
 {
   const db = getDb();

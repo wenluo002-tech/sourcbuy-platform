@@ -20,7 +20,14 @@ type RadarItem = {
   vettedCount: number | null;
   topSales: number | null;
   note: string | null;
+  trendDirection: string | null;
+  trendCheckedAt: string | null;
 };
+
+// Google Trends 五年趋势链接——买家点开自己验证，来源真实、永不依赖非官方抓取
+function gtUrl(titleEn: string | null, fallback: string): string {
+  return `https://trends.google.com/trends/explore?date=today%205-y&q=${encodeURIComponent(titleEn || fallback)}`;
+}
 
 const SOURCE_DOT = { amazon: "#e07b39", tiktok: "#6d28d9" } as const;
 
@@ -85,6 +92,34 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
           it.signalText
         )}
       </p>
+
+      {/* 趋势标注：人工查 GT 标注（涨/平/跌 + 检查日期），没查过不显示；右侧挂 GT 原链可自查 */}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {it.trendDirection ? (
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+              it.trendDirection === "rising"
+                ? "bg-emerald-50 text-emerald-700"
+                : it.trendDirection === "falling"
+                  ? "bg-red-50 text-red-600"
+                  : "bg-black/5 text-[var(--sb-ink-60)]"
+            }`}
+          >
+            {t(`radar.trend.${it.trendDirection}`)}
+            {it.trendCheckedAt ? ` · ${it.trendCheckedAt}` : ""}
+          </span>
+        ) : (
+          <span />
+        )}
+        <a
+          href={gtUrl(it.titleEn, it.title)}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 text-[10px] font-medium text-[var(--sb-ink-40)] underline decoration-dotted underline-offset-2 hover:text-[var(--sb-brand)]"
+        >
+          {t("radar.gtLink")}
+        </a>
+      </div>
 
       {/* 价格底板：纸色数据块，两栏大数字 */}
       <div className="mt-4 grid grid-cols-2 gap-x-3 bg-[var(--sb-paper)] px-3.5 py-3">
