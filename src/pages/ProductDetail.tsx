@@ -3,10 +3,12 @@ import { Link, useParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { FX_SETTLEMENT } from "@contracts/fx";
 import { DESTINATIONS } from "@contracts/freight";
+import { useT } from "@/i18n";
 
 const REF_RATE = FX_SETTLEMENT;
 
-function fmtSalesNum(n: number): string {
+function fmtSalesNum(n: number, lang: string = "zh"): string {
+  if (lang === "en") return n.toLocaleString("en-US");
   if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")}万`;
   return n.toLocaleString();
 }
@@ -17,12 +19,9 @@ const label = "mb-1 block text-[11px] font-medium text-[var(--sb-ink-40)]";
 
 /* 履约链路：佣金买到的四段服务 */
 function FulfillmentChain({ dispatchNote }: { dispatchNote: string | null }) {
-  const steps = [
-    { t: "工厂出货", d: dispatchNote ?? "按工厂承诺时效发货" },
-    { t: "集货仓二次质检", d: "到仓开箱核验，货不对板当场拦截" },
-    { t: "国际运输", d: "按试算方案走真实渠道，全程轨迹可查" },
-    { t: "清关派送", d: "出口申报、清关、尾程派送到门" },
-  ];
+  const { t } = useT();
+  const chain = t("product.chain") as { t: string; d: string }[];
+  const steps = chain.map((c, i) => (i === 0 && dispatchNote ? { ...c, d: dispatchNote } : c));
   return (
     <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {steps.map((s, i) => (
@@ -38,6 +37,7 @@ function FulfillmentChain({ dispatchNote }: { dispatchNote: string | null }) {
 
 export default function ProductDetail() {
   const { offerId = "" } = useParams();
+  const { lang, t } = useT();
   const q = trpc.products.detailV2.useQuery({ offerId }, { retry: false });
   const offer = q.data?.offer ?? null;
   const factory = q.data?.factory ?? null;
@@ -84,10 +84,10 @@ export default function ProductDetail() {
   if (!offer) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
-        <p className="text-lg font-semibold">这个商品没拿到</p>
-        <p className="mt-2 text-sm text-[var(--sb-ink-60)]">可能已下架，或货号有误。把链接发给我，我再帮你查一次。</p>
+        <p className="text-lg font-semibold">{t("product.notFoundTitle")}</p>
+        <p className="mt-2 text-sm text-[var(--sb-ink-60)]">{t("product.notFoundBody")}</p>
         <Link to="/buyer" className="sb-pill mt-6 inline-block px-6 py-2.5 text-sm">
-          去问老采购 →
+          {t("product.notFoundCta")}
         </Link>
       </div>
     );
@@ -104,19 +104,19 @@ export default function ProductDetail() {
   // 「为什么挑中它」：只用真实数据，一条都编不出来就不渲染整块
   const maxStock = offer.skus.reduce((m, s) => Math.max(m, s.stock ?? 0), 0);
   const why: string[] = [];
-  if (offer.sales != null && offer.sales > 0) why.push(`平台已售 ${fmtSalesNum(offer.sales)} 件——有真实动销，不是冷门尾货`);
+  if (offer.sales != null && offer.sales > 0) why.push(t("product.whySales", { n: fmtSalesNum(offer.sales, lang) }));
   if (hasRange) {
     const drop = 1 - tiers[tiers.length - 1].price / tiers[0].price;
-    if (drop >= 0.05) why.push(`量到 ${tiers[tiers.length - 1].minQty} 件，单价降到 ¥${tiers[tiers.length - 1].price}，比零售档省 ${(drop * 100).toFixed(0)}%`);
+    if (drop >= 0.05) why.push(t("product.whyTierDrop", { n: tiers[tiers.length - 1].minQty, p: tiers[tiers.length - 1].price, pct: (drop * 100).toFixed(0) }));
   }
-  if (offer.skus.length > 1) why.push(`${offer.skus.length} 个规格全码在库${maxStock > 0 ? `，单规格最深可订 ${fmtSalesNum(maxStock)} 件` : ""}——铺货、补货都不用等`);
-  if (offer.dispatchHours) why.push(`工厂承诺 ${offer.dispatchHours} 小时内发货，交期写进了平台规则`);
-  if (factory) why.push(`工厂就在我们严选库里${factory.tier ? `（${factory.tier}标）` : ""}，评分 ${factory.score}——底细我们验过`);
+  if (offer.skus.length > 1) why.push(t("product.whySkuStock", { n: offer.skus.length, stock: maxStock > 0 ? t("product.whySkuStockDeep", { n: fmtSalesNum(maxStock, lang) }) : "" }));
+  if (offer.dispatchHours) why.push(t("product.whyDispatch", { n: offer.dispatchHours }));
+  if (factory) why.push(t("product.whyFactory", { tier: factory.tier ? t("product.whyFactoryTier", { tier: t(`home.tierName.${factory.tier}`) }) : "", score: factory.score ?? "—" }));
 
   return (
     <div className="mx-auto max-w-5xl pb-16">
       <Link to="/buyer" className="text-xs font-medium text-[var(--sb-ink-40)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline">
-        ← 返回对话
+        {t("product.back")}
       </Link>
 
       <div className="mt-4 grid gap-8 md:grid-cols-2">
@@ -162,36 +162,36 @@ export default function ProductDetail() {
         <div className="min-w-0">
           <h1 className="text-lg leading-snug font-bold break-words md:text-xl">{offer.title}</h1>
           <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--sb-ink-60)]">
-            {offer.moq != null && <span>起订 ≥ {offer.moq} 件</span>}
-            {offer.sales != null && offer.sales > 0 && <span>已售 {fmtSalesNum(offer.sales)}</span>}
-            {offer.dispatchHours != null && <span>{offer.dispatchHours} 小时发货</span>}
+            {offer.moq != null && <span>{t("product.moq", { n: offer.moq })}</span>}
+            {offer.sales != null && offer.sales > 0 && <span>{t("product.soldN", { n: fmtSalesNum(offer.sales, lang) })}</span>}
+            {offer.dispatchHours != null && <span>{t("product.dispatchH", { n: offer.dispatchHours })}</span>}
           </div>
 
           {/* 价格 */}
           <div className="mt-4 rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] px-4 py-3.5">
             <div className="flex flex-wrap items-baseline gap-x-2">
               <span className="sb-num text-3xl font-bold tracking-tight text-[var(--sb-navy)]">{priceMain}</span>
-              <span className="text-xs text-[var(--sb-ink-40)]">/ 件 · 出厂价</span>
+              <span className="text-xs text-[var(--sb-ink-40)]">{t("product.perUnitExw")}</span>
               {priceUsd && <span className="sb-num text-sm text-[var(--sb-ink-40)]">≈ US${priceUsd}</span>}
             </div>
             {hasRange && (
               <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {tiers.map((t, i) => (
+                {tiers.map((tp, i) => (
                   <span
                     key={i}
                     className={`rounded-md border px-2 py-1 text-[11px] tabular-nums ${
-                      qtyN > 0 && qtyN >= t.minQty && (i === tiers.length - 1 || qtyN < tiers[i + 1].minQty)
+                      qtyN > 0 && qtyN >= tp.minQty && (i === tiers.length - 1 || qtyN < tiers[i + 1].minQty)
                         ? "border-[var(--sb-brand)] bg-[var(--sb-brand-soft)] font-medium text-[var(--sb-brand)]"
                         : "border-[var(--sb-line)] bg-white text-[var(--sb-ink-60)]"
                     }`}
                   >
-                    ≥{t.minQty} 件 · ¥{t.price}
+                    {t("product.tierPrice", { n: tp.minQty, p: tp.price })}
                   </span>
                 ))}
               </div>
             )}
             <p className="mt-2 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
-              结汇汇率 {REF_RATE}（牌价 − 0.3）；到手价 = 出厂价 + 运费 + 关税 + 履约佣金
+              {t("product.fxNote", { rate: REF_RATE })}
             </p>
           </div>
 
@@ -199,7 +199,7 @@ export default function ProductDetail() {
           {offer.skus.length > 0 && (
             <div className="mt-4">
               <p className={label}>
-                规格（{offer.skus.length} 个{sku?.stock != null ? ` · 当前规格可订 ${sku.stock.toLocaleString()} 件` : ""}）
+                {t("product.skuLabel", { n: offer.skus.length, stock: sku?.stock != null ? t("product.skuStock", { n: sku.stock.toLocaleString() }) : "" })}
               </p>
               <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto pr-1">
                 {offer.skus.map((s, i) => (
@@ -225,40 +225,40 @@ export default function ProductDetail() {
 
           {/* 到手价快算 */}
           <div className="mt-4 rounded-xl border border-[var(--sb-line)] bg-white p-4">
-            <p className={label}>到手价快算{weightKg != null ? `（单件约 ${weightKg} kg）` : ""}</p>
+            <p className={label}>{t("product.quickCalc")}{weightKg != null ? t("product.quickCalcWeight", { w: weightKg }) : ""}</p>
             {weightKg == null ? (
               <p className="text-xs leading-relaxed text-[var(--sb-ink-60)]">
-                这款的重量上游没给可靠数据，我不瞎填——点下方「完整试算」手动输入重量再算。
+                {t("product.noWeight")}
               </p>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
                   <label>
-                    <span className={label}>数量（件）</span>
+                    <span className={label}>{t("product.qtyLabel")}</span>
                     <input
                       value={qty}
                       onChange={(e) => setQty(e.target.value.replace(/[^\d]/g, ""))}
-                      placeholder={offer.moq ? `≥${offer.moq}` : "如 500"}
+                      placeholder={offer.moq ? `≥${offer.moq}` : t("product.qtyPh")}
                       className={`${input} sb-num`}
                     />
                   </label>
                   <label className="col-span-2 md:col-span-1">
-                    <span className={label}>目的地</span>
+                    <span className={label}>{t("product.destLabel")}</span>
                     <select value={dest} onChange={(e) => setDest(e.target.value)} className={input}>
-                      <option value="">通用估算</option>
+                      <option value="">{t("product.destGeneric")}</option>
                       {DESTINATIONS.map((d) => (
                         <option key={d.code} value={d.code}>
-                          {d.zh}
+                          {lang === "en" ? d.en : d.zh}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label className="col-span-2 md:col-span-1">
-                    <span className={label}>品类风险档</span>
+                    <span className={label}>{t("product.riskLabel")}</span>
                     <select value={riskTier} onChange={(e) => setRiskTier(e.target.value as any)} className={input}>
-                      <option value="A">低风险</option>
-                      <option value="B">常规</option>
-                      <option value="C">高风险</option>
+                      <option value="A">{t("product.riskA")}</option>
+                      <option value="B">{t("product.riskB")}</option>
+                      <option value="C">{t("product.riskC")}</option>
                     </select>
                   </label>
                   <div className="col-span-2 flex items-end md:col-span-1">
@@ -267,7 +267,7 @@ export default function ProductDetail() {
                       disabled={qtyN <= 0 || landed.isFetching}
                       className="sb-pill w-full px-4 py-2 text-sm disabled:opacity-40"
                     >
-                      {landed.isFetching ? "计算中…" : "试算"}
+                      {landed.isFetching ? t("product.calculating") : t("product.calcBtn")}
                     </button>
                   </div>
                 </div>
@@ -275,24 +275,24 @@ export default function ProductDetail() {
                   <div className="mt-3 rounded-lg bg-[var(--sb-navy)] px-4 py-3 text-[#eef4f5]">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                       <div>
-                        <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">到手单价{dest ? "" : "（通用估算）"}</p>
+                        <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">{t("product.perUnitLanded")}{dest ? "" : t("product.genericSuffix")}</p>
                         <p className="sb-num text-2xl font-bold">US${landed.data.perUnit}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">整票 {qtyN} 件</p>
+                        <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">{t("product.totalLot", { n: qtyN })}</p>
                         <p className="sb-num text-lg font-semibold">US${landed.data.total.toLocaleString()}</p>
                       </div>
                     </div>
                     <p className="mt-1.5 text-[11px] opacity-70">
                       {landed.data.realChannel
                         ? `${landed.data.realChannel.name} · ${landed.data.realChannel.transitNote}`
-                        : "通用估算渠道，选目的地后走真实价卡"}
-                      {" · "}佣金 {landed.data.commissionMeta ? `${(landed.data.commissionMeta.rate * 100).toFixed(1)}%` : ""}
+                        : t("product.genericChannel")}
+                      {" · "}{landed.data.commissionMeta ? t("product.commissionLabel", { rate: `${(landed.data.commissionMeta.rate * 100).toFixed(1)}%` }) : ""}
                     </p>
                   </div>
                 )}
                 {landed.error && (
-                  <p className="mt-2 text-xs text-[var(--sb-ink-60)]">试算没跑通：{landed.error.message}。可以走完整试算页逐项填。</p>
+                  <p className="mt-2 text-xs text-[var(--sb-ink-60)]">{t("product.calcErrorPrefix")}{landed.error.message}{t("product.calcErrorSuffix")}</p>
                 )}
               </>
             )}
@@ -301,16 +301,16 @@ export default function ProductDetail() {
           {/* CTA */}
           <div className="mt-4 flex flex-wrap gap-2.5">
             <Link
-              to={`/buyer?prefill=${encodeURIComponent(`帮我看看这款货（货号 ${offer.offerId}）：${offer.title.slice(0, 30)}`)}`}
+              to={`/buyer?prefill=${encodeURIComponent(t("product.ctaFollowMsg", { id: offer.offerId, title: offer.title.slice(0, 30) }))}`}
               className="sb-pill px-5 py-2.5 text-sm"
             >
-              让老采购跟进这款 →
+              {t("product.ctaFollow")}
             </Link>
             <Link
               to={`/calculator?price=${unitPrice ?? ""}${qtyN ? `&qty=${qtyN}` : ""}${weightKg ? `&weight=${weightKg}` : ""}`}
               className="rounded-full border border-[var(--sb-line)] px-5 py-2.5 text-sm font-medium text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
             >
-              完整试算（可选渠道/附加费）
+              {t("product.ctaFullCalc")}
             </Link>
           </div>
         </div>
@@ -319,7 +319,7 @@ export default function ProductDetail() {
       {/* 为什么挑中它 */}
       {why.length > 0 && (
         <section className="mt-10">
-          <p className="sb-eyebrow">Why This One · 老采购的拿货理由</p>
+          <p className="sb-eyebrow">{t("product.whyKicker")} · {t("product.whyTitle")}</p>
           <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
             {why.map((w, i) => (
               <li key={i} className="flex items-start gap-2.5 rounded-xl border border-[var(--sb-line)] bg-white px-4 py-3 text-sm leading-relaxed text-[var(--sb-ink-60)]">
@@ -333,7 +333,7 @@ export default function ProductDetail() {
 
       {/* 工厂背书 */}
       <section className="mt-10">
-        <p className="sb-eyebrow">Behind This Listing · 背后的厂</p>
+        <p className="sb-eyebrow">{t("product.behindKicker")} · {t("product.behindTitle")}</p>
         {factory ? (
           <div className="mt-3 rounded-2xl border border-[var(--sb-line)] bg-white p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -342,26 +342,26 @@ export default function ProductDetail() {
                   {factory.name}
                 </Link>
                 <p className="mt-1 text-xs text-[var(--sb-ink-40)]">
-                  {[factory.tier ? `${factory.tier}标严选` : null, factory.location, factory.years ? `${factory.years} 年老厂` : null].filter(Boolean).join(" · ")}
+                  {[factory.tier ? t("product.factoryMetaTier", { tier: t(`home.tierName.${factory.tier}`) }) : null, factory.location, factory.years ? t("product.yearsOld", { n: factory.years }) : null].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <div className="text-right">
                 <p className="sb-num text-2xl font-bold text-[var(--sb-brand)]">{factory.score}</p>
-                <p className="text-[10px] text-[var(--sb-ink-40)]">严选评分</p>
+                <p className="text-[10px] text-[var(--sb-ink-40)]">{t("factoryDetail.scoreLabel")}</p>
               </div>
             </div>
             <p className="mt-3 border-t border-[var(--sb-line)] pt-3 text-xs leading-relaxed text-[var(--sb-ink-60)]">
-              这家就在我们严选库里，底细验过——评分七维加权、算法公开，花钱买不到名次。
+              {t("product.vettedNote")}
               <Link to={`/factories/${factory.id}`} className="ml-1 font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline">
-                看工厂档案 →
+                {t("product.viewProfile")}
               </Link>
             </p>
           </div>
         ) : (
           <div className="mt-3 rounded-2xl border border-dashed border-[var(--sb-line)] bg-[var(--sb-paper)] p-5">
-            <p className="text-sm font-semibold">这家供应商不在我们的严选库里</p>
+            <p className="text-sm font-semibold">{t("product.notVettedTitle")}</p>
             <p className="mt-1.5 text-xs leading-relaxed text-[var(--sb-ink-60)]">
-              不在库里不等于不能买，但底细我们还没验过。看中这款就发给我——我去查它的工商信息、经营年限和履约记录，必要时安排验厂，别裸下单。
+              {t("product.notVettedBody")}
             </p>
           </div>
         )}
@@ -369,15 +369,15 @@ export default function ProductDetail() {
 
       {/* 履约链路 */}
       <section className="mt-10">
-        <p className="sb-eyebrow">How It Ships · 履约链路</p>
-        <h2 className="mt-2 text-lg font-bold">你的佣金买到的是这四段</h2>
+        <p className="sb-eyebrow">{t("product.shipKicker")} · {t("product.shipTitle")}</p>
+        <h2 className="mt-2 text-lg font-bold">{t("product.shipH2")}</h2>
         <div className="mt-4">
           <FulfillmentChain dispatchNote={offer.dispatchNote} />
         </div>
       </section>
 
       <p className="mt-8 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
-        报价与库存来自工厂端实时数据（每日复核）；下单前老采购还会再核一遍价，买贵买错都有兜底。
+        {t("product.footnote")}
       </p>
     </div>
   );

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
 import { FX_SETTLEMENT } from "@contracts/fx";
+import { useT } from "@/i18n";
 
 interface MatchedFactory {
   id: number;
@@ -87,7 +88,6 @@ interface FollowUpCardData {
 }
 
 /* 补充问题卡：多题同卡、chips 只选不发、选完一次提交；常驻"跳过，直接寻源"。非阻塞——结果已先出 */
-const FOLLOWUP_KEY_LABEL: Record<string, string> = { quantity: "数量", destination: "目的地", deadline: "交期" };
 function FollowUpCard({
   card,
   doneSummary,
@@ -100,6 +100,7 @@ function FollowUpCard({
   onSkip: () => void;
 }) {
   const [sel, setSel] = useState<Record<string, string>>({});
+  const { t } = useT();
   if (doneSummary) {
     return (
       <div className="max-w-[94%] text-[11px] text-[var(--sb-ink-40)]">
@@ -118,14 +119,14 @@ function FollowUpCard({
   const submit = () => {
     const parts = card.questions
       .filter((q) => sel[q.key])
-      .map((q) => `${FOLLOWUP_KEY_LABEL[q.key] ?? q.label}:${sel[q.key]}`);
+      .map((q) => `${t(`chat.followKey.${q.key}`) ?? q.label}:${sel[q.key]}`);
     const summary = parts.join(" · ");
-    onSubmit(`[补充] ${parts.join("；")}`, `已补充：${summary}`);
+    onSubmit(`[补充] ${parts.join("；")}`, `${t("chat.followAddedPrefix")}${summary}`);
   };
   return (
     <div className="max-w-[94%] rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] p-4">
       <div className="text-[13px] font-semibold text-[var(--sb-ink)]">
-        补齐这几个，我配得更准<span className="ml-1.5 font-normal text-[var(--sb-ink-40)]">（不补也行，先看上面的结果）</span>
+        {t("chat.followTitle")}<span className="ml-1.5 font-normal text-[var(--sb-ink-40)]">{t("chat.followHint")}</span>
       </div>
       {card.questions.map((q) => (
         <div key={q.key} className="mt-3">
@@ -159,14 +160,14 @@ function FollowUpCard({
           onClick={submit}
           className="rounded-lg bg-[var(--sb-brand)] px-4 py-1.5 text-[12.5px] font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
         >
-          提交补充{picked ? `（已选 ${picked} 项）` : ""}
+          {t("chat.followSubmit")}{picked ? t("chat.followSubmitPicked", { n: picked }) : ""}
         </button>
         <button
           type="button"
           onClick={onSkip}
           className="rounded-lg border border-[var(--sb-line)] bg-white px-4 py-1.5 text-[12.5px] text-[var(--sb-ink-60,#666)] transition-colors hover:border-[var(--sb-brand)]/50"
         >
-          跳过，直接寻源
+          {t("chat.followSkip")}
         </button>
       </div>
     </div>
@@ -175,6 +176,7 @@ function FollowUpCard({
 
 /* 外链识别卡：买家贴的亚马逊/TikTok 等链接，系统读到的真实信息（读不到就明说） */
 function LinkRefCard({ link }: { link: LinkRef }) {
+  const { t } = useT();
   return (
     <div className="flex max-w-[94%] items-center gap-3 rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] px-3.5 py-2.5">
       {link.image ? (
@@ -190,10 +192,10 @@ function LinkRefCard({ link }: { link: LinkRef }) {
       )}
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--sb-ink-40)]">
-          {link.fetchFailed ? `${link.platform} · 链接没打开` : `${link.platform} · 已识别${link.source === "slug" ? "（从链接路径）" : ""}`}
+          {link.fetchFailed ? `${link.platform} · ${t("chat.linkOpenFail")}` : `${link.platform} · ${t("chat.linkRecognized")}${link.source === "slug" ? t("chat.linkFromSlug") : ""}`}
         </p>
         <p className="mt-0.5 truncate text-[13px] font-medium text-[var(--sb-ink)]">
-          {link.title ?? "平台挡了抓取——补一句品名我马上查"}
+          {link.title ?? t("chat.linkNoTitle")}
         </p>
       </div>
       {link.priceText && (
@@ -203,23 +205,13 @@ function LinkRefCard({ link }: { link: LinkRef }) {
   );
 }
 
-const SUGGESTIONS = [
-  "瑜伽裤 500 条，发德国",
-  "找做连帽卫衣的工厂，预算到手价 $4 以内",
-  "蓝牙耳机，先寄样品看看质量",
-];
-
 /* 作业状态流：每一行对应后端真实在做的事，只陈述过程、不虚报结果 */
-const STAGES: { label: string; detail: string }[] = [
-  { label: "解析采购需求", detail: "品类 · 数量 · 目的地 · 认证要求" },
-  { label: "搜索真实在售货源", detail: "货源平台同步搜款 · 出厂价" },
-  { label: "比对严选工厂库", detail: "数千家源头工厂交叉核验" },
-  { label: "撰写采购建议", detail: "推荐理由与风险提示" },
-];
 const STAGE_DELAYS = [900, 1900, 3000];
 
 function SourcingStatus() {
   const [step, setStep] = useState(0);
+  const { t } = useT();
+  const stages = t("chat.stages") as { label: string; detail: string }[];
 
   useEffect(() => {
     const timers = STAGE_DELAYS.map((ms, i) =>
@@ -234,12 +226,12 @@ function SourcingStatus() {
         <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-ink-40)]">
           AI Buyer
         </span>
-        <span className="text-[11px] font-medium text-[var(--sb-brand)]">老采购</span>
-        <span className="text-[10px] text-[var(--sb-ink-40)]">· 作业中</span>
+        <span className="text-[11px] font-medium text-[var(--sb-brand)]">{t("chat.aiBuyerTag")}</span>
+        <span className="text-[10px] text-[var(--sb-ink-40)]">{t("chat.working")}</span>
       </div>
       <div className="border-l-2 border-[var(--sb-brand)]/60 pl-4">
         <ul className="space-y-1.5 py-0.5">
-          {STAGES.slice(0, step + 1).map((s, i) => {
+          {stages.slice(0, step + 1).map((s, i) => {
             const active = i === step;
             return (
               <li key={s.label} className="sb-stage flex items-baseline gap-2.5">
@@ -271,7 +263,8 @@ function SourcingStatus() {
 
 const REF_RATE = FX_SETTLEMENT; // 与到手价引擎一致的结汇汇率（牌价 − 0.3，见 contracts/fx.ts）
 
-function fmtSales(n: number): string {
+function fmtSales(n: number, lang: string = "zh"): string {
+  if (lang === "en") return n.toLocaleString("en-US");
   if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")} 万`;
   if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")} 千`;
   return String(n);
@@ -286,13 +279,14 @@ function ProductStrip({
   quantity?: string | null;
 }) {
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
+  const { t } = useT();
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)]">
-          真实在售货源 · 出厂价（未含运费佣金）
+          {t("chat.stripTitle")}
         </p>
-        <p className="text-[10px] text-[var(--sb-ink-40)]">{products.length} 款</p>
+        <p className="text-[10px] text-[var(--sb-ink-40)]">{t("chat.stripCount", { n: products.length })}</p>
       </div>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
         {products.map((p) => {
@@ -335,20 +329,20 @@ function ProductStrip({
                 </div>
                 <div className="mt-1.5 flex items-center justify-between gap-1">
                   <span className="text-[10px] text-[var(--sb-ink-40)]">
-                    {p.sales > 0 ? `已售 ${fmtSales(p.sales)}` : "在售"}
+                    {p.sales > 0 ? t("chat.sold", { n: fmtSales(p.sales) }) : t("chat.onSale")}
                   </span>
                   <div className="flex items-center gap-2">
                     <Link
                       to={`/products/${p.offerId}`}
                       className="text-[10px] font-medium text-[var(--sb-ink-60)] underline-offset-2 hover:text-[var(--sb-brand)] hover:underline"
                     >
-                      详情
+                      {t("chat.details")}
                     </Link>
                     <Link
                       to={calcUrl}
                       className="text-[10px] font-semibold text-[var(--sb-brand)] underline-offset-2 hover:underline"
                     >
-                      算到手价 →
+                      {t("chat.calcLink")}
                     </Link>
                   </div>
                 </div>
@@ -371,6 +365,7 @@ function ProductCard({
 }) {
   const offer = product.offer;
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
+  const { t } = useT();
   const tiers = [...offer.priceTiers].sort((a, b) => a.minQty - b.minQty);
   // 按采购数量选价档：够得着的最低单价；没给数量则用首档
   const main =
@@ -401,8 +396,7 @@ function ProductCard({
           {offer.amountOnSale != null && offer.amountOnSale > 0 && (
             <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--sb-ink-60)]">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-              在售 · 可售 {offer.amountOnSale.toLocaleString()}{" "}
-              {offer.unit ?? "件"}
+              {t("chat.onSaleStock", { n: offer.amountOnSale.toLocaleString(), unit: offer.unit ?? t("chat.unitPc") })}
             </p>
           )}
         </div>
@@ -415,14 +409,14 @@ function ProductCard({
               ¥{main.price}
             </span>
             <span className="text-xs text-[var(--sb-ink-40)]">
-              / {offer.unit ?? "件"} · 出厂价
+              {t("chat.perUnitExw", { unit: offer.unit ?? t("chat.unitPc") })}
             </span>
             <span className="text-xs tabular-nums text-[var(--sb-ink-40)]">
               ≈ US${(main.price / REF_RATE).toFixed(2)}
             </span>
             {qty > 0 && (
               <span className="rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--sb-brand)]">
-                按 {qty.toLocaleString()} {offer.unit ?? "件"}档
+                {t("chat.qtyTier", { qty: qty.toLocaleString(), unit: offer.unit ?? t("chat.unitPc") })}
               </span>
             )}
           </div>
@@ -443,7 +437,7 @@ function ProductCard({
             </div>
           )}
           <p className="mt-2 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
-            按结汇汇率 {REF_RATE} 折算（当日牌价 − 0.3）；到手价 = 出厂价 + 运费 + 关税 + 履约佣金，点「算到手价」逐行试算
+            {t("chat.fxNote", { rate: REF_RATE })}
           </p>
         </div>
       )}
@@ -454,25 +448,24 @@ function ProductCard({
             to={`/factories/${product.factory.id}`}
             className="text-xs font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
           >
-            背后工厂在严选库：{product.factory.name}（{product.factory.tier} ·{" "}
-            {product.factory.score} 分）→
+            {t("chat.factoryVetted", { name: product.factory.name, tier: product.factory.tier ?? "", score: product.factory.score ?? "—" })}
           </Link>
         ) : (
           <span className="sb-note rounded-md px-2 py-1 text-xs">
-            该店铺不在严选库，下单前建议验厂
+            {t("chat.shopNotVetted")}
           </span>
         )}
         <Link
           to={`/products/${offer.offerId}`}
           className="shrink-0 text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
         >
-          看详情
+          {t("chat.viewDetails")}
         </Link>
         <Link
           to={calcUrl}
           className="shrink-0 text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
         >
-          算到手价 →
+          {t("chat.calcLink")}
         </Link>
       </div>
     </div>
@@ -480,11 +473,11 @@ function ProductCard({
 }
 
 export default function BuyerChat() {
+  const { lang, t } = useT();
   const [turns, setTurns] = useState<Turn[]>([
     {
       role: "assistant",
-      content:
-        "你好，我是你的 AI 采购买手，干这行十几年了。你要什么货、多少量、发往哪里，告诉我就行——我帮你找源头好货和好价，背后的工厂我都验过底。每一单为什么推荐、到手价多少，摆证据说清楚；需求不靠谱我也会直说。",
+      content: t("chat.greeting"),
     },
   ]);
   const [input, setInput] = useState("");
@@ -519,10 +512,10 @@ export default function BuyerChat() {
   }, [turns, chat.isPending]);
 
   function send(text: string, radarId?: number) {
-    const msg = text.trim() || (pendingImage ? "帮我找图里这个产品的货源" : "");
+    const msg = text.trim() || (pendingImage ? t("chat.defaultImageMsg") : "");
     if (!msg || chat.isPending) return;
     const img = pendingImage;
-    const history = turns.map((t) => ({ role: t.role, content: t.content }));
+    const history = turns.map((turn) => ({ role: turn.role, content: turn.content }));
     setTurns((ts) => [...ts, { role: "user", content: msg, imageUrl: img ?? undefined }]);
     setInput("");
     setPendingImage(null);
@@ -532,7 +525,7 @@ export default function BuyerChat() {
   // 失败静默重试一次（网络/模型抖动大多是瞬时的）；再失败才诚实告诉买家
   function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean, radarId?: number, imageData?: string) {
     chat.mutate(
-      { message: msg, history, radarId, imageData },
+      { message: msg, history, radarId, imageData, locale: lang },
       {
         onSuccess: (res) =>
           setTurns((ts) => [
@@ -557,8 +550,7 @@ export default function BuyerChat() {
             ...ts,
             {
               role: "assistant",
-              content:
-                "这次查询卡住了——源头货源接口响应太慢，我不拿半截数据糊弄你。再发一次试试；连着失败就先去「严选工厂库」自己逛，或把需求留给我，我缓过来接着查。",
+              content: t("chat.errorRetry"),
             },
           ]);
         },
@@ -583,14 +575,14 @@ export default function BuyerChat() {
     <div className="mx-auto flex h-[calc(100dvh-12rem)] max-w-3xl flex-col">
       {/* 对话区 */}
       <div ref={scrollRef} className="sb-scroll flex-1 space-y-6 overflow-y-auto rounded-[20px] border border-[var(--sb-line)] bg-white p-4 md:p-7">
-        {turns.map((t, i) =>
-          t.role === "user" ? (
+        {turns.map((turn, i) =>
+          turn.role === "user" ? (
             <div key={i} className="flex justify-end">
               <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--sb-brand)] px-4 py-2.5 text-sm leading-relaxed text-[#eef4f5]">
-                {t.imageUrl && (
-                  <img src={t.imageUrl} alt="商品图" className="mb-2 max-h-44 rounded-lg border border-white/20 object-cover" />
+                {turn.imageUrl && (
+                  <img src={turn.imageUrl} alt={t("chat.imageAlt")} className="mb-2 max-h-44 rounded-lg border border-white/20 object-cover" />
                 )}
-                {t.content.replace(/^\[(?:补充|跳过补充)\]\s*/, "")}
+                {turn.content.replace(/^\[(?:补充|跳过补充)\]\s*/, "")}
               </div>
             </div>
           ) : (
@@ -601,46 +593,46 @@ export default function BuyerChat() {
                   AI Buyer
                 </span>
                 <span className="text-[11px] font-medium text-[var(--sb-brand)]">
-                  老采购
+                  {t("chat.aiBuyerTag")}
                 </span>
               </div>
               {/* 外链识别卡：贴链接进来的，先摆读到的真实信息 */}
-              {t.linkRef && <LinkRefCard link={t.linkRef} />}
+              {turn.linkRef && <LinkRefCard link={turn.linkRef} />}
 
               <div className="max-w-[94%] border-l-2 border-[var(--sb-brand)]/60 pl-4 text-sm leading-[1.75] whitespace-pre-wrap text-[var(--sb-ink)]">
-                {t.content}
+                {turn.content}
               </div>
 
               {/* 补充问题卡：多题同卡一次提交 / 跳过直寻 */}
-              {t.followUp && (
+              {turn.followUp && (
                 <FollowUpCard
-                  card={t.followUp}
-                  doneSummary={t.followUpDone}
+                  card={turn.followUp}
+                  doneSummary={turn.followUpDone}
                   onSubmit={(msg, doneSummary) => {
                     setTurns((ts) => ts.map((x, xi) => (xi === i ? { ...x, followUpDone: doneSummary } : x)));
                     send(msg);
                   }}
                   onSkip={() => {
-                    setTurns((ts) => ts.map((x, xi) => (xi === i ? { ...x, followUpDone: "已跳过补充，直接寻源" } : x)));
-                    send("[跳过补充] 这些先不谈，按现在了解的直接帮我配");
+                    setTurns((ts) => ts.map((x, xi) => (xi === i ? { ...x, followUpDone: t("chat.followSkippedDone") } : x)));
+                    send(t("chat.followSkipMsg"));
                   }}
                 />
               )}
 
               {/* 商品卡：产品优先，到手价入口 */}
-              {t.product && (
-                <ProductCard product={t.product} quantity={t.quantity} />
+              {turn.product && (
+                <ProductCard product={turn.product} quantity={turn.quantity} />
               )}
 
               {/* 搜索商品墙：真实在售货源，出厂价 */}
-              {t.products && t.products.length > 0 && (
-                <ProductStrip products={t.products} quantity={t.quantity} />
+              {turn.products && turn.products.length > 0 && (
+                <ProductStrip products={turn.products} quantity={turn.quantity} />
               )}
 
               {/* 工厂卡 */}
-              {t.factories && t.factories.length > 0 && (
+              {turn.factories && turn.factories.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {t.factories.map((f) => (
+                  {turn.factories.map((f) => (
                     <div
                       key={f.id}
                       className="rounded-xl border border-[var(--sb-line)] bg-white p-4 transition-shadow hover:shadow-[0_2px_8px_rgba(11,11,11,0.06)]"
@@ -674,14 +666,16 @@ export default function BuyerChat() {
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-[var(--sb-ink-40)]">
-                        {[f.tier, f.location, f.years ? `${f.years} 年` : null]
+                        {[f.tier ? t(`home.tierName.${f.tier}`) : null, f.location, f.years ? `${f.years}${t("chat.yearsSuffix")}` : null]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
                       <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
                         {f.matchBasis === "productLinked" && f.linkedOffer
-                          ? `在售「${f.linkedOffer.title.slice(0, 30)}」`
-                          : f.reason}
+                          ? t("chat.sellingItem", { title: f.linkedOffer.title.slice(0, 30) })
+                          : f.reason === "严选库在册 · 有这款在售货"
+                            ? t("chat.shopVettedShort") || f.reason
+                            : f.reason}
                       </p>
                       {f.tags && f.tags.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
@@ -697,25 +691,23 @@ export default function BuyerChat() {
                       )}
                       {f.categoryRank && (
                         <p className="mt-2 text-xs font-semibold text-[var(--sb-brand)]">
-                          {f.categoryRank.category}类目第 {f.categoryRank.rank} /{" "}
-                          {f.categoryRank.total} 家
+                          {t("chat.rankLine", { cat: f.categoryRank.category, rank: f.categoryRank.rank, total: f.categoryRank.total })}
                         </p>
                       )}
                       {f.matchBasis === "productLinked" && f.linkedOffer && (
                         <p className="mt-2 rounded-md bg-[#fdf6e3] px-2 py-1.5 text-xs font-medium leading-relaxed text-[#92610a] ring-1 ring-[#e9d5a1]">
-                          ✓ 严选库在册 · 有这款在售：¥{f.linkedOffer.price} 起 · 销量{" "}
-                          {f.linkedOffer.sales.toLocaleString()}（已实时核对）
+                          {t("chat.goldBadge", { price: f.linkedOffer.price, sales: f.linkedOffer.sales.toLocaleString() })}
                         </p>
                       )}
                       {f.matchBasis === "bucket" && (
                         <p className="mt-2 text-xs font-medium text-[#b45309]">
-                          同大类高分厂 · 做这款请先拿图确认
+                          {t("chat.bucketNote")}
                         </p>
                       )}
                       {f.evidence.length > 0 && (
                         <details className="mt-2.5 text-xs">
                           <summary className="cursor-pointer select-none font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline">
-                            为什么推荐它？（{f.evidence.length} 条证据）
+                            {t("chat.whyRecommend", { n: f.evidence.length })}
                           </summary>
                           <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed text-[var(--sb-ink-60)]">
                             {f.evidence.map((e, j) => (
@@ -730,7 +722,7 @@ export default function BuyerChat() {
                                 return (
                                   <div key={d.key} className="flex items-center gap-1.5">
                                     <span className="w-14 shrink-0 text-[10px] text-[var(--sb-ink-40)]">
-                                      {d.label}
+                                      {t(`chat.scoreDim.${d.key}`)}
                                     </span>
                                     <div className="h-1.5 flex-1 rounded-full bg-[var(--sb-paper)]">
                                       <div
@@ -753,13 +745,13 @@ export default function BuyerChat() {
                           to={`/factories/${f.id}`}
                           className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
                         >
-                          工厂档案 →
+                          {t("chat.factoryProfile")}
                         </Link>
                         <Link
                           to="/calculator"
                           className="text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
                         >
-                          算到手价 →
+                          {t("chat.calcLink")}
                         </Link>
                       </div>
                     </div>
@@ -776,7 +768,7 @@ export default function BuyerChat() {
       {/* 建议问题（仅首轮展示） */}
       {turns.length <= 1 && (
         <div className="mt-3 flex flex-wrap gap-2">
-          {SUGGESTIONS.map((s) => (
+          {(t("chat.suggestions") as string[]).map((s) => (
             <button
               key={s}
               onClick={() => send(s)}
@@ -809,14 +801,14 @@ export default function BuyerChat() {
         />
         {pendingImage && (
           <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--sb-line)] bg-white px-2.5 py-2">
-            <img src={pendingImage} alt="待发送商品图" className="h-10 w-10 rounded-lg border border-[var(--sb-line)] object-cover" />
-            <span className="text-xs text-[var(--sb-ink-60)]">商品图已就绪——补一句要求（数量/目的地）更准，也可直接发送</span>
+            <img src={pendingImage} alt={t("chat.imageAlt")} className="h-10 w-10 rounded-lg border border-[var(--sb-line)] object-cover" />
+            <span className="text-xs text-[var(--sb-ink-60)]">{t("chat.imageReady")}</span>
             <button
               type="button"
               onClick={() => setPendingImage(null)}
               className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-[var(--sb-ink-40)] hover:text-[var(--sb-ink)]"
             >
-              移除
+              {t("chat.remove")}
             </button>
           </div>
         )}
@@ -824,7 +816,7 @@ export default function BuyerChat() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            title="发商品图给我认"
+            title={t("chat.imageBtnTitle")}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
           >
             <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -836,7 +828,7 @@ export default function BuyerChat() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="说出你要的品，或贴亚马逊 / TikTok 商品链接，也可发图…"
+            placeholder={t("chat.placeholder")}
             className="h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
           />
           <button
@@ -844,7 +836,7 @@ export default function BuyerChat() {
             disabled={chat.isPending || (!input.trim() && !pendingImage)}
             className="h-11 shrink-0 rounded-xl bg-[var(--sb-brand)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
           >
-            发送
+            {t("chat.send")}
           </button>
         </div>
       </form>

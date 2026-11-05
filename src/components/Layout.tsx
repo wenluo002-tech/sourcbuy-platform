@@ -1,16 +1,18 @@
 import { Link, Outlet, useLocation } from "react-router";
 import logoHorizontal from "@/assets/logo-horizontal.png";
 import logoMark from "@/assets/logo-mark.png";
+import { useT } from "@/i18n";
 
 const NAV = [
-  { to: "/buyer", zh: "开始采购", en: "SOURCING" },
-  { to: "/radar", zh: "爆款雷达", en: "RADAR" },
-  { to: "/factories", zh: "严选工厂库", en: "FACTORIES" },
-  { to: "/calculator", zh: "到手价试算", en: "LANDED COST" },
+  { to: "/buyer", key: "nav.sourcing", tag: "SOURCING" },
+  { to: "/radar", key: "nav.radar", tag: "RADAR" },
+  { to: "/factories", key: "nav.factories", tag: "FACTORIES" },
+  { to: "/calculator", key: "nav.calculator", tag: "LANDED COST" },
 ];
 
 export default function Layout() {
   const { pathname } = useLocation();
+  const { lang, setLang, t } = useT();
   return (
     <div className="min-h-dvh bg-[var(--sb-paper)] text-[var(--sb-ink)]">
       <header className="sticky top-0 z-40 border-b border-[var(--sb-rule)] bg-[var(--sb-paper)]">
@@ -43,7 +45,7 @@ export default function Layout() {
                   className="group relative whitespace-nowrap px-2 py-2 leading-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)] sm:px-3"
                 >
                   <span className="hidden text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--sb-ink-40)] group-hover:text-[var(--sb-brand)] sm:block">
-                    {n.en}
+                    {n.tag}
                   </span>
                   <span
                     className={`mt-1 block text-xs sm:text-sm ${
@@ -52,7 +54,7 @@ export default function Layout() {
                         : "text-[var(--sb-ink-60)] group-hover:text-[var(--sb-ink)]"
                     }`}
                   >
-                    {n.zh}
+                    {t(n.key)}
                   </span>
                   <span
                     className={`absolute inset-x-2 -bottom-[13px] h-[2px] bg-[var(--sb-brand)] transition-opacity duration-150 sm:inset-x-3 ${
@@ -62,6 +64,13 @@ export default function Layout() {
                 </Link>
               );
             })}
+            <button
+              onClick={() => setLang(lang === "zh" ? "en" : "zh")}
+              className="ml-1 shrink-0 border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)] sm:ml-2"
+              aria-label="Switch language"
+            >
+              {lang === "zh" ? "EN" : "中文"}
+            </button>
           </nav>
         </div>
       </header>
@@ -75,7 +84,7 @@ export default function Layout() {
             Buyer-side Only
           </span>
           <p className="text-xs text-[var(--sb-ink-60)]">
-            只代表买家立场 — 不收工厂返点 · 不加隐藏差价 · 佣金费率公开 · 损失先行赔付
+            {t("footer.tagline")}
           </p>
         </div>
       </footer>

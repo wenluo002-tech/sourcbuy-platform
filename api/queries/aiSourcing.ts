@@ -111,6 +111,40 @@ export interface ChatMsg {
 const GREETING_FALLBACK =
   "你好，我是你的 AI 采购买手，干这行十几年了。你要什么货、多少量、发往哪里，告诉我就行——我帮你找源头好货和好价，背后的工厂我都验过底。每一单为什么推荐、到手价多少，摆证据说清楚；需求不靠谱我也会直说。";
 
+// ============ English reply persona（locale=en 时替代 REPLY_SYSTEM，规则逐条对应中文版）============
+const REPLY_SYSTEM_EN = `You are SourcBuy's AI sourcing agent. Persona: a veteran buyer guarding the buyer's interests — professional, direct, honest, like a China supply-chain sourcing manager with 20 years on the job.
+
+You receive: the user's message, chat history, the extracted sourcing intent, and the system's real matched factory list (JSON, possibly empty).
+
+Rules:
+1. Factory cards render below your reply (score, tier, category rank, evidence). Don't enumerate factories — comment, advise, flag risks in a sentence or two. Quote their real data (score, years, repurchase rate), but never quote category pool sizes ("top 6 out of 484 vetted factories" is forbidden) — ranks show on the cards; you only say "top of the category" as a qualitative judgment.
+2. If the list is empty, say honestly that no suitable factory in our vetted database matched this item yet, and offer 1-2 alternatives (a broader product word / looser constraints / leave it to a human buyer). Never claim you shortlisted or compared anything that didn't happen.
+3. Push back on unrealistic asks: a budget clearly below cost gets pushback; don't point tiny orders at big source factories. Don't be a yes-man.
+4. If key info is missing (quantity / target price), end with ONE follow-up question — only one.
+5. Keep it short and conversational. No lecturing, no jargon. The buyer is an overseas small-B seller.
+6. Plain text only — no Markdown (no ** bold, no # headings, no - bullets). Line breaks are fine.
+7. Never expose internal terms (e.g. relaxedThreshold); if the score threshold was relaxed, say "I loosened the score bar a bit".
+8. If system facts contain linkedProduct: real data from the product link the buyer pasted. Comment on it — how the ladder pricing looks, whether the MOQ is reasonable; if factoryInOurDb is non-null say "this factory is in our vetted database" with its tier; if null warn "this shop isn't in our vetted database — audit before ordering". If linkedProduct.fetchFailed=true, say the item didn't load and ask them to check the link or item ID.
+9. Never name any upstream source-platform brand (e.g. 1688) — say "the supply platform" or "the link you pasted". We're a sourcing agent; we don't funnel traffic upstream.
+10. Hard rule: buyer-side only, never take factory kickbacks; recommendations rank neutrally by score; the scoring algorithm is public (seven weighted dimensions); factories cannot pay for ranking.
+11. If system facts contain searchProducts (real on-sale items with price/sales): they render as cards below your reply. Buyers see goods before factories — comment on the overall price band and sales ("mainstream EXW runs ¥xx–xx; one SKU sells 10k+ a month"), don't recite titles.
+12. If factoryCount=0 but searchProducts is non-empty: honestly say "no vetted factory specializing in this yet — I won't fob you off with unrelated factories", then guide the buyer to pick an item from the cards so you can investigate the supplier behind it (vetted-db cross-check, factory audit if needed). NEVER present factories from other categories as makers of this item — a tent factory once got pushed to a bicycle buyer; never again.
+13. If system facts contain radarContext: the buyer came in from the best-seller radar. First confirm the item's overseas signal in a sentence or two (quote signalText and signalDate verbatim; you may say the source is verifiable), then follow the rules above. factoryPriceMin/Max in radarContext is the live EXW band — quote it directly; retailPriceUsd can be compared against overseas retail. End with a reminder: the board is a demand signal, not a guarantee — test small before scaling.
+14. If system facts contain linkContext: the buyer pasted an overseas retail link. First confirm what you read from the link (platform + item name; quote priceText as the overseas price), then give domestic supply and factories. You may note the gap between priceText and the EXW band as "the margin looks decent", but must warn that retail price is not net profit (platform fees, ads, last-mile not deducted). If linkContext.source is "slug", say "the page blocked scraping — I recognized it from the link path, double-check me"; if fetchFailed=true, honestly say "I couldn't open this link" and ask for a product name or screenshot — never pretend to know the link.
+15. If system facts contain imageContext: the buyer sent a product photo. Confirm what you recognized (quote specsNote verbatim) and add "correct me if I'm wrong". If failed=true, honestly say you couldn't recognize it and ask for a product name — never pretend you understood it.
+16. Every factory in the list carries matchBasis — three evidence grades, strictly distinguished:
+   - productLinked = this factory is in our vetted database AND has this exact item on sale (linkedOffer gives title / EXW price / sales, all verified live). Hardest evidence: you may state confidently "this factory sells this exact item — listing, price and sales all verified", quoting linkedOffer's real price and sales.
+   - direct = the factory's name / review / tags explicitly mention this product type — you can say "they make this kind of product".
+   - bucket = merely a high scorer in the broader category, no direct evidence they've made this exact item — you must say clearly "these are high scorers in the broader category; whether they've made this exact item needs confirmation with photos and an inquiry — no promises", never imply they make it.
+   If the whole list is bucket, use rule 12's framing: "no vetted factory verified for this exact item", and present the category high-scorers as inquiry leads.
+17. When the requested item carries a famous brand (Bose, Nike, Apple, Disney, Lego etc.), you must warn: genuine branded goods only move through authorized channels; Chinese factories can only make unbranded white-label equivalents; counterfeits carry legal risk at customs and on marketplaces — we don't touch them. Then give white-label sources and factories.
+18. A buyer message starting with "[补充]" = they're answering the follow-up question card: merge the answers into your understanding, update your judgment, don't re-ask what they've answered. Starting with "[跳过补充]" = they explicitly declined; proceed with what you have and don't ask again. If a follow-up card is attached to your reply (structured options rendered by the UI), mention it in at most one short sentence (e.g. "add quantity and destination when you can — sharper numbers"), never enumerate the questions one by one.
+19. Always reply in English.`;
+
+// greeting 英文静态开场白
+const GREETING_FALLBACK_EN =
+  "Hi — I'm your AI sourcing buyer, 15+ years in China supply chains. Tell me what you need, how much, and where it ships. I find source goods at honest prices, and every factory I put forward has been vetted. I'll show you the evidence and the landed cost for every pick — and if the ask doesn't add up, I'll say so.";
+
 // 常见目的地词表（国名/热门城市），供 LLM 挂掉时的本地意图兜底提取
 const DEST_WORDS = [
   "美国", "加拿大", "英国", "德国", "法国", "意大利", "西班牙", "荷兰", "比利时", "波兰", "捷克", "奥地利", "瑞典", "挪威", "丹麦", "芬兰", "爱尔兰", "葡萄牙", "希腊", "瑞士",
@@ -163,7 +197,8 @@ export interface FollowUpCard {
 function buildFollowUpCard(
   intent: { product: string | null; quantity: number | null; destination: string | null; isGreeting: boolean },
   message: string,
-  history: ChatMsg[]
+  history: ChatMsg[],
+  locale: "zh" | "en" = "zh"
 ): FollowUpCard | null {
   if (!intent.product || intent.isGreeting) return null;
   if (message.startsWith("[补充]") || message.startsWith("[跳过补充]")) return null; // 本轮就是答卡/跳卡
@@ -172,29 +207,30 @@ function buildFollowUpCard(
   );
   if (answered) return null; // 答过/跳过，不再追问
   const qs: FollowUpQuestion[] = [];
+  const en = locale === "en";
   if (!intent.quantity) {
     qs.push({
       key: "quantity",
-      label: "大概先要多少量？",
-      why: "量决定走哪档服务费，也决定能不能拼柜省运费",
-      options: ["先拿样看看", "100–500 件", "500–2,000 件", "2,000 件以上"],
+      label: en ? "Roughly how many units first?" : "大概先要多少量？",
+      why: en ? "Quantity sets the service-fee tier — and whether you can share a container to cut freight" : "量决定走哪档服务费，也决定能不能拼柜省运费",
+      options: en ? ["Samples first", "100–500 pcs", "500–2,000 pcs", "2,000+ pcs"] : ["先拿样看看", "100–500 件", "500–2,000 件", "2,000 件以上"],
     });
   }
   if (!intent.destination) {
     qs.push({
       key: "destination",
-      label: "发往哪个市场？",
-      why: "有了目的地我才能算到手价（运费清关全含），不然只能报出厂价",
-      options: ["美国", "欧洲", "东南亚", "中东", "拉美", "其他"],
+      label: en ? "Which market is it headed to?" : "发往哪个市场？",
+      why: en ? "With a destination I can price landed cost (freight + customs included); without it I can only quote EXW" : "有了目的地我才能算到手价（运费清关全含），不然只能报出厂价",
+      options: en ? ["USA", "Europe", "Southeast Asia", "Middle East", "Latin America", "Other"] : ["美国", "欧洲", "东南亚", "中东", "拉美", "其他"],
     });
   }
   const allUserText = message + history.filter((m) => m.role === "user").map((m) => m.content).join(" ");
-  if (!/[天周月个]内|交期|交货|尽快|越快|急|urgent|deadline|asap/i.test(allUserText)) {
+  if (!/[天周月个]内|交期|交货|尽快|越快|急|urgent|deadline|asap|within|month|week/i.test(allUserText)) {
     qs.push({
       key: "deadline",
-      label: "希望多久能到？",
-      why: "交期紧就走不了海运，方案和价格完全不一样",
-      options: ["越快越好", "1 个月内", "1–2 个月", "还没定"],
+      label: en ? "How soon do you need it?" : "希望多久能到？",
+      why: en ? "A tight deadline rules out sea freight — the plan and price change completely" : "交期紧就走不了海运，方案和价格完全不一样",
+      options: en ? ["ASAP", "Within 1 month", "1–2 months", "Not set yet"] : ["越快越好", "1 个月内", "1–2 个月", "还没定"],
     });
   }
   if (!qs.length) return null;
@@ -267,7 +303,74 @@ function buildFallbackReply(
   return parts.join("\n\n");
 }
 
-async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string) {
+// 英文规则兜底模板：与 buildFallbackReply 同结构同口径，只用系统已拿到的真实数据
+function buildFallbackReplyEn(
+  intent: { product: string | null; quantity: number | null; destination: string | null },
+  factories: { name: string; tier: string | null; score: number | null; matchBasis?: "productLinked" | "direct" | "bucket"; linkedOffer?: { offerId: string; title: string; price: number; sales: number } | null }[],
+  searchProducts: { price: number; promotionPrice: number | null; sales: number }[],
+  relaxed: boolean,
+  radarCtx?: { title: string; signalText: string; signalDate: string } | null,
+  linkCtx?: LinkContext | null,
+  imageNote?: { specsNote: string | null; failed: boolean } | null,
+): string {
+  const parts: string[] = [];
+  const brandHit = /(bose|nike|apple|sony|disney|lego|adidas|dyson|supreme|lv|gucci|chanel)/i.test(
+    `${intent.product ?? ""} ${linkCtx?.title ?? ""}`,
+  );
+  if (brandHit) {
+    parts.push("First things first: that's a branded item. Genuine brand goods only move through authorized channels — factories here can only make unbranded white-label equivalents. Counterfeits carry legal risk at customs and on marketplaces; I don't touch them, and neither should you. Below I've looked up white-label equivalents for you.");
+  }
+  if (imageNote) {
+    if (imageNote.failed) {
+      parts.push("I couldn't recognize what's in that photo — give me the product name (English or Chinese both work) and I'll search supply right away.");
+    } else if (imageNote.specsNote) {
+      parts.push(`What I recognized in the photo: ${imageNote.specsNote} — correct me if I'm wrong.`);
+    }
+  }
+  if (linkCtx) {
+    if (linkCtx.fetchFailed || !linkCtx.title) {
+      parts.push(`I couldn't open that ${linkCtx.platform} link (the platform blocked scraping) — just tell me what the product is and I'll search supply right away.`);
+    } else {
+      const price = linkCtx.priceText ? `, selling overseas at ${linkCtx.priceText}` : "";
+      const how = linkCtx.source === "slug" ? "the page blocked scraping, so I recognized it from the link path — double-check me" : "I opened the link";
+      parts.push(`That ${linkCtx.platform} link: "${linkCtx.title}"${price} — ${how}.`);
+    }
+  }
+  if (radarCtx) {
+    parts.push(`"${radarCtx.title}" — what you saw on the radar checks out: ${radarCtx.signalText} (signal date ${radarCtx.signalDate}; the source is linked on the board).`);
+  }
+  const what = intent.product ? `"${intent.product}"` : "this item";
+  const linkedCount = factories.filter((f) => f.matchBasis === "productLinked").length;
+  const directCount = factories.filter((f) => f.matchBasis === "direct").length;
+  if (linkedCount > 0) {
+    const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
+    const sample = l0?.linkedOffer ? ` ${l0.name}, for one, is selling this exact item — from ¥${l0.linkedOffer.price}, upstream sales ${l0.linkedOffer.sales.toLocaleString()}; I verified the listing just now.` : "";
+    parts.push(
+      `${what} comes with hard evidence: ${linkedCount} vetted factories are selling this exact item — listing, EXW price and sales all checked live.${sample}${directCount > 0 ? ` Another ${directCount} explicitly make this kind of product.` : ""}${factories.length - linkedCount - directCount > 0 ? ` Plus ${factories.length - linkedCount - directCount} high scorers in the broader category for reference.` : ""} Cards are below, evidence laid out.`,
+    );
+  } else if (factories.length > 0 && directCount > 0) {
+    parts.push(
+      `For ${what} I shortlisted ${directCount} vetted factories that explicitly make this kind of product${factories.length > directCount ? `, plus ${factories.length - directCount} high scorers in the broader category for reference` : ""} — cards below, with scores, years and evidence laid out for you to check.${relaxed ? " I loosened the score bar a bit this time, so excuse the longer list." : ""}`,
+    );
+  } else if (factories.length > 0) {
+    parts.push(
+      `For ${what}: I haven't verified a vetted factory specializing in this exact item — below are high scorers in the broader category. Whether they've made it needs confirmation with photos and an inquiry; I won't fob you off with unrelated factories.`,
+    );
+  } else {
+    parts.push(`For ${what}, no factory vetted for this exact item in the database yet — I won't fob you off with unrelated factories.`);
+  }
+  if (searchProducts.length > 0) {
+    const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
+    const band = prices.length ? `mainstream EXW band runs ¥${Math.min(...prices)} to ¥${Math.max(...prices)}` : "";
+    parts.push(`Live listings are below${band ? ", " + band : ""}. Tap whatever catches your eye — specs, ladder pricing and landed cost are all in there.`);
+  }
+  if (!intent.quantity) parts.push("How many units are you thinking? Quantity changes both the price I negotiate and the factories I pick.");
+  else if (!intent.destination) parts.push("Which country is it headed to? With a destination I'll price the landed cost down to the cent.");
+  parts.push("(The write-up ran slow just now, so I've given you the real data first — details as we go.)");
+  return parts.join("\n\n");
+}
+
+async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh") {
   // 雷达卡 CTA 直达：radarId 钉死品类与信号上下文，跳过 LLM 意图抽取（词库没收录的品也不受影响）
   // 必须在选品意图拦截之前——CTA 话术含"爆款"字样，否则会被误判成选品意图
   let radarCtx: Awaited<ReturnType<typeof getRadarItem>> | null = null;
@@ -382,14 +485,16 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     try {
       const { text } = await generateText({
         model: kimiGw(defaultModelId),
-        system: REPLY_SYSTEM,
-        prompt: `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
+        system: locale === "en" ? REPLY_SYSTEM_EN : REPLY_SYSTEM,
+        prompt: locale === "en"
+          ? `User message: ${message}\nSourcing intent: small talk / no clear category\nFactory list: []`
+          : `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
         abortSignal: AbortSignal.timeout(12_000),
       });
       return { reply: text, understood: false, intent, factories: [], product: null, followUp: null };
     } catch (e) {
       log.warn("greeting 话术生成失败，用静态开场白", { error: e instanceof Error ? e.message : String(e) });
-      return { reply: GREETING_FALLBACK, understood: false, intent, factories: [], product: null, followUp: null };
+      return { reply: locale === "en" ? GREETING_FALLBACK_EN : GREETING_FALLBACK, understood: false, intent, factories: [], product: null, followUp: null };
     }
   }
 
@@ -575,21 +680,25 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   try {
     const r = await generateText({
       model: kimiGw(defaultModelId),
-      system: REPLY_SYSTEM,
+      system: locale === "en" ? REPLY_SYSTEM_EN : REPLY_SYSTEM,
       messages: [
         ...messages,
-        { role: "user" as const, content: `[系统事实] ${facts}\n请基于以上事实回复用户。` },
+        { role: "user" as const, content: locale === "en"
+          ? `[System facts] ${facts}\nReply to the user based on these facts.`
+          : `[系统事实] ${facts}\n请基于以上事实回复用户。` },
       ],
       abortSignal: AbortSignal.timeout(18_000),
     });
     reply = r.text;
   } catch (e) {
     log.warn("reply 话术生成失败，走规则模板兜底", { error: e instanceof Error ? e.message : String(e) });
-    reply = buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null);
+    reply = locale === "en"
+      ? buildFallbackReplyEn(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null)
+      : buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null);
   }
 
   // 补充问题卡：规则驱动（非阻塞——结果照出，卡附在下面；答过/跳过就不再问）
-  const followUp = buildFollowUpCard(intent, message, history);
+  const followUp = buildFollowUpCard(intent, message, history, locale);
 
   return {
     reply,
@@ -608,14 +717,16 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
 }
 
 // 最外层保险：任何漏网异常都不让买家看到报错——返回诚实的降级话术（HTTP 200），并留日志可查
-export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string) {
+export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh") {
   try {
-    return await sourcingChatInner(message, history, radarId, imageData);
+    return await sourcingChatInner(message, history, radarId, imageData, locale);
   } catch (e) {
     log.error("ai.chat 未捕获异常，走全兜底", { error: e instanceof Error ? e.message : String(e) });
     return {
       reply:
-        "我这边系统卡了一下——不是你的问题，是我这头的接口闹脾气。你的话我记住了，稍等片刻再发一次就行；急着看货就先去「严选工厂库」自己逛，看中的发我，我接着帮你查底细。",
+        locale === "en"
+          ? "My system hiccuped — not your fault, my upstream interface threw a tantrum. I've noted your message; resend it in a moment. In a hurry? Browse the vetted factory library and send me whatever catches your eye — I'll dig into it."
+          : "我这边系统卡了一下——不是你的问题，是我这头的接口闹脾气。你的话我记住了，稍等片刻再发一次就行；急着看货就先去「严选工厂库」自己逛，看中的发我，我接着帮你查底细。",
       understood: false,
       intent: { product: null, quantity: null },
       factories: [],

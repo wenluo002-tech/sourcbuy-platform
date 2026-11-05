@@ -129,16 +129,19 @@ export const appRouter = createRouter({
             .max(20),
           radarId: z.number().int().positive().optional(), // 雷达卡 CTA 直达：钉死品类与信号上下文
           imageData: z.string().max(6_000_000).optional(), // 商品图（base64 data URL，前端已压到 1024px JPEG）
+          locale: z.enum(["zh", "en"]).optional(), // 界面语言：英文买家走英文话术体系
         })
       )
       .mutation(async ({ input }) => {
         try {
-          return await sourcingChat(input.message, input.history, input.radarId, input.imageData);
+          return await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale);
         } catch (err) {
           const classified = classifyAiError(err);
           if (classified instanceof AiUnavailable) {
             return {
-              reply: "AI 采购助手暂时不可用（服务额度已用尽），请稍后再试，或先用上方搜索框按品类查找工厂。",
+              reply: input.locale === "en"
+                ? "The AI sourcing assistant is temporarily unavailable (service quota exhausted). Please try again later, or use the search above to find factories by category."
+                : "AI 采购助手暂时不可用（服务额度已用尽），请稍后再试，或先用上方搜索框按品类查找工厂。",
               understood: false,
               intent: { product: null, quantity: null },
               factories: [],

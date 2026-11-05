@@ -2,43 +2,32 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
+import { useT } from "@/i18n";
 
-const IMAGE_GROUPS = [
-  ["product", "产品实拍"],
-  ["workshop", "生产车间"],
-  ["equipment", "生产设备"],
-  ["warehouse", "仓储"],
-  ["gate", "厂区"],
-  ["catalog", "产品册"],
-] as const;
+const IMAGE_GROUP_KEYS = ["product", "workshop", "equipment", "warehouse", "gate", "catalog"] as const;
 
-const SCORE_LABELS: Array<[string, string]> = [
-  ["qualityCert", "资质认证"],
-  ["factoryPower", "工厂实力"],
-  ["trustYears", "诚信年限"],
-  ["repurchase", "复购表现"],
-  ["production", "生产能力"],
-  ["service", "服务能力"],
-  ["sales", "出货活跃度"],
-];
+const SCORE_KEYS = ["qualityCert", "factoryPower", "trustYears", "repurchase", "production", "service", "sales"] as const;
 
 export default function FactoryDetail() {
   const { id } = useParams<{ id: string }>();
   const q = trpc.factories.detail.useQuery({ id: Number(id) });
+  const { t } = useT();
 
-  if (q.isLoading) return <p className="text-black/45">加载中…</p>;
-  if (!q.data) return <p className="text-black/45">工厂不存在。</p>;
+  if (q.isLoading) return <p className="text-black/45">{t("factoryDetail.loading")}</p>;
+  if (!q.data) return <p className="text-black/45">{t("factoryDetail.notFound")}</p>;
   const f = q.data;
 
   return <FactoryDetailView f={f} />;
 }
 
 function FactoryDetailView({ f }: { f: any }) {
+  const { t } = useT();
   // 灯箱：所有分组图片拍平成一条序列，点缩略图放大，支持左右切换
   const [viewer, setViewer] = useState<number | null>(null);
   const flatImages = useMemo(() => {
     const out: Array<{ src: string; group: string }> = [];
-    for (const [k, label] of IMAGE_GROUPS) {
+    for (const k of IMAGE_GROUP_KEYS) {
+      const label = t(`factoryDetail.photoGroups.${k}`) as string;
       const list = ((f.images as Record<string, string[]>)?.[k] ?? [])
         .filter((u: string) => /^https?:\/\//i.test(u))
         .slice(0, 6);
@@ -63,23 +52,23 @@ function FactoryDetailView({ f }: { f: any }) {
   }, [viewer !== null, flatImages.length]);
 
   const facts: Array<[string, string | null]> = [
-    ["所在地区", [f.province, f.city, f.district].filter(Boolean).join(" ") || f.location],
-    ["诚信年限", f.years ? `${Number(f.years)} 年` : null],
-    ["员工规模", f.employeeCount ? `${f.employeeCount} 人` : null],
-    ["厂房面积", f.areaSqm ? `${f.areaSqm} ㎡` : null],
-    ["询盘回复率", f.replyRate ? `${Number(f.replyRate)}%` : null],
-    ["老客户回头率", f.repurchaseRate ? `${Number(f.repurchaseRate)}%` : null],
-    ["近月付款买家", f.monthlyBuyers ? `${f.monthlyBuyers}` : null],
-    ["合作模式", f.oemMode],
-    ["加工类型", f.productionType],
-    ["服务能力", f.serviceCapability],
-    ["认证", f.cert],
+    [t("factoryDetail.factLabels.location"), [f.province, f.city, f.district].filter(Boolean).join(" ") || f.location],
+    [t("factoryDetail.factLabels.years"), f.years ? `${Number(f.years)}${t("factoryDetail.yearsSuffix")}` : null],
+    [t("factoryDetail.factLabels.employees"), f.employeeCount ? `${f.employeeCount}${t("factoryDetail.peopleSuffix")}` : null],
+    [t("factoryDetail.factLabels.area"), f.areaSqm ? `${f.areaSqm} ㎡` : null],
+    [t("factoryDetail.factLabels.replyRate"), f.replyRate ? `${Number(f.replyRate)}%` : null],
+    [t("factoryDetail.factLabels.repurchase"), f.repurchaseRate ? `${Number(f.repurchaseRate)}%` : null],
+    [t("factoryDetail.factLabels.monthlyBuyers"), f.monthlyBuyers ? `${f.monthlyBuyers}` : null],
+    [t("factoryDetail.factLabels.oem"), f.oemMode],
+    [t("factoryDetail.factLabels.prodType"), f.productionType],
+    [t("factoryDetail.factLabels.service"), f.serviceCapability],
+    [t("factoryDetail.factLabels.cert"), f.cert],
   ];
 
   return (
     <div className="space-y-6">
       <Link to="/factories" className="text-sm text-[var(--sb-brand)] hover:underline">
-        ← 返回工厂库
+        {t("factoryDetail.back")}
       </Link>
 
       <div className="rounded-xl border border-black/10 bg-white p-6">
@@ -87,8 +76,8 @@ function FactoryDetailView({ f }: { f: any }) {
           <div>
             <h1 className="sb-display text-2xl sm:text-3xl">{f.name}</h1>
             <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-              {f.tier && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 font-medium text-[var(--sb-brand)]">{f.tier}</span>}
-              {f.isSuper && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-[var(--sb-brand)]">超级工厂</span>}
+              {f.tier && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 font-medium text-[var(--sb-brand)]">{t(`home.tierName.${f.tier}`)}</span>}
+              {f.isSuper && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-[var(--sb-brand)]">{t("factoryDetail.superFactory")}</span>}
               {f.medal && f.medal !== "无牌工厂" && (
                 <span className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{f.medal}{f.medalLevel ?? ""}</span>
               )}
@@ -99,7 +88,7 @@ function FactoryDetailView({ f }: { f: any }) {
           </div>
           <div className="text-right">
             <div className="sb-num text-3xl font-bold text-[var(--sb-brand)]">{f.score}</div>
-            <div className="text-xs text-black/45">严选评分</div>
+            <div className="text-xs text-black/45">{t("factoryDetail.scoreLabel")}</div>
           </div>
         </div>
 
@@ -125,7 +114,7 @@ function FactoryDetailView({ f }: { f: any }) {
             to="/calculator"
             className="sb-pill bg-[var(--sb-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--sb-brand-hover)]"
           >
-            用这家工厂算到手价 →
+            {t("factoryDetail.calcCta")}
           </Link>
         </div>
       </div>
@@ -136,9 +125,10 @@ function FactoryDetailView({ f }: { f: any }) {
           (k) => (f.images as Record<string, string[]>)[k]?.length
         ) && (
           <div className="rounded-xl border border-black/10 bg-white p-6">
-            <h2 className="mb-4 font-semibold">工厂实拍</h2>
+            <h2 className="mb-4 font-semibold">{t("factoryDetail.photosTitle")}</h2>
             <div className="space-y-4">
-              {IMAGE_GROUPS.map(([k, label]) => {
+              {IMAGE_GROUP_KEYS.map((k) => {
+                const label = t(`factoryDetail.photoGroups.${k}`) as string;
                 const list = flatImages
                   .map((img, idx) => ({ ...img, idx }))
                   .filter((img) => img.group === label);
@@ -153,7 +143,7 @@ function FactoryDetailView({ f }: { f: any }) {
                           type="button"
                           onClick={() => setViewer(img.idx)}
                           className="group/img relative cursor-zoom-in overflow-hidden rounded-lg border border-black/5 focus-visible:outline-2 focus-visible:outline-[var(--sb-brand)]"
-                          aria-label={`放大查看${label}`}
+                          aria-label={t("factoryDetail.zoomAria", { label })}
                         >
                           <img
                             src={img.src}
@@ -172,19 +162,19 @@ function FactoryDetailView({ f }: { f: any }) {
                 );
               })}
             </div>
-            <p className="mt-3 text-[11px] text-black/35">点击图片可放大查看，左右方向键切换，Esc 关闭。</p>
+            <p className="mt-3 text-[11px] text-black/35">{t("factoryDetail.photoTip")}</p>
           </div>
         )}
 
       {f.scores && (
         <div className="rounded-xl border border-black/10 bg-white p-6">
-          <h2 className="mb-1 font-semibold">评分明细</h2>
+          <h2 className="mb-1 font-semibold">{t("factoryDetail.scoresTitle")}</h2>
           <p className="mb-4 text-xs leading-relaxed text-black/45">
-            综合评分 = 七维加权 + 基础分。权重公开、工厂不可付费调分：
-            质量认证 15% · 工厂实力 15% · 诚信年限 12% · 复购率 12% · 生产产能 10% · 服务响应 10% · 销售表现 13%。
+            {t("factoryDetail.scoresIntro")}
           </p>
           <div className="space-y-3">
-            {SCORE_LABELS.map(([key, label]) => {
+            {SCORE_KEYS.map((key) => {
+              const label = t(`factoryDetail.scoreDims.${key}`) as string;
               const v = (f.scores as any)[key];
               const n = v != null ? Number(v) : null;
               if (n == null) return null;
@@ -211,7 +201,7 @@ function FactoryDetailView({ f }: { f: any }) {
                       <div
                         className="absolute -top-1 h-4 w-0.5 bg-[var(--sb-warn)]"
                         style={{ left: `calc(${Math.min(100, med)}% - 1px)` }}
-                        title={`同类目中位数 ${med.toFixed(1)}`}
+                        title={t("factoryDetail.medianTitle", { n: med.toFixed(1) })}
                       />
                     )}
                   </div>
@@ -225,10 +215,10 @@ function FactoryDetailView({ f }: { f: any }) {
                             ? "text-emerald-700"
                             : "text-[var(--sb-warn)]"
                       }`}
-                      title={`同类目中位数 ${med!.toFixed(1)}`}
+                      title={t("factoryDetail.medianTitle", { n: med!.toFixed(1) })}
                     >
                       {Math.abs(delta) < 0.05
-                        ? "持平"
+                        ? t("factoryDetail.flat")
                         : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}`}
                     </span>
                   )}
@@ -239,22 +229,22 @@ function FactoryDetailView({ f }: { f: any }) {
           {(f as any).categoryMedians && (
             <p className="mt-3 flex items-center gap-1.5 text-[11px] text-black/45">
               <span className="inline-block h-3 w-0.5 bg-[var(--sb-warn)]" />
-              竖线 = 「{(f as any).category}」类目工厂中位数，右侧数字为该厂与中位数的差值；刻度按类目内有该维度评分数据的工厂计算，样本不足的维度不显示
+              {t("factoryDetail.medianNote", { cat: (f as any).category })}
             </p>
           )}
           <details className="mt-4 text-xs text-black/45">
             <summary className="cursor-pointer select-none font-medium text-[var(--sb-brand)] hover:underline">
-              每个维度看什么？
+              {t("factoryDetail.dimDetailQ")}
             </summary>
             <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed">
               {SCORING_FORMULA.dimensions.map((d) => (
                 <li key={d.key}>
-                  <span className="font-medium text-black/70">{d.label}</span>（{Math.round(d.weight * 100)}%）：{d.desc}
+                  <span className="font-medium text-black/70">{t(`factoryDetail.scoreDims.${d.key}`)}</span>（{Math.round(d.weight * 100)}%）：{t(`factoryDetail.scoreDimDesc.${d.key}`)}
                 </li>
               ))}
             </ul>
             <p className="mt-2">
-              算法已对 {SCORING_FORMULA.verifiedOn} 家有完整子分的工厂回归验证，拟合误差 ≤{SCORING_FORMULA.maxError} 分。
+              {t("factoryDetail.verifiedNote", { n: SCORING_FORMULA.verifiedOn, e: SCORING_FORMULA.maxError })}
             </p>
           </details>
         </div>
@@ -273,7 +263,7 @@ function FactoryDetailView({ f }: { f: any }) {
             type="button"
             onClick={() => setViewer(null)}
             className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xl text-white transition-colors hover:bg-white/20"
-            aria-label="关闭"
+            aria-label={t("factoryDetail.closeAria")}
           >
             ×
           </button>
@@ -283,7 +273,7 @@ function FactoryDetailView({ f }: { f: any }) {
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setViewer((viewer - 1 + flatImages.length) % flatImages.length); }}
                 className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20"
-                aria-label="上一张"
+                aria-label={t("factoryDetail.prevAria")}
               >
                 ‹
               </button>
@@ -291,7 +281,7 @@ function FactoryDetailView({ f }: { f: any }) {
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setViewer((viewer + 1) % flatImages.length); }}
                 className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-2xl text-white transition-colors hover:bg-white/20"
-                aria-label="下一张"
+                aria-label={t("factoryDetail.nextAria")}
               >
                 ›
               </button>

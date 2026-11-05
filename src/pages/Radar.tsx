@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useReveal } from "@/hooks/useReveal";
+import { useT } from "@/i18n";
 
 type RadarItem = {
   id: number;
@@ -21,10 +22,7 @@ type RadarItem = {
   note: string | null;
 };
 
-const SOURCE_META = {
-  amazon: { label: "AMAZON 信号", dot: "#e07b39" },
-  tiktok: { label: "TIKTOK 信号", dot: "#6d28d9" },
-} as const;
+const SOURCE_DOT = { amazon: "#e07b39", tiktok: "#6d28d9" } as const;
 
 function fmtSales(n: number | null): string | null {
   if (n == null || n <= 0) return null;
@@ -34,7 +32,9 @@ function fmtSales(n: number | null): string | null {
 }
 
 export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
-  const src = SOURCE_META[it.signalSource];
+  const { lang, t } = useT();
+  const dot = SOURCE_DOT[it.signalSource];
+  const srcLabel = it.signalSource === "amazon" ? t("radar.sourceAmazon") : t("radar.sourceTiktok");
   const sales = fmtSales(it.topSales);
   return (
     <article
@@ -64,14 +64,14 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
           {String(i + 1).padStart(2, "0")}
         </span>
         <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--sb-ink-60)]">
-          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: src.dot }} />
-          {src.label}
+          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
+          {srcLabel}
         </span>
       </div>
 
       {/* 品名 */}
-      <h3 className="sb-display mt-3 text-[21px] leading-snug text-[var(--sb-ink)]">{it.title}</h3>
-      {it.titleEn && (
+      <h3 className="sb-display mt-3 text-[21px] leading-snug text-[var(--sb-ink)]">{lang === "en" && it.titleEn ? it.titleEn : it.title}</h3>
+      {it.titleEn && lang !== "en" && (
         <p className="mt-1 line-clamp-1 text-[11px] tracking-[0.04em] text-[var(--sb-ink-40)]">{it.titleEn}</p>
       )}
 
@@ -90,30 +90,30 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
       <div className="mt-4 grid grid-cols-2 gap-x-3 bg-[var(--sb-paper)] px-3.5 py-3">
         {it.factoryPriceMin != null && it.factoryPriceMax != null ? (
           <div>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--sb-ink-40)]">源头出厂价带</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--sb-ink-40)]">{t("radar.exwBand")}</span>
             <div className="sb-num mt-1 text-[17px] font-semibold leading-none text-[var(--sb-ink)]">
               ¥{it.factoryPriceMin}–{it.factoryPriceMax}
             </div>
           </div>
         ) : (
           <div>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--sb-ink-40)]">源头出厂价</span>
-            <div className="mt-1 text-[15px] font-semibold leading-none text-[var(--sb-ink)]">询我查实价</div>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--sb-ink-40)]">{t("radar.exwAsk")}</span>
+            <div className="mt-1 text-[15px] font-semibold leading-none text-[var(--sb-ink)]">{t("radar.askMe")}</div>
           </div>
         )}
         <div>
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--sb-ink-40)]">
-            {it.retailPriceUsd != null ? "海外零售参考" : "严选库相关工厂"}
+            {it.retailPriceUsd != null ? t("radar.retailRef") : t("radar.vettedRef")}
           </span>
           <div className="sb-num mt-1 text-[17px] font-semibold leading-none text-[var(--sb-ink)]">
-            {it.retailPriceUsd != null ? `$${it.retailPriceUsd}` : `${it.vettedCount ?? 0} 家`}
+            {it.retailPriceUsd != null ? `$${it.retailPriceUsd}` : t("radar.vettedCount", { n: it.vettedCount ?? 0 })}
           </div>
         </div>
       </div>
 
       {it.note && (
         <p className="mt-3.5 border-l-2 border-[var(--sb-brand)]/50 pl-3 text-[11px] leading-relaxed text-[var(--sb-ink-60)]">
-          <span className="font-semibold text-[var(--sb-ink)]">老采购：</span>
+          <span className="font-semibold text-[var(--sb-ink)]">{t("radar.buyerNote")}</span>
           {it.note}
         </p>
       )}
@@ -121,14 +121,14 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
       <div className="mt-auto pt-4">
         <div className="flex items-center justify-between gap-2 border-t border-[var(--sb-line)] pt-3.5">
           <span className="text-[10px] text-[var(--sb-ink-40)]">
-            信号 {it.signalDate}
-            {sales ? ` · 头部在售 ${sales}` : ""}
+            {t("radar.signalLine", { date: it.signalDate })}
+            {sales ? t("radar.topSalesSuffix", { n: sales }) : ""}
           </span>
           <Link
-            to={`/buyer?radar=${it.id}&prefill=${encodeURIComponent(`我在爆款雷达上看到「${it.title}」，帮我查对口工厂和到手价`)}`}
+            to={`/buyer?radar=${it.id}&prefill=${encodeURIComponent(t("radar.ctaPrefill", { title: lang === "en" && it.titleEn ? it.titleEn : it.title }))}`}
             className="shrink-0 border border-[var(--sb-rule)] px-3.5 py-1.5 text-xs font-semibold text-[var(--sb-ink)] transition-colors duration-150 hover:border-[var(--sb-brand)] hover:bg-[var(--sb-brand)] hover:text-white"
           >
-            问老采购这款 →
+            {t("radar.cta")}
           </Link>
         </div>
       </div>
@@ -137,6 +137,7 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
 }
 
 export default function Radar() {
+  const { t } = useT();
   const q = trpc.radar.list.useQuery(undefined, { staleTime: 60_000 });
   const [filter, setFilter] = useState<"all" | "amazon" | "tiktok">("all");
   const pageRef = useReveal<HTMLDivElement>();
@@ -149,22 +150,21 @@ export default function Radar() {
       <header className="sb-reveal sb-rule pt-4">
         <span className="sb-eyebrow flex items-center gap-2">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
-          Hot Signals · 海外爆款雷达
+          {t("radar.eyebrowKicker")} · {t("radar.eyebrowTitle")}
         </span>
         <h1 className="sb-display mt-4 text-3xl tracking-tight sm:text-[40px] sm:leading-[1.15]">
-          海外在爆什么，工厂能不能造
+          {t("radar.h1")}
         </h1>
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-[var(--sb-ink-60)]">
-          每个品都钉着三件事：真实可验证的海外热度信号（亚马逊官方榜单 / TikTok 行业公开报道，带来源与日期）、
-          国内源头出厂价带（实时查询）、严选工厂库对口产能。榜单是需求信号不是保票——先小单试水，再放大。
+          {t("radar.intro")}
         </p>
       </header>
 
       <div className="sb-reveal flex flex-wrap items-center gap-x-1 gap-y-2 border-y border-[var(--sb-line)] py-2.5">
         {([
-          ["all", "全部"],
-          ["amazon", "亚马逊信号"],
-          ["tiktok", "TikTok 信号"],
+          ["all", t("radar.filterAll")],
+          ["amazon", t("radar.filterAmazon")],
+          ["tiktok", t("radar.filterTiktok")],
         ] as const).map(([k, label]) => (
           <button
             key={k}
@@ -179,13 +179,13 @@ export default function Radar() {
           </button>
         ))}
         <span className="ml-auto whitespace-nowrap text-xs text-[var(--sb-ink-40)]">
-          {q.isLoading ? "加载中…" : `本期 ${shown.length} 个品 · 每周更新`}
+          {q.isLoading ? t("radar.loading") : t("radar.countLine", { n: shown.length })}
         </span>
       </div>
 
       {q.isError ? (
         <p className="sb-reveal sb-rule pt-4 text-sm text-[var(--sb-ink-60)]">
-          榜单数据加载失败，请刷新重试——数据没回来我们不会拿旧数据糊弄你。
+          {t("radar.error")}
         </p>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -196,8 +196,7 @@ export default function Radar() {
       )}
 
       <p className="border-t border-[var(--sb-line)] pt-4 text-[11px] leading-relaxed text-[var(--sb-ink-40)]">
-        口径说明：亚马逊信号来自美国站官方 Best Sellers 榜单实抓（排名为 BSR 口径，非绝对销量）；TikTok 信号来自 FastMoss/Kalodata 等第三方监测的公开报道，已标注统计截止日。
-        出厂价带为国内源头货源实时查询价格区间，未含国际运费与关税——到手价请用「到手价试算」或直接问老采购。
+        {t("radar.footnote")}
       </p>
     </div>
   );

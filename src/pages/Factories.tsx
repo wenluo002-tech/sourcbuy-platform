@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
+import { useT } from "@/i18n";
 
 const TIERS = ["金标", "银标", "铜标", "优选", "培育"];
 const CERTS = [
@@ -11,6 +12,7 @@ const CERTS = [
 ];
 
 export default function Factories() {
+  const { t } = useT();
   const [params] = useSearchParams();
   const [keyword, setKeyword] = useState(params.get("keyword") ?? "");
   const [tier, setTier] = useState("");
@@ -37,9 +39,9 @@ export default function Factories() {
       {/* 页头 */}
       <div className="sb-rule pt-4">
         <span className="sb-eyebrow">Vetted Factory Index</span>
-        <h1 className="sb-display mt-4 text-3xl tracking-tight sm:text-[40px]">严选工厂库</h1>
+        <h1 className="sb-display mt-4 text-3xl tracking-tight sm:text-[40px]">{t("factories.h1")}</h1>
         <p className="mt-4 max-w-xl text-sm leading-relaxed text-black/55">
-          每一家都验过资质、产能、履约记录。评分公式公开，工厂花钱买不到名次。
+          {t("factories.sub")}
         </p>
       </div>
 
@@ -51,17 +53,17 @@ export default function Factories() {
             setKeyword(e.target.value);
             setPage(1);
           }}
-          placeholder="搜索工厂名称…"
+          placeholder={t("factories.searchPh")}
           className={sel + " min-w-48"}
         />
         <select value={tier} onChange={(e) => { setTier(e.target.value); setPage(1); }} className={sel}>
-          <option value="">全部分层</option>
-          {TIERS.map((t) => (
-            <option key={t}>{t}</option>
+          <option value="">{t("factories.allTiers")}</option>
+          {TIERS.map((tierZh) => (
+            <option key={tierZh} value={tierZh}>{t(`home.tierName.${tierZh}`)}</option>
           ))}
         </select>
         <select value={cert} onChange={(e) => { setCert(e.target.value); setPage(1); }} className={sel}>
-          <option value="">全部认证</option>
+          <option value="">{t("factories.allCerts")}</option>
           {CERTS.map((c) => (
             <option key={c.v} value={c.v}>
               {c.l}
@@ -74,27 +76,26 @@ export default function Factories() {
             setLocation(e.target.value);
             setPage(1);
           }}
-          placeholder="地区，如 深圳"
+          placeholder={t("factories.locationPh")}
           className={sel + " w-32"}
         />
       </div>
 
       <p className="text-xs text-black/45">
-        {q.isLoading ? "加载中…" : `共 ${q.data?.total ?? 0} 家，按严选评分从高到低`}
+        {q.isLoading ? t("factories.loading") : t("factories.totalLine", { n: q.data?.total ?? 0 })}
       </p>
 
       {!q.isLoading && q.data?.total === 0 && (
         <div className="rounded-xl border border-dashed border-black/15 bg-white p-8 text-center">
-          <p className="font-medium">没有直接匹配的工厂</p>
+          <p className="font-medium">{t("factories.emptyTitle")}</p>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-black/55">
-            试试更宽泛的词（如"服饰"代替"卫衣"），或清空筛选条件。
-            找不到的品可以交给 AI 买手人工补源——工厂库每周都在扩充。
+            {t("factories.emptyBody")}
           </p>
           <button
             onClick={() => { setKeyword(""); setTier(""); setCert(""); setLocation(""); setPage(1); }}
             className="sb-pill mt-5 border border-black/15 px-5 py-2 text-sm hover:bg-black/[0.03]"
           >
-            清空筛选，查看全部
+            {t("factories.emptyReset")}
           </button>
         </div>
       )}
@@ -116,10 +117,10 @@ export default function Factories() {
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
               {f.tier && (
-                <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-black/60">{f.tier}</span>
+                <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-black/60">{t(`home.tierName.${f.tier}`)}</span>
               )}
               {f.isSuper && (
-                <span className="rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-[var(--sb-brand)]">超级工厂</span>
+                <span className="rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-[var(--sb-brand)]">{t("factories.superFactory")}</span>
               )}
               {f.medal && f.medal !== "无牌工厂" && (
                 <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-black/60">
@@ -129,7 +130,7 @@ export default function Factories() {
               )}
             </div>
             <p className="sb-num mt-2.5 text-xs text-black/45">
-              {[f.location, f.years ? `${Number(f.years)} 年` : null, f.repurchaseRate ? `复购 ${Number(f.repurchaseRate)}%` : null]
+              {[f.location, f.years ? `${Number(f.years)}${t("factories.yearsSuffix")}` : null, f.repurchaseRate ? t("factories.repurchase", { n: Number(f.repurchaseRate) }) : null]
                 .filter(Boolean)
                 .join(" · ")}
             </p>
@@ -144,7 +145,7 @@ export default function Factories() {
             onClick={() => setPage(page - 1)}
             className="sb-pill border border-black/15 px-5 py-2 text-sm hover:bg-black/[0.03] disabled:opacity-40"
           >
-            上一页
+            {t("factories.prev")}
           </button>
           <span className="sb-num text-sm text-black/45">
             {page} / {totalPages}
@@ -154,7 +155,7 @@ export default function Factories() {
             onClick={() => setPage(page + 1)}
             className="sb-pill border border-black/15 px-5 py-2 text-sm hover:bg-black/[0.03] disabled:opacity-40"
           >
-            下一页
+            {t("factories.next")}
           </button>
         </div>
       )}

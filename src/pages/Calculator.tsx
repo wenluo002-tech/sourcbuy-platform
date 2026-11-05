@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { DESTINATIONS } from "@contracts/freight";
 import { FX_LABEL } from "@contracts/fx";
+import { useT } from "@/i18n";
 
 const DEST_GROUPS = [...new Set(DESTINATIONS.map((d) => d.group))];
 
@@ -15,6 +16,7 @@ type Submitted = {
 };
 
 export default function Calculator() {
+  const { lang, t } = useT();
   const [searchParams] = useSearchParams();
   const fromProduct = Number(searchParams.get("price")) > 0;
   const [unitPriceCny, setUnitPriceCny] = useState(
@@ -136,15 +138,14 @@ export default function Calculator() {
     <div className="mx-auto max-w-3xl space-y-8 pb-4">
       {/* 页头 */}
       <div>
-        <span className="sb-eyebrow">Landed Cost Calculator</span>
-        <h1 className="sb-display mt-4 text-3xl tracking-tight sm:text-[40px]">到手价试算</h1>
+        <span className="sb-eyebrow">{t("calc.eyebrow")}</span>
+        <h1 className="sb-display mt-4 text-3xl tracking-tight sm:text-[40px]">{t("calc.h1")}</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-black/55">
-          出厂价、国内段、国际运费、关税、尾程、履约佣金，逐行列示，没有隐藏费用。
+          {t("calc.sub")}
         </p>
         {fromProduct && (
           <p className="sb-note mt-3 rounded-md px-3 py-2 text-xs leading-relaxed">
-            已从商品卡带入出厂单价{searchParams.get("qty") ? "和数量" : ""}
-            ，重量按常用默认值先试算，可直接调整；未填尺寸按实重计费，抛货请补尺寸。
+            {t("calc.fromProduct", { qty: searchParams.get("qty") ? t("calc.fromProductQty") : "" })}
           </p>
         )}
       </div>
@@ -156,46 +157,44 @@ export default function Calculator() {
           e.preventDefault();
           if (needsZip && !zip.trim()) {
             setFormError(
-              destinationCode === "AU"
-                ? "澳洲渠道按邮编分区报价，麻烦填一下收件邮编（4 位，如 2000）——差一个区，运费可能差一截。"
-                : "美国渠道按邮编分区报价，麻烦填一下收件邮编（5 位，如 90001）——差一个区，运费可能差一截。"
+              destinationCode === "AU" ? t("calc.zipErrAu") : t("calc.zipErrUs")
             );
             return;
           }
           if (needsCaRegion && !caRegion) {
-            setFormError("加拿大海运按交仓区域报价，选一个区域再算——温哥华和多伦多价差不少。");
+            setFormError(t("calc.caErr"));
             return;
           }
           setFormError("");
           setSubmitted(buildSubmit(channel));
         }}
       >
-        <span className="sb-eyebrow !text-black/45">货物与目的地 · Shipment</span>
+        <span className="sb-eyebrow !text-black/45">{t("calc.sectionShipment")}</span>
         <div className="mt-5 grid gap-x-5 gap-y-6 sm:grid-cols-2">
           <label>
-            <span className={label}>出厂单价（¥ 人民币）</span>
+            <span className={label}>{t("calc.unitPrice")}</span>
             <input required type="number" step="0.01" min="0.01" value={unitPriceCny}
               onChange={(e) => setUnitPriceCny(e.target.value)} className={`${input} sb-num`} />
           </label>
           <label>
-            <span className={label}>采购数量（件）</span>
+            <span className={label}>{t("calc.quantity")}</span>
             <input required type="number" min="1" value={quantity}
               onChange={(e) => setQuantity(e.target.value)} className={`${input} sb-num`} />
           </label>
           <label>
-            <span className={label}>单件实重（kg）</span>
+            <span className={label}>{t("calc.weight")}</span>
             <input required type="number" step="0.01" min="0.01" value={weightKg}
               onChange={(e) => setWeightKg(e.target.value)} className={`${input} sb-num`} />
           </label>
           <label>
-            <span className={label}>目的地国家/地区</span>
+            <span className={label}>{t("calc.dest")}</span>
             <select value={destinationCode} onChange={(e) => setDestinationCode(e.target.value)} className={input}>
-              <option value="">未确定（按渠道均价估算）</option>
+              <option value="">{t("calc.destUndecided")}</option>
               {DEST_GROUPS.map((g) => (
-                <optgroup key={g} label={g}>
+                <optgroup key={g} label={t(`destGroup.${g}`)}>
                   {DESTINATIONS.filter((d) => d.group === g).map((d) => (
                     <option key={d.code} value={d.code}>
-                      {d.zh} {d.en}
+                      {lang === "en" ? d.en : `${d.zh} ${d.en}`}
                     </option>
                   ))}
                 </optgroup>
@@ -204,34 +203,34 @@ export default function Calculator() {
           </label>
           <div className="sm:col-span-2">
             <span className={label}>
-              单件尺寸 长×宽×高（cm，选填）
+              {t("calc.dims")}
               <span className="ml-1 font-normal text-black/35">
-                不填按实重计费；抛货填了更准
+                {t("calc.dimsHint")}
               </span>
             </span>
             <div className="grid grid-cols-3 gap-2">
-              <input type="number" step="0.1" min="0" placeholder="长" value={dimL}
+              <input type="number" step="0.1" min="0" placeholder={t("calc.dimL")} value={dimL}
                 onChange={(e) => setDimL(e.target.value)} className={`${input} sb-num`} />
-              <input type="number" step="0.1" min="0" placeholder="宽" value={dimW}
+              <input type="number" step="0.1" min="0" placeholder={t("calc.dimW")} value={dimW}
                 onChange={(e) => setDimW(e.target.value)} className={`${input} sb-num`} />
-              <input type="number" step="0.1" min="0" placeholder="高" value={dimH}
+              <input type="number" step="0.1" min="0" placeholder={t("calc.dimH")} value={dimH}
                 onChange={(e) => setDimH(e.target.value)} className={`${input} sb-num`} />
             </div>
           </div>
           <label>
-            <span className={label}>品类风险档</span>
+            <span className={label}>{t("calc.risk")}</span>
             <select value={riskTier} onChange={(e) => setRiskTier(e.target.value as any)} className={input}>
-              <option value="A">A 档 · 低风险标品（服饰/日用/文具）</option>
-              <option value="B">B 档 · 中风险（家居/小家电/玩具）</option>
-              <option value="C">C 档 · 高风险（电子/化妆品/儿童用品）</option>
+              <option value="A">{t("calc.riskA")}</option>
+              <option value="B">{t("calc.riskB")}</option>
+              <option value="C">{t("calc.riskC")}</option>
             </select>
           </label>
           {needsZip && (
             <label>
               <span className={label}>
-                收件邮编
+                {t("calc.zipLabel")}
                 <span className="ml-1 font-normal text-black/35">
-                  分区报价必需{destinationCode === "AU" ? "（4 位，如 2000）" : "（5 位，如 90001）"}
+                  {t(destinationCode === "AU" ? "calc.zipHintAu" : "calc.zipHintUs")}
                 </span>
               </span>
               <input value={zip} onChange={(e) => setZip(e.target.value)}
@@ -240,9 +239,9 @@ export default function Calculator() {
           )}
           {needsCaRegion && (
             <label>
-              <span className={label}>派送区域（加拿大海运按区域定价）</span>
+              <span className={label}>{t("calc.caLabel")}</span>
               <select value={caRegion} onChange={(e) => setCaRegion(e.target.value)} className={input}>
-                <option value="">请选择交仓/派送区域</option>
+                <option value="">{t("calc.caSelect")}</option>
                 {caRegionOptions.map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
@@ -253,8 +252,8 @@ export default function Calculator() {
             <>
               <label>
                 <span className={label}>
-                  货物属性
-                  <span className="ml-1 font-normal text-black/35">影响渠道可用性与附加费</span>
+                  {t("calc.cargoType")}
+                  <span className="ml-1 font-normal text-black/35">{t("calc.cargoHint")}</span>
                 </span>
                 <select value={cargoType} onChange={(e) => setCargoType(e.target.value)} className={input}>
                   {channelsQ.data?.cargoTypes.map((c) => (
@@ -266,7 +265,7 @@ export default function Calculator() {
                 <input type="checkbox" checked={residential}
                   onChange={(e) => setResidential(e.target.checked)}
                   className="h-4 w-4 accent-[var(--sb-brand)]" />
-                收件地址是私人住宅（可能有住宅派送附加费）
+                {t("calc.residential")}
               </label>
             </>
           )}
@@ -275,45 +274,45 @@ export default function Calculator() {
         {/* 渠道不用买家挑：默认自动推荐；行家可展开手选 */}
         {hasReal && !proMode && (
           <p className="mt-6 rounded-md bg-[var(--sb-brand-soft)] px-3.5 py-2.5 text-xs leading-relaxed text-black/60">
-            渠道不用你挑——我按协议价把该国的每条渠道都算一遍，直接给你
-            <strong className="text-[var(--sb-brand)]">最省钱</strong>和
-            <strong className="text-[var(--sb-brand)]">最快</strong>两个方案。
+            {t("calc.autoNotePre")}
+            <strong className="text-[var(--sb-brand)]">{t("calc.autoNoteCheapest")}</strong>{t("calc.autoNoteMid")}
+            <strong className="text-[var(--sb-brand)]">{t("calc.autoNoteFastest")}</strong>{t("calc.autoNotePost")}
             {channelsQ.data?.priceVersion && <span className="text-black/35">（{channelsQ.data.priceVersion}）</span>}
             <button type="button" onClick={() => setProMode(true)}
               className="ml-1.5 font-medium text-[var(--sb-brand)] underline underline-offset-2">
-              我是行家，自己选渠道
+              {t("calc.proEntry")}
             </button>
           </p>
         )}
         {proMode && (
           <label className="mt-6 block">
             <span className={label}>
-              运输渠道（行家模式）
+              {t("calc.proLabel")}
               <button type="button" onClick={() => { setProMode(false); setChannel("auto"); }}
                 className="ml-2 font-medium text-[var(--sb-brand)] underline underline-offset-2">
-                回到自动推荐
+                {t("calc.proExit")}
               </button>
             </span>
             <select value={channel} onChange={(e) => setChannel(e.target.value)} className={input}>
-              <option value="auto">自动推荐（按到手价替你挑）</option>
+              <option value="auto">{t("calc.autoOption")}</option>
               {realChannels.length > 0 && (
-                <optgroup label={`真实协议价（${channelsQ.data?.priceVersion}）`}>
+                <optgroup label={t("calc.realGroup", { v: channelsQ.data?.priceVersion ?? "" })}>
                   {realChannels.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}{c.ddp ? "（包税）" : ""} · {c.transitNote}
+                      {c.name}{c.ddp ? t("calc.ddpTag") : ""} · {c.transitNote}
                     </option>
                   ))}
                 </optgroup>
               )}
-              <optgroup label="通用估算（非协议价）">
-                <option value="express">国际快递（体积重 ÷5000）</option>
-                <option value="line">空派专线（体积重 ÷6000，欧美日规则有别）</option>
-                <option value="sea">海运（体积重 ÷6000）</option>
+              <optgroup label={t("calc.genericGroup")}>
+                <option value="express">{t("calc.chExpress")}</option>
+                <option value="line">{t("calc.chLine")}</option>
+                <option value="sea">{t("calc.chSea")}</option>
               </optgroup>
             </select>
             {selCh && selCh.minShipmentKg > 0 && (
               <span className="mt-1.5 block text-xs text-black/40">
-                该渠道整票最低计费 {selCh.minShipmentKg} kg
+                {t("calc.minKg", { n: selCh.minShipmentKg })}
               </span>
             )}
           </label>
@@ -329,22 +328,22 @@ export default function Calculator() {
           type="submit"
           className="sb-pill mt-7 flex w-full items-center justify-center gap-2 bg-[var(--sb-brand)] px-6 py-3 text-sm font-semibold text-white hover:bg-[var(--sb-brand-hover)]"
         >
-          算一笔到手价
+          {t("calc.submit")}
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 8h11M9 3.5 14 8l-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
       </form>
 
-      {q.isFetching && <p className="text-sm text-black/45">计算中…</p>}
+      {q.isFetching && <p className="text-sm text-black/45">{t("calc.calculating")}</p>}
       {q.error && (
         <div className="sb-note rounded-xl p-5 text-sm">
           <p className="font-semibold">
-            {q.error.message.includes("人工单询") ? "这票货需要人工核价" : "这票货现在报不了价"}
+            {q.error.message.includes("人工单询") ? t("calc.errManual") : t("calc.errGeneric")}
           </p>
           <p className="mt-1.5 leading-relaxed">{q.error.message}</p>
           <p className="mt-2 text-xs opacity-75">
-            可以调整货物属性或目的地再试，或把需求发给采购顾问，我们按协议价人工核给你。
+            {t("calc.errHint")}
           </p>
         </div>
       )}
@@ -354,7 +353,7 @@ export default function Calculator() {
           {/* 方案卡片：买家只看这两张 */}
           {budget && (
             <section>
-              <span className="sb-eyebrow !text-black/45">两种走法 · Two Ways to Ship</span>
+              <span className="sb-eyebrow !text-black/45">{t("calc.twoWays")}</span>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {/* 性价比卡：深海军蓝，全场视觉焦点 */}
                 <div
@@ -363,22 +362,22 @@ export default function Calculator() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-sky)]">
-                      性价比之选
+                      {t("calc.budgetTag")}
                     </span>
                     <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-medium tracking-wide text-white/85">
                       <span className="h-1.5 w-1.5 rounded-full bg-[var(--sb-sky)]" />
-                      老采购推荐
+                      {t("calc.recommended")}
                     </span>
                   </div>
                   <p className="mt-4 font-semibold leading-snug">{budget.label}</p>
                   <p className="mt-1 text-xs text-[var(--sb-navy-ink)]">
-                    {budget.mode === "sea" ? "海运" : "空运"}{budget.speedTag ? ` · ${budget.speedTag}` : ""} · {budget.transit}
+                    {budget.mode === "sea" ? t("calc.modeSea") : t("calc.modeAir")}{budget.speedTag ? ` · ${budget.speedTag}` : ""} · {budget.transit}
                   </p>
                   <p className="sb-num mt-5 text-[40px] font-bold leading-none tracking-tight">
                     ${budget.total.toFixed(2)}
                   </p>
                   <p className="mt-2 text-xs text-[var(--sb-navy-ink)]">
-                    到手价合计 · 国际运费 <span className="sb-num">${budget.freight.toFixed(2)}</span> · 计费重 <span className="sb-num">{budget.chargeableKg} kg</span>
+                    {t("calc.landedTotal")} · {t("calc.intlFreight")} <span className="sb-num">${budget.freight.toFixed(2)}</span> · {t("calc.chargeable")} <span className="sb-num">{budget.chargeableKg} kg</span>
                   </p>
                   {/* 海运子方案：普船/快船互换 */}
                   {budget.mode === "sea" && seas.length > 1 && (
@@ -387,7 +386,7 @@ export default function Calculator() {
                         <button key={s.channel} type="button" onClick={() => switchTo(s.channel)}
                           className="flex w-full items-baseline justify-between gap-2 border-b border-[var(--sb-navy-line)] px-1 py-2 text-left text-xs transition-colors duration-150 hover:bg-white/5">
                           <span className="text-white/75">
-                            {s.speedTag ?? "海运"} · {s.label.replace(/^美国海派 · /, "")}
+                            {s.speedTag ?? t("calc.modeSea")} · {s.label.replace(/^美国海派 · /, "")}
                           </span>
                           <span className="sb-num shrink-0 text-white/90">
                             ${s.total.toFixed(2)}
@@ -405,12 +404,12 @@ export default function Calculator() {
                         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                           <path d="m3 8.5 3.2 3L13 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
-                        当前方案{isAuto ? "（我替你挑的）" : ""}
+                        {t("calc.currentPlan")}{isAuto ? t("calc.currentPlanAuto") : ""}
                       </span>
                     ) : (
                       <button type="button" onClick={() => switchTo(budget.channel)}
                         className="sb-pill bg-white px-4 py-2 text-xs font-semibold text-[var(--sb-navy)] hover:bg-white/90">
-                        改用此方案
+                        {t("calc.switchPlan")}
                       </button>
                     )}
                   </div>
@@ -423,19 +422,19 @@ export default function Calculator() {
                     style={{ "--sb-delay": "80ms" } as React.CSSProperties}
                   >
                     <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/45">
-                      时效最快
+                      {t("calc.fastestTag")}
                     </span>
                     <p className="mt-4 font-semibold leading-snug">{fastest.label}</p>
-                    <p className="mt-1 text-xs text-black/45">空运 · {fastest.transit}</p>
+                    <p className="mt-1 text-xs text-black/45">{t("calc.modeAir")} · {fastest.transit}</p>
                     <p className="sb-num mt-5 text-[40px] font-bold leading-none tracking-tight text-[var(--sb-brand)]">
                       ${fastest.total.toFixed(2)}
                     </p>
                     <p className="mt-2 text-xs text-black/45">
-                      比省钱方案贵 <span className="sb-num">${(fastest.total - budget.total).toFixed(0)}</span> ·
-                      计费重 <span className="sb-num">{fastest.chargeableKg} kg</span>
+                      {t("calc.fasterPre")} <span className="sb-num">${(fastest.total - budget.total).toFixed(0)}</span>{t("calc.fasterPost")} ·
+                      {t("calc.chargeable")} <span className="sb-num">{fastest.chargeableKg} kg</span>
                     </p>
                     <p className="mt-4 text-xs leading-relaxed text-black/50">
-                      赶交期、补断货选它；不急就走左边，省下的都是利润。
+                      {t("calc.fasterWhy")}
                     </p>
                     <div className="mt-4">
                       {currentChannelId === fastest.channel ? (
@@ -443,12 +442,12 @@ export default function Calculator() {
                           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                             <path d="m3 8.5 3.2 3L13 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
-                          当前方案
+                          {t("calc.currentPlan")}
                         </span>
                       ) : (
                         <button type="button" onClick={() => switchTo(fastest.channel)}
                           className="sb-pill border border-[var(--sb-brand)] px-4 py-2 text-xs font-semibold text-[var(--sb-brand)] hover:bg-[var(--sb-brand-soft)]">
-                          改用此方案
+                          {t("calc.switchPlan")}
                         </button>
                       )}
                     </div>
@@ -459,10 +458,10 @@ export default function Calculator() {
                     style={{ "--sb-delay": "80ms" } as React.CSSProperties}
                   >
                     <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/45">
-                      老采购点评
+                      {t("calc.buyerComment")}
                     </span>
                     <p className="mt-4 text-sm leading-relaxed text-black/70">
-                      这票货量级小，空运又省又快，就是它了。等量起来（百公斤级以上），海运能把到手价再压一截，到时候来找我重算。
+                      {t("calc.buyerCommentAir")}
                     </p>
                   </div>
                 ) : null}
@@ -476,10 +475,10 @@ export default function Calculator() {
             style={{ "--sb-delay": "160ms" } as React.CSSProperties}
           >
             <div className="flex items-baseline justify-between gap-3">
-              <span className="sb-eyebrow !text-black/45">逐行明细 · Breakdown</span>
+              <span className="sb-eyebrow !text-black/45">{t("calc.breakdown")}</span>
               {q.data.realChannel && (
                 <span className="text-right text-[11px] leading-relaxed text-black/40">
-                  {q.data.realChannel.name} · {q.data.realChannel.ddp ? "DDP 包税" : "不含税"} · {q.data.realChannel.priceVersion}
+                  {q.data.realChannel.name} · {q.data.realChannel.ddp ? t("calc.ddpYes") : t("calc.ddpNo")} · {q.data.realChannel.priceVersion}
                 </span>
               )}
             </div>
@@ -491,14 +490,18 @@ export default function Calculator() {
                 </div>
               ))}
               <div className="mt-4 flex items-baseline justify-between gap-4 border-t-2 border-black/80 pt-4">
-                <span className="text-sm font-semibold">到手价合计</span>
+                <span className="text-sm font-semibold">{t("calc.grandTotal")}</span>
                 <span className="sb-num shrink-0 text-[28px] font-bold leading-none tracking-tight text-[var(--sb-brand)]">
                   ${q.data.total.toFixed(2)}
                 </span>
               </div>
               <div className="mt-1.5">
                 <span className="sb-num text-xs text-black/45">
-                  ≈ ¥{q.data.totalCny.toLocaleString("zh-CN")} · 单件 ${q.data.perUnit.toFixed(2)}（≈ ¥{q.data.perUnitCny.toFixed(2)}）
+                  {t("calc.approxLine", {
+                    total: q.data.totalCny.toLocaleString(lang === "en" ? "en-US" : "zh-CN"),
+                    per: q.data.perUnit.toFixed(2),
+                    perCny: q.data.perUnitCny.toFixed(2),
+                  })}
                 </span>
               </div>
             </div>
@@ -513,19 +516,17 @@ export default function Calculator() {
             )}
             {q.data.commissionMeta.minFeeApplied && (
               <p className="sb-note mt-3 rounded-md p-2.5 text-xs">
-                本单佣金按比例不足 $50，已按最低收费 $50 计。
+                {t("calc.minFee")}
               </p>
             )}
             <p className="mt-4 text-[11px] leading-relaxed text-black/40">
-              费率表 {q.data.commissionMeta.ruleVersion} · 佣金基数为出厂价合计（不含运费）·
-              {FX_LABEL} ·
+              {t("calc.feeNote", { v: q.data.commissionMeta.ruleVersion, fx: FX_LABEL })} ·{" "}
               {q.data.chargeableBasis === "real_channel"
-                ? ` 运费按协议价卡精确报价（${q.data.volumetricNote}），附加费以实际出货核验为准`
+                ? t("calc.basisReal", { note: q.data.volumetricNote })
                 : q.data.chargeableBasis === "actual_unsized"
-                  ? ` 运费按实重 ${q.data.chargeableWeight} kg 估算（${q.data.volumetricNote}）`
-                  : ` 运费按计费重 ${q.data.chargeableWeight} kg 估算（${q.data.volumetricNote}）`}
-              {q.data.chargeableBasis !== "real_channel" &&
-                "；美国/加拿大/墨西哥/澳大利亚已接入分区协议价，选这些目的地可精确报价。"}
+                  ? t("calc.basisUnsized", { w: q.data.chargeableWeight, note: q.data.volumetricNote })
+                  : t("calc.basisVolumetric", { w: q.data.chargeableWeight, note: q.data.volumetricNote })}
+              {q.data.chargeableBasis !== "real_channel" && t("calc.zonedSuffix")}
             </p>
           </section>
 
@@ -537,11 +538,12 @@ export default function Calculator() {
             >
               <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-black/45">
                 <span>
-                  全部渠道对比 · 备查（{compare.length} 条已报价
-                  {q.data.channelAdvice.unavailable?.length
-                    ? `，${q.data.channelAdvice.unavailable.length} 条不可用`
-                    : ""}
-                  ）
+                  {t("calc.compareTitle", {
+                    n: compare.length,
+                    u: q.data.channelAdvice.unavailable?.length
+                      ? t("calc.unavailableSuffix", { n: q.data.channelAdvice.unavailable.length })
+                      : "",
+                  })}
                 </span>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"
                   className="transition-transform duration-150 group-open:rotate-180">
@@ -557,11 +559,11 @@ export default function Calculator() {
                 <table className="w-full min-w-[520px] text-xs">
                   <thead>
                     <tr className="text-left text-[10px] uppercase tracking-wider text-black/40">
-                      <th className="pb-2 font-medium">渠道</th>
-                      <th className="pb-2 font-medium">计费重</th>
-                      <th className="pb-2 font-medium">国际运费</th>
-                      <th className="pb-2 font-medium">到手价</th>
-                      <th className="pb-2 font-medium">参考时效</th>
+                      <th className="pb-2 font-medium">{t("calc.thChannel")}</th>
+                      <th className="pb-2 font-medium">{t("calc.thWeight")}</th>
+                      <th className="pb-2 font-medium">{t("calc.thFreight")}</th>
+                      <th className="pb-2 font-medium">{t("calc.thLanded")}</th>
+                      <th className="pb-2 font-medium">{t("calc.thTransit")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -584,7 +586,7 @@ export default function Calculator() {
                     {q.data.channelAdvice.unavailable?.map((u) => (
                       <tr key={u.label} className="border-t border-black/[0.07] text-black/35">
                         <td className="py-2">{u.label}</td>
-                        <td className="py-2" colSpan={4}>未入选：{u.reason}</td>
+                        <td className="py-2" colSpan={4}>{t("calc.unavailableRow", { r: u.reason })}</td>
                       </tr>
                     ))}
                   </tbody>
