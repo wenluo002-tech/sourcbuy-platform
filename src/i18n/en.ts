@@ -50,6 +50,8 @@ const enChat: Messages["chat"] = {
   qtyTier: "Tier at {qty} {unit}",
   fxNote:
     "Converted at settlement rate {rate} (daily fix − 0.3). Landed cost = EXW + freight + duty + fulfillment commission — tap 'Landed cost' for the line-item breakdown",
+  feeLine: "Service fee {rate}% · Tier B estimate (the calculator prices your exact category & amount)",
+  feeMin: " · $50 minimum applies",
   onSaleStock: "On sale · {n} {unit} available",
   factoryVetted: "Factory behind it is vetted: {name} ({tier} · {score}) →",
   shopNotVetted: "This shop isn't in our vetted database — audit before ordering",

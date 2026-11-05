@@ -5,6 +5,7 @@ import {
   findFactoryById,
   factoryStats,
   calcLandedPrice,
+  listCommissionRules,
   matchFactories,
 } from "./queries/factories";
 import { sourcingChat } from "./queries/aiSourcing";
@@ -72,6 +73,8 @@ export const appRouter = createRouter({
         suspended: SUSPENDED_CHANNELS,
         priceVersion: "2026-10-15 价卡",
       })),
+    // 佣金费率表 v1.0（结果卡服务费拆解行用；公开费率是铁律卖点，全量下发）
+    commissionTable: publicQuery.query(() => listCommissionRules()),
     landed: publicQuery
       .input(
         z.object({

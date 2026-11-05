@@ -210,6 +210,23 @@ export async function calcCommission(purchaseAmountUsd: number, riskTier: "A" | 
   };
 }
 
+// 佣金费率表（v1.0 冻结矩阵，全量 12 行）——前端结果卡"服务费拆解行"的单一事实源
+export async function listCommissionRules() {
+  const db = getDb();
+  const rules = await db
+    .select()
+    .from(commissionRules)
+    .where(and(eq(commissionRules.version, "v1.0"), eq(commissionRules.status, "active")));
+  return rules.map((r) => ({
+    riskTier: r.riskTier as "A" | "B" | "C",
+    amountFrom: Number(r.amountFrom),
+    amountTo: r.amountTo === null ? null : Number(r.amountTo),
+    rate: Number(r.rate),
+    minFee: Number(r.minFee),
+    version: r.version,
+  }));
+}
+
 // ============ 到手价试算（蓝图 §5.5）============
 
 export interface LandedPriceInput {

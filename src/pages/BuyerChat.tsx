@@ -280,6 +280,12 @@ function ProductStrip({
 }) {
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
   const { t } = useT();
+  // 佣金费率表 v1.0（单一事实源在后端 commission_rules 表；卡片按 B 档估，显式标注）
+  const commissionQ = trpc.pricing.commissionTable.useQuery(undefined, { staleTime: 60 * 60_000 });
+  const feeRule = (amtUsd: number) =>
+    commissionQ.data?.find(
+      (r) => r.riskTier === "B" && r.amountFrom <= amtUsd && (r.amountTo === null || amtUsd < r.amountTo)
+    );
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -327,6 +333,17 @@ function ProductStrip({
                     ≈ US${(price / REF_RATE).toFixed(2)}
                   </span>
                 </div>
+                {(() => {
+                  const rule = feeRule(((qty || 1) * price) / REF_RATE);
+                  if (!rule) return null;
+                  const minApplied = (((qty || 1) * price) / REF_RATE) * rule.rate < rule.minFee;
+                  return (
+                    <p className="mt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                      {t("chat.feeLine", { rate: parseFloat((rule.rate * 100).toFixed(1)) })}
+                      {minApplied ? t("chat.feeMin") : ""}
+                    </p>
+                  );
+                })()}
                 <div className="mt-1.5 flex items-center justify-between gap-1">
                   <span className="text-[10px] text-[var(--sb-ink-40)]">
                     {p.sales > 0 ? t("chat.sold", { n: fmtSales(p.sales) }) : t("chat.onSale")}
@@ -366,6 +383,12 @@ function ProductCard({
   const offer = product.offer;
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
   const { t } = useT();
+  // 佣金费率表 v1.0（单一事实源在后端 commission_rules 表；卡片按 B 档估，显式标注）
+  const commissionQ = trpc.pricing.commissionTable.useQuery(undefined, { staleTime: 60 * 60_000 });
+  const feeRule = (amtUsd: number) =>
+    commissionQ.data?.find(
+      (r) => r.riskTier === "B" && r.amountFrom <= amtUsd && (r.amountTo === null || amtUsd < r.amountTo)
+    );
   const tiers = [...offer.priceTiers].sort((a, b) => a.minQty - b.minQty);
   // 按采购数量选价档：够得着的最低单价；没给数量则用首档
   const main =
@@ -439,6 +462,17 @@ function ProductCard({
           <p className="mt-2 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
             {t("chat.fxNote", { rate: REF_RATE })}
           </p>
+          {(() => {
+            const rule = feeRule(((qty || 1) * main.price) / REF_RATE);
+            if (!rule) return null;
+            const minApplied = (((qty || 1) * main.price) / REF_RATE) * rule.rate < rule.minFee;
+            return (
+              <p className="mt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                {t("chat.feeLine", { rate: parseFloat((rule.rate * 100).toFixed(1)) })}
+                {minApplied ? t("chat.feeMin") : ""}
+              </p>
+            );
+          })()}
         </div>
       )}
 

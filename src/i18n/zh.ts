@@ -47,6 +47,8 @@ export const zhChat = {
   qtyTier: "按 {qty} {unit}档",
   fxNote:
     "按结汇汇率 {rate} 折算（当日牌价 − 0.3）；到手价 = 出厂价 + 运费 + 关税 + 履约佣金，点「算到手价」逐行试算",
+  feeLine: "服务费 {rate}% · 按 B 档估（到手价试算按实际类目与金额精确算）",
+  feeMin: " · 本单触发最低收费 $50",
   onSaleStock: "在售 · 可售 {n} {unit}",
   factoryVetted: "背后工厂在严选库：{name}（{tier} · {score} 分）→",
   shopNotVetted: "该店铺不在严选库，下单前建议验厂",

@@ -362,7 +362,7 @@ export interface LinkedOfferFactory {
   image: string | null;
   price: number;
   sales: number;
-  factory: { id: number; name: string; tier: string | null; score: number | null; years: string | null; location: string | null; cert: string | null };
+  factory: { id: number; name: string; tier: string | null; score: number | string | null; years: string | null; location: string | null; cert: string | null };
 }
 
 // 以货带厂：对搜到的 top 货源拉详情拿 memberId，join 严选库。

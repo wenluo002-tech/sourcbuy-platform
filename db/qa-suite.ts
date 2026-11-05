@@ -21,7 +21,8 @@ async function chat(message: string, history: any[] = [], locale?: "zh" | "en") 
     signal: AbortSignal.timeout(60_000),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return (await r.json()).result.data.json;
+  const j: any = await r.json();
+  return j.result.data.json;
 }
 
 console.log("\n[1] API 健康");
