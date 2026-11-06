@@ -94,7 +94,8 @@ console.log("\n[6] 数据口径对账");
   const db = getDb();
   const [pool]: any = await db.execute(sql`SELECT COUNT(*) c FROM offer_pool`);
   const [fac]: any = await db.execute(sql`SELECT COUNT(*) c FROM factories`);
-  check("严选库 = 4,060 家", Number(fac[0].c) === 4060, `实际 ${fac[0].c}`);
+  // 2026-11-06 旧权威库合并后：4,060 + 3,678 净新增 = 7,738 家（CSV 内同名 7 家被去重规则跳过）
+  check("严选库 = 7,738 家", Number(fac[0].c) === 7738, `实际 ${fac[0].c}`);
   check("产品池 ≥ 5,000 条", Number(pool[0].c) >= 5000, `实际 ${pool[0].c}`);
   const [logs]: any = await db.execute(sql`SELECT COUNT(*) c, IFNULL(SUM(cost_cny),0) cost FROM sourcing_api_logs WHERE created_at >= CURDATE()`);
   console.log(`  ℹ 今日 API 调用 ${logs[0].c} 次 / ¥${Number(logs[0].cost).toFixed(2)}`);

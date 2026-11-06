@@ -42,7 +42,7 @@ async function main() {
       // 3) 重量：sunclub SKU 中位 vs 万邦交叉算法重量（0.02–60kg 带）
       const ws = (sc.Data.Tags?.pieceWeightScale?.pieceWeightScaleInfo ?? []).map((x: any) => Number(x.weight)).filter((w: number) => w > 0).sort((a: number, b: number) => a - b);
       const scW = ws.length ? ws[Math.floor(ws.length / 2)] / 1000 : null; // 克→公斤
-      const wbW = wb.offer.weightKg ?? null;
+      const wbW = (wb.offer as any).unitWeightKg ?? null;
       if (scW && wbW) {
         weightBoth++;
         if (Math.abs(scW - wbW) / Math.max(scW, wbW) > 0.35) notes.push(`${r.offer_id} 重量分歧: sunclub=${scW}kg 万邦=${wbW}kg`);
