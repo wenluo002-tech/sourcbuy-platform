@@ -48,6 +48,7 @@ export const factories = mysqlTable(
     home: text("home"), // 1688 店铺链接
     mainImage: text("main_image"), // 主图（本地化后换对象存储 key）
     images: json("images").$type<Record<string, string[]>>(), // 实拍图集：gate/workshop/product/warehouse/equipment/catalog
+    isTrader: boolean("is_trader").notNull().default(false), // 贸易商/供应链公司标记：不是源头工厂，AI 匹配与工厂列表排除（2026-11-06 罗总授权清理）
     review: text("review"), // AI 评语
     tags: json("tags").$type<string[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),

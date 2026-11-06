@@ -72,6 +72,13 @@ function FactoryDetailView({ f }: { f: any }) {
         {t("factoryDetail.back")}
       </Link>
 
+      {f.isTrader && (
+        <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-800">
+          <span className="mr-1.5 inline-block rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-700">{t("factoryDetail.traderBadge")}</span>
+          {t("factoryDetail.traderNotice")}
+        </div>
+      )}
+
       <div className="rounded-xl border border-black/10 bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

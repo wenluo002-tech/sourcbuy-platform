@@ -29,6 +29,8 @@ export interface FactoryFilter {
 export async function findFactories(f: FactoryFilter) {
   const db = getDb();
   const conds: SQL[] = [];
+  // 贸易商/供应链公司不是源头工厂：AI 匹配与工厂列表一律排除（2026-11-06 罗总授权清理，108 家）
+  conds.push(sql`${factories.isTrader} = 0`);
   if (f.tier) conds.push(sql`${factories.tier} = ${f.tier}`);
   if (f.location) conds.push(like(factories.location, `%${f.location}%`));
   if (f.cert) conds.push(like(factories.cert, `%${f.cert}%`));
@@ -167,14 +169,17 @@ export async function findFactoryById(id: number) {
 
 export async function factoryStats() {
   const db = getDb();
+  // 统计口径排除贸易商（is_trader=1），前台"严选工厂数"只算真工厂
   const byTier = await db
     .select({ tier: factories.tier, c: sql<number>`count(*)` })
     .from(factories)
+    .where(sql`${factories.isTrader} = 0`)
     .groupBy(factories.tier);
-  const total = await db.select({ c: sql<number>`count(*)` }).from(factories);
+  const total = await db.select({ c: sql<number>`count(*)` }).from(factories).where(sql`${factories.isTrader} = 0`);
   const locations = await db
     .select({ location: factories.location, c: sql<number>`count(*)` })
     .from(factories)
+    .where(sql`${factories.isTrader} = 0`)
     .groupBy(factories.location)
     .orderBy(desc(sql`count(*)`))
     .limit(10);
