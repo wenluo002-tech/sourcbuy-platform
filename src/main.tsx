@@ -9,6 +9,7 @@ import { AuthProvider } from "@/auth"
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
+  // 部署标记：allowedHosts 修复 v56（触发平台重新构建，勿删）
   <StrictMode>
     <BrowserRouter>
       <TRPCProvider>
