@@ -1,5 +1,8 @@
 node_modules
 dist
+shot
 .git
-*.swp
 *.log
+ops
+数据抢救备份
+严选工厂数据库备份
