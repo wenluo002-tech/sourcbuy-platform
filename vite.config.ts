@@ -12,6 +12,7 @@ export default defineConfig({
     inspectAttr(), react()],
   server: {
     port: 3000,
+    allowedHosts: true, // 平台预览走反向代理（如 3000.proxy.internal），主机名动态，必须放行
   },
   resolve: {
     alias: {
