@@ -14,6 +14,9 @@ export default defineConfig({
     port: 3000,
     allowedHosts: true, // 平台预览走反向代理（如 3000.proxy.internal），主机名动态，必须放行
   },
+  preview: {
+    allowedHosts: true, // vite preview 有独立的 host 白名单，双保险
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
