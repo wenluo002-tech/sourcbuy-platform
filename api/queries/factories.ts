@@ -31,6 +31,8 @@ export async function findFactories(f: FactoryFilter) {
   const conds: SQL[] = [];
   // 贸易商/供应链公司不是源头工厂：AI 匹配与工厂列表一律排除（2026-11-06 罗总授权清理，108 家）
   conds.push(sql`${factories.isTrader} = 0`);
+  // 同一公司多店铺账号只保留最高分店铺（dup_of 指向保留者），推荐位不浪费在重复公司上（2026-11-06 深度体检）
+  conds.push(sql`${factories.dupOf} IS NULL`);
   if (f.tier) conds.push(sql`${factories.tier} = ${f.tier}`);
   if (f.location) conds.push(like(factories.location, `%${f.location}%`));
   if (f.cert) conds.push(like(factories.cert, `%${f.cert}%`));
@@ -169,17 +171,18 @@ export async function findFactoryById(id: number) {
 
 export async function factoryStats() {
   const db = getDb();
-  // 统计口径排除贸易商（is_trader=1），前台"严选工厂数"只算真工厂
+  // 统计口径排除贸易商（is_trader=1）与重复店铺（dup_of 非空），前台"严选工厂数"只算真实独立工厂
+  const NOT_DUP = sql`${factories.isTrader} = 0 AND ${factories.dupOf} IS NULL`;
   const byTier = await db
     .select({ tier: factories.tier, c: sql<number>`count(*)` })
     .from(factories)
-    .where(sql`${factories.isTrader} = 0`)
+    .where(NOT_DUP)
     .groupBy(factories.tier);
-  const total = await db.select({ c: sql<number>`count(*)` }).from(factories).where(sql`${factories.isTrader} = 0`);
+  const total = await db.select({ c: sql<number>`count(*)` }).from(factories).where(NOT_DUP);
   const locations = await db
     .select({ location: factories.location, c: sql<number>`count(*)` })
     .from(factories)
-    .where(sql`${factories.isTrader} = 0`)
+    .where(NOT_DUP)
     .groupBy(factories.location)
     .orderBy(desc(sql`count(*)`))
     .limit(10);

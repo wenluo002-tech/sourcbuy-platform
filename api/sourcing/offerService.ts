@@ -111,7 +111,7 @@ async function joinFactoriesBatch(rows: { offerId: string; memberId: string | nu
   const frows = await getDb()
     .select({ id: factories.id, name: factories.name, tier: factories.tier, score: factories.score, years: factories.years, location: factories.location, cert: factories.cert, memberId: factories.memberId })
     .from(factories)
-    .where(sql`(${sql.join(conds, sql` OR `)})`);
+    .where(sql`(${sql.join(conds, sql` OR `)}) AND ${factories.isTrader} = 0 AND ${factories.dupOf} IS NULL`);
   const byMember = new Map(frows.map((f) => [f.memberId, f]));
   for (const r of rows) {
     const f =

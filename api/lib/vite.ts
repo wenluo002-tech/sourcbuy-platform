@@ -9,8 +9,8 @@ type App = Hono<{ Bindings: HttpBindings }>;
 export function serveStaticFiles(app: App) {
   const distPath = path.resolve(import.meta.dirname, "../dist");
 
-  // 后端 bundle 不可被静态服务暴露（业务逻辑在内，虽无密钥也不该能下载）
-  app.use("/boot.js", (c) => c.notFound());
+  // 后端 bundle 不可被静态服务暴露（虽无密钥也不该能下载）
+  app.use("/boot.js", async (c) => c.notFound());
 
   app.use("*", serveStatic({ root: "./dist" }));
 
