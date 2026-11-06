@@ -6,7 +6,7 @@ import { sql } from "drizzle-orm";
 
 const BASE = process.env.SUNCLUB_BASE;
 const PILOT = Number(process.env.PILOT || 0);
-const DAILY_CAP = 2000;
+const DAILY_CAP = 12000; // 罗总口径 40 万次/¥1000 无日限（API 侧无法核实，按台账自控）；全池 9,444 一次跑完
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function ensureColumns(db: any) {
