@@ -549,10 +549,12 @@ export async function matchFactories(intent: {
 }): Promise<MatchedFactory[]> {
   // 推荐中立条款（费率矩阵 v1.0 §3.3）：排序仅依据评分与经营指标，工厂不可付费影响
   const category = intent.keyword ? expandQuery(intent.keyword).category : null;
+  // 买家显式指定地区时门槛放宽到 75：买家自己做了第一道筛选，我们的职责是在该地区内按分数取最优并如实展示，
+  // 而不是用全国统一 85 分线把该地区卡成空白（2026-11-06 中山演示前修复：中山灯饰金标厂 83.9 分会被 85 线卡没）
   const res = await findFactories({
     keyword: intent.keyword,
     location: intent.location,
-    minScore: intent.minScore ?? 85,
+    minScore: intent.minScore ?? (intent.location ? 75 : 85),
     page: 1,
     pageSize: Math.min(6, Math.max(3, intent.limit ?? 6)),
   });

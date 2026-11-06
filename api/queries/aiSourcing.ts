@@ -56,6 +56,7 @@ const INTENT_SYSTEM = `你是采购需求解析器。从用户消息和对话历
 2. quantity = 数量（number 或 null），destination = 发往国家/地区（或 null）。
 3. budgetNote = 用户提到的目标价/预算，原样摘录（或 null）。
 4. followUp = 还差关键信息时，一个最关键的追问（优先级：品类 → 数量 → 目标价/预算）。信息够则 null。
+4.5 region = 买家指定的产地/城市（如"中山的灯饰厂"→"中山"，"义乌小商品"→"义乌"）。买家没指定产地时=null。注意与 destination（发往国）区分：region 是"货从哪产"，destination 是"货运到哪"。
 5. 用户只是打招呼/闲聊/说"继续"但没有新品类时：isGreeting=true。`;
 
 const intentSchema = z.object({
@@ -64,6 +65,7 @@ const intentSchema = z.object({
   destination: z.string().nullable(),
   budgetNote: z.string().nullable(),
   followUp: z.string().nullable(),
+  region: z.string().nullable(), // 买家指定的产地/城市（如"中山""义乌"），没指定=null
   isGreeting: z.boolean(),
 });
 
@@ -139,7 +141,8 @@ Rules:
    If the whole list is bucket, use rule 12's framing: "no vetted factory verified for this exact item", and present the category high-scorers as inquiry leads.
 17. When the requested item carries a famous brand (Bose, Nike, Apple, Disney, Lego etc.), you must warn: genuine branded goods only move through authorized channels; Chinese factories can only make unbranded white-label equivalents; counterfeits carry legal risk at customs and on marketplaces — we don't touch them. Then give white-label sources and factories.
 18. A buyer message starting with "[补充]" = they're answering the follow-up question card: merge the answers into your understanding, update your judgment, don't re-ask what they've answered. Starting with "[跳过补充]" = they explicitly declined; proceed with what you have and don't ask again. If a follow-up card is attached to your reply (structured options rendered by the UI), mention it in at most one short sentence (e.g. "add quantity and destination when you can — sharper numbers"), never enumerate the questions one by one.
-19. Always reply in English.`;
+19. When the buyer names a production region (e.g. "factories in Zhongshan"): open by answering the region head-on — "here are the vetted lighting factories I have in Zhongshan". If no factory in the list is from that region, say so honestly ("I don't have a vetted factory there yet"); you may share sourcing-cluster knowledge (e.g. "Guzhen, Zhongshan is China's lighting capital"), but never present a factory from another region as being in the requested one, and never imply a top pick is from the requested region when it is not.
+20. Always reply in English.`;
 
 // greeting 英文静态开场白
 const GREETING_FALLBACK_EN =
@@ -157,7 +160,7 @@ const DEST_WORDS = [
 function localIntentFallback(message: string): z.infer<typeof intentSchema> {
   // 纯问候/寒暄本地判定：不查库，交给 greeting 静态开场白（否则"你好"会被当品类去搜货）
   if (/^(你好|您好|hi|hello|hey|嗨|喂|在吗|在不在|早上好|下午好|晚上好|good\s*(morning|afternoon|evening))\s*[!！~～。.。]*$/i.test(message.trim())) {
-    return { product: null, quantity: null, destination: null, budgetNote: null, followUp: null, isGreeting: true };
+    return { product: null, quantity: null, destination: null, budgetNote: null, followUp: null, region: null, isGreeting: true };
   }
   // 具体产品词优先（跨类目取最长命中），其次类目名，最后短消息原文
   let product: string | null = null;
@@ -178,7 +181,10 @@ function localIntentFallback(message: string): z.infer<typeof intentSchema> {
     break;
   }
   const destination = DEST_WORDS.find((w) => message.includes(w)) ?? null;
-  return { product, quantity, destination, budgetNote: null, followUp: null, isGreeting: false };
+  // 产地城市词（买家指定"哪产的"）——与 destination（运到哪）严格分开
+  const REGION_WORDS = ["中山","义乌","深圳","广州","东莞","佛山","宁波","杭州","温州","金华","泉州","厦门","苏州","无锡","常州","青岛","台州","绍兴","湖州","惠州","汕头","潮州","揭阳","江门","珠海","肇庆","嘉兴","慈溪","余姚","永康","临海","温岭"];
+  const region = REGION_WORDS.find((w) => message.includes(w)) ?? null;
+  return { product, quantity, destination, budgetNote: null, followUp: null, region, isGreeting: false };
 }
 
 // 话术生成超时/失败时的规则兜底——只用系统已拿到的真实数据，一句都不编
@@ -412,7 +418,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   let imageFailed = false;
   let intent: z.infer<typeof intentSchema>;
   if (radarCtx) {
-    intent = { product: radarCtx.keyword, quantity: null, destination: null, budgetNote: null, followUp: null, isGreeting: false };
+    intent = { product: radarCtx.keyword, quantity: null, destination: null, budgetNote: null, followUp: null, region: null, isGreeting: false };
   } else if (imageData) {
     // 商品图识别与意图抽取合一：单次调用出品类词+可见规格（网关默认模型支持图片输入）
     try {
@@ -516,10 +522,10 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     // 工厂匹配与商品搜索并行——两个独立数据源，串行白等 3-5s
     const [fRes, sRes] = await Promise.allSettled([
       (async () => {
-        let fs = await matchFactories({ keyword, limit: 6 });
+        let fs = await matchFactories({ keyword, location: intent.region ?? undefined, limit: 6 });
         let wasRelaxed = false;
         if (fs.length < 3) {
-          const more = await matchFactories({ keyword, minScore: 0, limit: 6 });
+          const more = await matchFactories({ keyword, location: intent.region ?? undefined, minScore: 0, limit: 6 });
           if (more.length > fs.length) {
             fs = more;
             wasRelaxed = true;
@@ -556,8 +562,12 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
           ])
         : null;
       if (linked?.length) {
+        // 买家指定产地（region）时，以货带厂只保留该地区的厂——别地区厂即使在售这款货也不插队（买家立场）
+        const regionFiltered = intent.region
+          ? linked.filter((l) => String(l.factory.location ?? "").includes(intent.region!))
+          : linked;
         const byFactory = new Map<number, (typeof linked)[number]>();
-        for (const l of linked) if (!byFactory.has(l.factory.id)) byFactory.set(l.factory.id, l);
+        for (const l of regionFiltered) if (!byFactory.has(l.factory.id)) byFactory.set(l.factory.id, l);
         // 已在推荐列表里的厂：升级 matchBasis + 挂在售货快照
         factories = factories.map((f) => {
           const l = byFactory.get(f.id);
