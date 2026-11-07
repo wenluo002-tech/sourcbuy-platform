@@ -97,7 +97,7 @@ async function parseCards(page: Page): Promise<Card[]> {
   });
 }
 
-const norm = (s: string) => s.replace(/\s+/g, "");
+const norm = (s: string) => s.replace(/\s+/g, "").replace(/（/g, "(").replace(/）/g, ")").replace(/，/g, ",");
 
 async function main() {
   if (fs.existsSync(DEAD_SENTINEL)) { console.log("SESSION-DEAD 哨兵存在，退出"); process.exit(1); }
@@ -111,7 +111,7 @@ async function main() {
       AND (home IS NULL OR home='' OR oem_mode IS NULL OR production_type IS NULL
            OR member_id NOT REGEXP '^b2b-[0-9]' OR years IS NULL OR repurchase_rate IS NULL
            OR seller_user_id IS NULL OR seller_user_id='')
-    ORDER BY id LIMIT ${LIMIT}`);
+    ORDER BY FIELD(tier,'金标','银标','铜标','优选','培育'), id LIMIT ${LIMIT}`);
   if (!rows.length) { console.log("完成：无待采集行"); process.exit(0); }
   console.log(`本轮目标 ${rows.length} 家（DRY=${DRY}）`);
 
@@ -124,13 +124,14 @@ async function main() {
     if (i > 0 && i % 150 === 0) { await browser.close().catch(() => {}); browser = await newBrowser(); page = await newPage(browser); }
     const t0 = Date.now();
     let ok = false, matched: Card | null = null, cardsN = 0, errMsg = "";
+    let cands: string[] | undefined;
     try {
       await page.goto(`https://s.1688.com/company/company_search.htm?keywords=${gbkUrlEncode(f.name)}`, { waitUntil: "domcontentloaded", timeout: 30000 });
       await page.waitForTimeout(2200);
       const body = ((await page.textContent("body")) ?? "").replace(/\s+/g, " ");
       if (/punish|亲，请完成安全验证|滑动验证|请按住滑块/.test(page.url() + body)) {
-        console.log(`[${f.id}] 风控墙，冷却 10 分钟`);
-        await sleep(600000);
+        console.log(`[${f.id}] 风控墙，冷却 25 分钟`);
+        await sleep(1500000);
         await page.goto(`https://s.1688.com/company/company_search.htm?keywords=${gbkUrlEncode(f.name)}`, { waitUntil: "domcontentloaded", timeout: 30000 });
         await page.waitForTimeout(2200);
         const body2 = ((await page.textContent("body")) ?? "").replace(/\s+/g, " ");
@@ -146,6 +147,7 @@ async function main() {
         if (!body.includes("罗文0102")) { fs.writeFileSync(DEAD_SENTINEL, new Date().toISOString()); console.log("SESSION-EXPIRED，写哨兵退出"); process.exit(1); }
       }
       matched = cards.find((c) => !c.isAd && norm(c.name) === norm(f.name)) ?? null;
+      if (!matched) cands = cards.filter((c) => !c.isAd).slice(0, 3).map((c) => c.name);
       ok = true;
       consecErr = 0;
     } catch (e: any) {
@@ -189,14 +191,14 @@ async function main() {
       if (!DRY) {
         await db.execute(sql`UPDATE factories SET cards_checked_at=NOW() WHERE id=${f.id}`);
       }
-      fs.appendFileSync(REPORT, JSON.stringify({ id: f.id, name: f.name, matched: !!matched, cardName: matched?.name ?? null, winport: matched?.winport ?? null, cards: cardsN, writes, ts: new Date().toISOString() }) + "\n");
+      fs.appendFileSync(REPORT, JSON.stringify({ id: f.id, name: f.name, matched: !!matched, cardName: matched?.name ?? null, winport: matched?.winport ?? null, cards: cardsN, cands, writes, ts: new Date().toISOString() }) + "\n");
     }
 
     // 台账（成本 0）
     await db.execute(sql`INSERT INTO sourcing_api_logs (provider, endpoint, query, cost_cny, billed, ok, duration_ms, error) VALUES ('1688web','company_search',${f.name},0,false,${ok},${Date.now() - t0},${errMsg || null})`).catch(() => {});
 
     if ((i + 1) % 10 === 0 || i === rows.length - 1) console.log(`进度: ${i + 1}/${rows.length} 命中 ${hit} 未匹配 ${miss} 错误 ${err}`);
-    await sleep(4000 + Math.random() * 4000);
+    await sleep(5000 + Math.random() * 5000);
   }
   await browser.close().catch(() => {});
   const [left]: any = await db.execute(sql`SELECT COUNT(*) c FROM factories WHERE is_trader=0 AND dup_of IS NULL AND cards_checked_at IS NULL AND (home IS NULL OR home='' OR oem_mode IS NULL OR production_type IS NULL OR member_id NOT REGEXP '^b2b-[0-9]' OR years IS NULL OR repurchase_rate IS NULL OR seller_user_id IS NULL OR seller_user_id='')`);
