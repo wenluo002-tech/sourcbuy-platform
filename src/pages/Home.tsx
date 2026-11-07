@@ -3,12 +3,14 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { CountUp, useReveal } from "@/hooks/useReveal";
 import { useT } from "@/i18n";
+import { catLabel } from "@/i18n/categories";
 import { RadarCard } from "@/pages/Radar";
 
 const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
 
 export default function Home() {
   const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
+  const catStats = trpc.factories.categoryStats.useQuery(undefined, { staleTime: 60_000 });
   const featured = trpc.factories.match.useQuery({ minScore: 90, limit: 6 });
   const radar = trpc.radar.list.useQuery(undefined, { staleTime: 60_000 });
   const [kw, setKw] = useState("");
@@ -221,6 +223,44 @@ export default function Home() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+      )}
+
+      {/* ===== 品类覆盖：类目×独立工厂数（真实打标统计），点击直接发起 AI 寻源 ===== */}
+      {!catStats.isError && (catStats.data?.byCategory?.length ?? 0) > 0 && (
+      <section>
+        <div className="sb-reveal sb-rule flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
+            {t("home.catKicker")} · {t("home.catTitle")}
+          </h2>
+          <span className="whitespace-nowrap text-xs text-[var(--sb-ink-40)]">
+            <b className="font-semibold text-[var(--sb-ink)]">{catStats.data!.tagged.toLocaleString()}</b> {t("home.catTagged")} · {t("home.catRest")}
+          </span>
+        </div>
+        <div className="mt-4 grid border-t border-[var(--sb-line)] sm:grid-cols-2 lg:grid-cols-3">
+          {catStats.data!.byCategory.map((row, i) => {
+            const max = Number(catStats.data!.byCategory[0]?.c ?? 1);
+            const pct = Math.max(2, Math.round((Number(row.c) / max) * 100));
+            const label = catLabel(row.category, lang);
+            return (
+              <button
+                key={row.category}
+                type="button"
+                onClick={() => goChat(lang === "en" ? `I'm looking for factories making ${label}` : `我想找做${label}的工厂`)}
+                className="sb-reveal group border-b border-[var(--sb-line)] px-1 py-4 text-left transition-colors duration-300 hover:bg-white/60 sm:px-4"
+                style={{ ["--sb-delay" as string]: `${Math.min(i, 8) * 60}ms` }}
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-medium text-[var(--sb-ink)] transition-colors duration-300 group-hover:text-[var(--sb-brand)]">{label}</span>
+                  <span className="sb-display text-lg leading-none tracking-tight">{Number(row.c).toLocaleString()}</span>
+                </div>
+                <div className="mt-2 h-[3px] w-full bg-black/[0.07]">
+                  <div className="h-full bg-[var(--sb-brand)] opacity-60 transition-all duration-500 group-hover:opacity-100" style={{ width: `${pct}%` }} />
+                </div>
+              </button>
+            );
+          })}
         </div>
       </section>
       )}

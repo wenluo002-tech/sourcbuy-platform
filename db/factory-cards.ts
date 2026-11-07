@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 // 1688 登录态工厂搜索卡采集器：回填 home/oem_mode/production_type/years/repurchase_rate/area_sqm/cert/seller_user_id/member_id/主营tags
 // 纪律：评分列绝不写；缺失保持 NULL 不填 0；默认 dry-run（DRY=0 才落库）；限流 ~3s；成本 0 落台账 provider='1688web'
 // 幂等续跑：cards_checked_at 非空即跳过；未命中也标记，避免死循环。想重采：UPDATE factories SET cards_checked_at=NULL WHERE ...

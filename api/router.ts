@@ -5,6 +5,7 @@ import {
   findFactories,
   findFactoryById,
   factoryStats,
+  factoryCategoryStats,
   calcLandedPrice,
   listCommissionRules,
   matchFactories,
@@ -45,6 +46,7 @@ export const appRouter = createRouter({
       .query(({ input }) => findFactoryById(input.id)),
 
     stats: publicQuery.query(() => factoryStats()),
+    categoryStats: publicQuery.query(() => factoryCategoryStats()),
 
     match: publicQuery
       .input(

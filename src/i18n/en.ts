@@ -508,6 +508,11 @@ export const en: Messages = {
     statsNote: "Live counts from the factory database",
     statFactories: "Vetted source factories",
     statFactoriesSub: "Screened on licenses · capacity · fulfillment",
+    catKicker: "Category coverage",
+    catTitle: "What the factories make",
+    catTagged: "factories with categories on file",
+    catRest: "the rest are being profiled",
+    catAsk: "Find me factories in this category",
     tierSuffix: "",
     tierName: { 金标: "Gold", 银标: "Silver", 铜标: "Bronze", 优选: "Rising", 培育: "New" },
     tierDesc: {

@@ -189,6 +189,26 @@ export async function factoryStats() {
   return { byTier, total: total[0]?.c ?? 0, topLocations: locations };
 }
 
+// 品类覆盖：各类目下的独立工厂数（同口径排除贸易商/重复店），一厂可多类目
+export async function factoryCategoryStats() {
+  const db = getDb();
+  const NOT_DUP = sql`${factories.isTrader} = 0 AND ${factories.dupOf} IS NULL`;
+  const byCategory = await db
+    .select({ category: factoryCategories.category, c: sql<number>`count(distinct ${factoryCategories.factoryId})` })
+    .from(factoryCategories)
+    .innerJoin(factories, eq(factoryCategories.factoryId, factories.id))
+    .where(NOT_DUP)
+    .groupBy(factoryCategories.category)
+    .orderBy(desc(sql`count(distinct ${factoryCategories.factoryId})`));
+  const tagged = await db
+    .select({ c: sql<number>`count(distinct ${factoryCategories.factoryId})` })
+    .from(factoryCategories)
+    .innerJoin(factories, eq(factoryCategories.factoryId, factories.id))
+    .where(NOT_DUP);
+  const total = await db.select({ c: sql<number>`count(*)` }).from(factories).where(NOT_DUP);
+  return { byCategory, tagged: tagged[0]?.c ?? 0, total: total[0]?.c ?? 0 };
+}
+
 // ============ 佣金引擎（费率矩阵 v1.0）============
 
 export async function calcCommission(purchaseAmountUsd: number, riskTier: "A" | "B" | "C") {

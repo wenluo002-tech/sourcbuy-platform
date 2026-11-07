@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 // 登录态探针 v2：GBK 编码公司搜索→解析结果卡（年限/回头率/主营/认证/winport/loginId）→验证目标厂命中
 import { chromium } from "playwright-core";
 import iconv from "iconv-lite";

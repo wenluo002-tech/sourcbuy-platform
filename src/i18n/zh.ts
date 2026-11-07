@@ -504,6 +504,11 @@ export const zh = {
     statsNote: "实时统计自工厂数据库",
     statFactories: "严选源头工厂",
     statFactoriesSub: "资质 · 产能 · 履约三重筛查",
+    catKicker: "Category coverage",
+    catTitle: "品类覆盖",
+    catTagged: "家已建档主营类目",
+    catRest: "其余工厂档案补全中",
+    catAsk: "帮我找这个品类的工厂",
     tierSuffix: "工厂",
     tierName: { 金标: "金标", 银标: "银标", 铜标: "铜标", 优选: "优选", 培育: "培育" } as Record<string, string>,
     tierDesc: {
