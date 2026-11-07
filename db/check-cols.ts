@@ -1,0 +1,10 @@
+process.loadEnvFile();
+import { getDb } from "../api/queries/connection";
+import { sql } from "drizzle-orm";
+const db = getDb();
+const [r]: any = await db.execute(sql`SHOW COLUMNS FROM factories`);
+console.log(r.map((x: any) => x.Field).join(", "));
+const [c]: any = await db.execute(sql`SELECT COUNT(*) n FROM sourcing_api_logs WHERE created_at >= CURDATE() AND provider='wanbang'`);
+const [cost]: any = await db.execute(sql`SELECT COALESCE(SUM(cost_cny),0) s FROM sourcing_api_logs WHERE created_at >= CURDATE() AND provider='wanbang'`);
+console.log(`今日万邦: ${c[0].n} 次 / ¥${cost[0].s}`);
+process.exit(0);

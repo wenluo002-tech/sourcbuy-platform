@@ -9,6 +9,7 @@ import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import { log } from "../lib/logger";
 import { listRadar, getRadarItem } from "./radar";
 import { extractExternalUrl, resolveExternalLink, type LinkContext } from "./linkResolve";
+import { maskFactory, maskOffer, maskedFactoryName } from "../lib/mask";
 
 // ============ 选品意图：买家问"什么好卖/爆款/趋势" → 直接给真实雷达榜，不走 LLM ============
 const SELECTION_RE = /(好卖|爆款|热卖|畅销|趋势|选品|卖什么|什么.*(卖|火)|海外.*(流行|热)|trending|best[\s-]*seller|hot[\s-]*sell)/i;
@@ -102,7 +103,8 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
    - bucket=它只是该类目大类下的高分厂，没有直接证据表明做过这款——你必须说清楚"这几家是大类下的高分厂，做没做过这款要拿图询价确认，我不打包票"，绝不暗示它们做这款。
    清单全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
 17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。
-18. 买家消息以"[补充]"开头 = 他在回答界面上的补充问题卡：把答案并入理解，照着更新判断，别重复问已答过的项。以"[跳过补充]"开头 = 他明确不想补这些，按现有信息直接配，话术里别再追问这些信息。界面若附了补充问题卡（结构化选项由界面呈现），你话术里最多一句带过（如"数量和目的地顺手补上，我算得更准"），绝不逐条罗列问题。`;
+18. 买家消息以"[补充]"开头 = 他在回答界面上的补充问题卡：把答案并入理解，照着更新判断，别重复问已答过的项。以"[跳过补充]"开头 = 他明确不想补这些，按现有信息直接配，话术里别再追问这些信息。界面若附了补充问题卡（结构化选项由界面呈现），你话术里最多一句带过（如"数量和目的地顺手补上，我算得更准"），绝不逐条罗列问题。
+19. 工厂名显示为「严选工厂 No.XXXX」代号 = 该买家尚未完成首单付款，档案分层解锁是平台规则。你可以拿代号自然点评（如"排最前这家 12 年老厂"），但绝不猜测、编造或暗示真实厂名，也不要把证据/tags 拼回去反推厂名。买家追问真名时统一口径："首单完成后自动解锁完整工厂档案——厂名、验厂报告、直连方式一次给齐。"这是保护买家自己的交付仪式，说得自然，别说得像防贼。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -142,7 +144,8 @@ Rules:
 17. When the requested item carries a famous brand (Bose, Nike, Apple, Disney, Lego etc.), you must warn: genuine branded goods only move through authorized channels; Chinese factories can only make unbranded white-label equivalents; counterfeits carry legal risk at customs and on marketplaces — we don't touch them. Then give white-label sources and factories.
 18. A buyer message starting with "[补充]" = they're answering the follow-up question card: merge the answers into your understanding, update your judgment, don't re-ask what they've answered. Starting with "[跳过补充]" = they explicitly declined; proceed with what you have and don't ask again. If a follow-up card is attached to your reply (structured options rendered by the UI), mention it in at most one short sentence (e.g. "add quantity and destination when you can — sharper numbers"), never enumerate the questions one by one.
 19. When the buyer names a production region (e.g. "factories in Zhongshan"): open by answering the region head-on — "here are the vetted lighting factories I have in Zhongshan". If no factory in the list is from that region, say so honestly ("I don't have a vetted factory there yet"); you may share sourcing-cluster knowledge (e.g. "Guzhen, Zhongshan is China's lighting capital"), but never present a factory from another region as being in the requested one, and never imply a top pick is from the requested region when it is not.
-20. Always reply in English.`;
+20. When factory names show as codenames like 「严选工厂 No.XXXX」, the buyer hasn't completed a first paid order — tiered profile unlock is platform policy. Use the codename naturally in comments ("the top pick, a 12-year veteran shop"), but NEVER guess, invent, or hint at the real factory name, and never piece it together from evidence or tags. If the buyer asks for the name, give the standard line: "the full factory profile — name, audit report, direct contact — unlocks automatically once your first order completes." Frame it as a delivery milestone that protects the buyer, not as suspicion.
+21. Always reply in English.`;
 
 // greeting 英文静态开场白
 const GREETING_FALLBACK_EN =
@@ -283,7 +286,7 @@ function buildFallbackReply(
   const directCount = factories.filter((f) => f.matchBasis === "direct").length;
   if (linkedCount > 0) {
     const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
-    const sample = l0?.linkedOffer ? `比如${l0.name}，这款它正在卖，出厂 ¥${l0.linkedOffer.price} 起、上游销量 ${l0.linkedOffer.sales.toLocaleString()}——在售数据我刚核过` : "";
+    const sample = l0?.linkedOffer ? `比如清单最前这家（${l0.name}），这款它正在卖，出厂 ¥${l0.linkedOffer.price} 起、上游销量 ${l0.linkedOffer.sales.toLocaleString()}——在售数据我刚核过` : "";
     parts.push(
       `${what}有个硬证据：${linkedCount} 家严选厂就在卖这款，在售链接、出厂价、销量我都逐一核对过${sample ? "——" + sample : ""}。${directCount > 0 ? `另有 ${directCount} 家明确做这类产品的厂，` : ""}${factories.length - linkedCount - directCount > 0 ? `再附 ${factories.length - linkedCount - directCount} 家同大类高分厂做参考，` : ""}卡片在下面，证据都摊开着。`,
     );
@@ -350,7 +353,7 @@ function buildFallbackReplyEn(
   const directCount = factories.filter((f) => f.matchBasis === "direct").length;
   if (linkedCount > 0) {
     const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
-    const sample = l0?.linkedOffer ? ` ${l0.name}, for one, is selling this exact item — from ¥${l0.linkedOffer.price}, upstream sales ${l0.linkedOffer.sales.toLocaleString()}; I verified the listing just now.` : "";
+    const sample = l0?.linkedOffer ? ` The top pick (${l0.name}) is selling this exact item — from ¥${l0.linkedOffer.price}, upstream sales ${l0.linkedOffer.sales.toLocaleString()}; I verified the listing just now.` : "";
     parts.push(
       `${what} comes with hard evidence: ${linkedCount} vetted factories are selling this exact item — listing, EXW price and sales all checked live.${sample}${directCount > 0 ? ` Another ${directCount} explicitly make this kind of product.` : ""}${factories.length - linkedCount - directCount > 0 ? ` Plus ${factories.length - linkedCount - directCount} high scorers in the broader category for reference.` : ""} Cards are below, evidence laid out.`,
     );
@@ -376,7 +379,7 @@ function buildFallbackReplyEn(
   return parts.join("\n\n");
 }
 
-async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh") {
+async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh", unlocked = false) {
   // 雷达卡 CTA 直达：radarId 钉死品类与信号上下文，跳过 LLM 意图抽取（词库没收录的品也不受影响）
   // 必须在选品意图拦截之前——CTA 话术含"爆款"字样，否则会被误判成选品意图
   let radarCtx: Awaited<ReturnType<typeof getRadarItem>> | null = null;
@@ -617,6 +620,18 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     }
   }
 
+  // 权益锁（2026-11-07 罗总授权）：未解锁买家的厂名全部换代号。
+  // 必须在话术组装前 mask——LLM 上下文、兜底话术模板、前端卡片同一份数据，只此一道闸
+  if (!unlocked) {
+    factories = factories.map((f) => ({ ...f, name: maskedFactoryName(f.id), masked: true }));
+    if (productInfo?.factory) {
+      productInfo = { ...productInfo, factory: maskFactory(productInfo.factory, false) };
+    }
+    if (productInfo?.offer) {
+      productInfo = { ...productInfo, offer: maskOffer(productInfo.offer, false)! };
+    }
+  }
+
   // 阶段三：基于真实结果写话术
   const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
   const facts = JSON.stringify({
@@ -727,9 +742,9 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
 }
 
 // 最外层保险：任何漏网异常都不让买家看到报错——返回诚实的降级话术（HTTP 200），并留日志可查
-export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh") {
+export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh", unlocked = false) {
   try {
-    return await sourcingChatInner(message, history, radarId, imageData, locale);
+    return await sourcingChatInner(message, history, radarId, imageData, locale, unlocked);
   } catch (e) {
     log.error("ai.chat 未捕获异常，走全兜底", { error: e instanceof Error ? e.message : String(e) });
     return {

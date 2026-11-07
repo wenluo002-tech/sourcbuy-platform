@@ -2,6 +2,7 @@ import { getDb } from "./connection";
 import { factories, factoryScores, factoryCategories, commissionRules } from "../../db/schema";
 import { eq, and, desc, like, gte, lte, sql, type SQL } from "drizzle-orm";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
+import { maskFactory, maskedFactoryName } from "../lib/mask";
 import {
   volumetricRule,
   findDestination,
@@ -24,6 +25,7 @@ export interface FactoryFilter {
   keyword?: string;
   page?: number;
   pageSize?: number;
+  unlocked?: boolean; // 权益锁：首单付款用户看真名，其余访客看代号（2026-11-07 罗总授权）
 }
 
 export async function findFactories(f: FactoryFilter) {
@@ -84,7 +86,7 @@ export async function findFactories(f: FactoryFilter) {
       .from(factories)
       .where(where),
   ]);
-  return { rows, total: cnt[0]?.c ?? 0, page, pageSize, category: categoryMatched };
+  return { rows: rows.map((r) => maskFactory(r, !!f.unlocked)), total: cnt[0]?.c ?? 0, page, pageSize, category: categoryMatched };
 }
 
 function eq2(col: any, val: any) {
@@ -109,7 +111,7 @@ function median(nums: number[]): number | null {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-export async function findFactoryById(id: number) {
+export async function findFactoryById(id: number, unlocked = false) {
   const db = getDb();
   const rows = await db.select().from(factories).where(eq(factories.id, id)).limit(1);
   if (!rows[0]) return null;
@@ -161,7 +163,7 @@ export async function findFactoryById(id: number) {
     ) as Record<ScoreDim, number | null>;
   }
   return {
-    ...rows[0],
+    ...maskFactory(rows[0], unlocked)!,
     scores: scores[0] ?? null,
     category,
     categoryMedians,
@@ -545,6 +547,7 @@ function r2(n: number) {
 export interface MatchedFactory {
   id: number;
   name: string;
+  masked?: boolean; // 权益锁：true=厂名为代号，首单付款后解锁完整档案
   tier: string | null;
   score: number | null;
   years: number | null;
@@ -569,6 +572,7 @@ export async function matchFactories(intent: {
   location?: string;
   minScore?: number;
   limit?: number;
+  unlocked?: boolean; // 权益锁：false=厂名以代号输出（查询匹配仍用真名，仅在出口处遮罩）
 }): Promise<MatchedFactory[]> {
   // 推荐中立条款（费率矩阵 v1.0 §3.3）：排序仅依据评分与经营指标，工厂不可付费影响
   const category = intent.keyword ? expandQuery(intent.keyword).category : null;
@@ -651,7 +655,8 @@ export async function matchFactories(intent: {
         : [];
     return {
       id: f.id,
-      name: f.name,
+      name: intent.unlocked ? f.name : maskedFactoryName(f.id),
+      masked: !intent.unlocked,
       tier: f.tier,
       score: f.score ? Number(f.score) : null,
       years: f.years ? Number(f.years) : null,

@@ -339,10 +339,15 @@ function ProductStrip({
                   if (!rule) return null;
                   const minApplied = (((qty || 1) * price) / REF_RATE) * rule.rate < rule.minFee;
                   return (
-                    <p className="mt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
-                      {t("chat.feeLine", { rate: parseFloat((rule.rate * 100).toFixed(1)) })}
-                      {minApplied ? t("chat.feeMin") : ""}
-                    </p>
+                    <>
+                      <p className="mt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                        {t("chat.feeLine", { rate: parseFloat((rule.rate * 100).toFixed(1)) })}
+                        {minApplied ? t("chat.feeMin") : ""}
+                      </p>
+                      <p className="mt-1 border-t border-dashed border-[var(--sb-line)] pt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                        {t("chat.diyLine")}
+                      </p>
+                    </>
                   );
                 })()}
                 <div className="mt-1.5 flex items-center justify-between gap-1">
@@ -473,10 +478,15 @@ function ProductCard({
             if (!rule) return null;
             const minApplied = (((qty || 1) * main.price) / REF_RATE) * rule.rate < rule.minFee;
             return (
-              <p className="mt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
-                {t("chat.feeLine", { rate: parseFloat((rule.rate * 100).toFixed(1)) })}
-                {minApplied ? t("chat.feeMin") : ""}
-              </p>
+              <>
+                <p className="mt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                  {t("chat.feeLine", { rate: parseFloat((rule.rate * 100).toFixed(1)) })}
+                  {minApplied ? t("chat.feeMin") : ""}
+                </p>
+                <p className="mt-1 border-t border-dashed border-[var(--sb-line)] pt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                  {t("chat.diyLine")}
+                </p>
+              </>
             );
           })()}
         </div>
@@ -843,6 +853,12 @@ export default function BuyerChat() {
                           {f.score}
                         </span>
                       </div>
+                      {(f as any).masked && (
+                        <p className="mt-1 flex items-center gap-1 text-[10px] text-[var(--sb-ink-40)]">
+                          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          {t("chat.maskedHint")}
+                        </p>
+                      )}
                       <p className="mt-1 text-xs text-[var(--sb-ink-40)]">
                         {[f.tier ? t(`home.tierName.${f.tier}`) : null, f.location, f.years ? `${f.years}${t("chat.yearsSuffix")}` : null]
                           .filter(Boolean)

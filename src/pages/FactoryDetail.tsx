@@ -79,6 +79,16 @@ function FactoryDetailView({ f }: { f: any }) {
         </div>
       )}
 
+      {(f as any).masked && (
+        <div className="rounded-lg border border-[var(--sb-line)] bg-[var(--sb-paper)] px-4 py-3 text-sm leading-relaxed text-[var(--sb-ink-60)]">
+          <span className="mr-1.5 inline-flex items-center gap-1 rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-xs font-medium text-[var(--sb-brand)]">
+            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            {t("factoryDetail.maskedBadge")}
+          </span>
+          {t("factoryDetail.maskedNotice")}
+        </div>
+      )}
+
       <div className="rounded-xl border border-black/10 bg-white p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

@@ -19,6 +19,7 @@ import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } f
 import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, appendMessage, listThreads, getThreadMessages } from "./queries/auth";
 import { createInquiry, listMyOrders, getOrderDetail, transitionOrder } from "./queries/orders";
 import { destroySession, sessionCookieHeader, clearSessionCookieHeader } from "./lib/auth";
+import { isUnlockedBuyer, maskFactory, maskOffer } from "./lib/mask";
 import { log } from "./lib/logger";
 
 export const appRouter = createRouter({
@@ -39,11 +40,13 @@ export const appRouter = createRouter({
           pageSize: z.number().optional(),
         })
       )
-      .query(({ input }) => findFactories(input)),
+      .query(async ({ input, ctx }) =>
+        findFactories({ ...input, unlocked: await isUnlockedBuyer(ctx.user?.id) })
+      ),
 
     detail: publicQuery
       .input(z.object({ id: z.number() }))
-      .query(({ input }) => findFactoryById(input.id)),
+      .query(async ({ input, ctx }) => findFactoryById(input.id, await isUnlockedBuyer(ctx.user?.id))),
 
     stats: publicQuery.query(() => factoryStats()),
     categoryStats: publicQuery.query(() => factoryCategoryStats()),
@@ -57,7 +60,9 @@ export const appRouter = createRouter({
           limit: z.number().optional(),
         })
       )
-      .query(({ input }) => matchFactories(input)),
+      .query(async ({ input, ctx }) =>
+        matchFactories({ ...input, unlocked: await isUnlockedBuyer(ctx.user?.id) })
+      ),
   }),
 
   pricing: createRouter({
@@ -107,18 +112,20 @@ export const appRouter = createRouter({
     // 粘贴 1688 链接/货号 → 真实商品详情 + 背后的严选工厂（若在我们的库中）
     detail: publicQuery
       .input(z.object({ offerId: z.string().min(6).max(20) }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const { offer, factory } = await offerWithFactory(input.offerId);
         if (!offer) throw new Error("未能获取该商品，请确认货号或链接有效");
-        return { offer, factory };
+        const unlocked = await isUnlockedBuyer(ctx.user?.id);
+        return { offer: maskOffer(offer, unlocked), factory: maskFactory(factory, unlocked) };
       }),
     // V2：缓存→万邦→点金→legacy 四级链路（同一商品 24h 内零成本）
     detailV2: publicQuery
       .input(z.object({ offerId: z.string().min(6).max(20) }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const { offer, factory } = await getOfferDetail(input.offerId);
         if (!offer) throw new Error("未能获取该商品，请确认货号或链接有效");
-        return { offer, factory };
+        const unlocked = await isUnlockedBuyer(ctx.user?.id);
+        return { offer: maskOffer(offer, unlocked), factory: maskFactory(factory, unlocked) };
       }),
     // 关键词搜品：搜索缓存 30 分钟防刷
     search: publicQuery
@@ -147,7 +154,7 @@ export const appRouter = createRouter({
       .mutation(async ({ input, ctx }) => {
         let result: any;
         try {
-          result = await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale);
+          result = await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale, await isUnlockedBuyer(ctx.user?.id));
         } catch (err) {
           const classified = classifyAiError(err);
           if (classified instanceof AiUnavailable) {

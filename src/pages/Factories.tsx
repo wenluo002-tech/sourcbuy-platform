@@ -115,6 +115,12 @@ export default function Factories() {
                 {f.score}
               </span>
             </div>
+            {(f as any).masked && (
+              <p className="mt-1.5 flex items-center gap-1 text-[10px] text-black/40">
+                <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                {t("factories.maskedHint")}
+              </p>
+            )}
             <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
               {f.tier && (
                 <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-black/60">{t(`home.tierName.${f.tier}`)}</span>
