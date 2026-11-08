@@ -12,6 +12,7 @@ import {
   getFactoryPassport,
 } from "./queries/factories";
 import { sourcingChat } from "./queries/aiSourcing";
+import { tempCheckFactory } from "./queries/tempCheck";
 import { logRecommendation, updateBuyerProfile } from "./queries/context";
 import { listRadar } from "./queries/radar";
 import { offerWithFactory } from "./queries/products";
@@ -59,6 +60,10 @@ export const appRouter = createRouter({
       .query(async ({ input, ctx }) => getFactoryPassport(input.id, await isUnlockedBuyer(ctx.user?.id))),
     stats: publicQuery.query(() => factoryStats()),
     categoryStats: publicQuery.query(() => factoryCategoryStats()),
+    // 临时查厂：买家报名字实时核查库外工厂（结果只留档 temp_factory_checks，绝不写严选库）
+    tempCheck: authedQuery
+      .input(z.object({ name: z.string().min(4).max(60) }))
+      .mutation(({ input, ctx }) => tempCheckFactory(input.name, ctx.user.id)),
 
     match: publicQuery
       .input(

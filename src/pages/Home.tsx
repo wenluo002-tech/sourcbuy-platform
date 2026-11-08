@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { CountUp, useReveal } from "@/hooks/useReveal";
 import { useT } from "@/i18n";
@@ -22,6 +22,38 @@ export default function Home() {
     const q = text.trim();
     navigate(q ? `/buyer?prefill=${encodeURIComponent(q)}` : "/buyer");
   };
+
+  // 首页附件入口：图片压缩后接力给对话页；图纸/文档只带文件名（内容不入库，走 48h 人工核价通道）
+  const attachRef = useRef<HTMLInputElement>(null);
+  function onPickAttach(f: File) {
+    if (f.size > 20 * 1024 * 1024) return; // 超限直接不带——对话页里还有显式错误提示兜底
+    const isImg = f.type.startsWith("image/") || /\.hei[cf]$/i.test(f.name);
+    if (!isImg) {
+      sessionStorage.setItem("sb.attach", JSON.stringify({ kind: "doc", name: f.name }));
+      navigate("/buyer");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        sessionStorage.setItem("sb.attach", JSON.stringify({ kind: "image", data: canvas.toDataURL("image/jpeg", 0.82) }));
+        navigate("/buyer");
+      };
+      img.onerror = () => {
+        // HEIC 等 <img> 解不了的格式：原样交给对话页的完整解码管线处理
+        sessionStorage.setItem("sb.attach", JSON.stringify({ kind: "doc", name: f.name }));
+        navigate("/buyer");
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(f);
+  }
 
   const tierCount = (t: string) =>
     stats.data?.byTier.find((x) => x.tier === t)?.c ?? 0;
@@ -101,6 +133,17 @@ export default function Home() {
                 goChat(kw);
               }}
             >
+              <input
+                ref={attachRef}
+                type="file"
+                accept="image/*,.heic,.heif,.pdf,.dwg,.dxf,.step,.stp,.zip"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onPickAttach(f);
+                  e.target.value = "";
+                }}
+              />
               <div className="flex items-stretch border border-[var(--sb-rule)] bg-white">
                 <input
                   value={kw}
@@ -108,6 +151,17 @@ export default function Home() {
                   placeholder={t("home.placeholder")}
                   className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
                 />
+                <button
+                  type="button"
+                  onClick={() => attachRef.current?.click()}
+                  title={t("home.attachBtn")}
+                  className="flex shrink-0 items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
+                  </svg>
+                  <span className="hidden sm:inline">{t("home.attachBtn")}</span>
+                </button>
                 <button
                   type="submit"
                   className="flex shrink-0 items-center gap-2 bg-[var(--sb-brand)] px-5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)] sm:px-7"

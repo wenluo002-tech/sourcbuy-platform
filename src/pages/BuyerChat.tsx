@@ -569,6 +569,7 @@ export default function BuyerChat() {
   ]);
   const [input, setInput] = useState("");
   const [pendingImage, setPendingImage] = useState<string | null>(null); // 待发送商品图（压缩后的 data URL）
+  const [pendingFile, setPendingFile] = useState<string | null>(null); // 待发送图纸/文档文件名（内容不入库不进模型，走 48h 人工核价通道）
   const [imgError, setImgError] = useState<string | null>(null); // 图片问题必须显式可见，绝不静默
   // M3a 会话记忆：threadId 续写；anonId 匿名设备 ID（登录后服务端归并）
   const { me } = useAuth();
@@ -636,6 +637,45 @@ export default function BuyerChat() {
     setPendingImage(canvas.toDataURL("image/jpeg", 0.82));
   }
 
+  // 语音输入：浏览器原生 SpeechRecognition，不支持的浏览器直接不渲染按钮（不摆死按钮）
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<{ stop: () => void } | null>(null);
+  const SpeechRec = typeof window !== "undefined"
+    ? ((window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition)
+    : null;
+  function toggleVoice() {
+    if (!SpeechRec) return;
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
+    const rec = new SpeechRec();
+    rec.lang = lang === "en" ? "en-US" : "zh-CN";
+    rec.interimResults = true;
+    rec.onresult = (e: any) => {
+      let txt = "";
+      for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      if (txt.trim()) setInput(txt);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recRef.current = rec;
+    setListening(true);
+    try { rec.start(); } catch { setListening(false); }
+  }
+
+  // 首页"上传图纸/照片"入口接力：sessionStorage 一次性载荷（图片=压缩 dataURL，图纸=仅文件名）
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("sb.attach");
+      if (!raw) return;
+      sessionStorage.removeItem("sb.attach");
+      const a = JSON.parse(raw);
+      if (a?.kind === "image" && typeof a.data === "string") setPendingImage(a.data);
+      else if (a?.kind === "doc" && typeof a.name === "string") setPendingFile(a.name);
+    } catch { /* 载荷损坏直接忽略，绝不阻塞对话页 */ }
+  }, []);
+
   // 只滚动聊天容器本身；scrollIntoView 会带着整页滚动，导致吸顶导航压住内容
   useEffect(() => {
     const el = scrollRef.current;
@@ -643,13 +683,16 @@ export default function BuyerChat() {
   }, [turns, chat.isPending]);
 
   function send(text: string, radarId?: number) {
-    const msg = text.trim() || (pendingImage ? t("chat.defaultImageMsg") : "");
+    const fileMarker = pendingFile ? (lang === "en" ? `[Drawing attached: ${pendingFile}]` : `[图纸附件：${pendingFile}]`) : "";
+    const base = text.trim() || (pendingImage ? t("chat.defaultImageMsg") : pendingFile ? t("chat.defaultDocMsg") : "");
+    const msg = fileMarker ? `${base ? base + " " : ""}${fileMarker}` : base;
     if (!msg || chat.isPending) return;
     const img = pendingImage;
     const history = turns.map((turn) => ({ role: turn.role, content: turn.content }));
     setTurns((ts) => [...ts, { role: "user", content: msg, imageUrl: img ?? undefined }]);
     setInput("");
     setPendingImage(null);
+    setPendingFile(null);
     doMutate(msg, history, false, radarId, img ?? undefined);
   }
 
@@ -1016,11 +1059,24 @@ export default function BuyerChat() {
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif,.pdf,.dwg,.dxf,.step,.stp,.zip"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) pickImage(f);
+            if (f) {
+              // 图片走视觉识别管线；图纸/文档只记文件名（内容不入库不进模型），走 48h 人工核价通道
+              if (f.type.startsWith("image/") || /\.hei[cf]$/i.test(f.name)) {
+                pickImage(f);
+              } else {
+                setImgError(null);
+                if (f.size > 20 * 1024 * 1024) {
+                  setPendingFile(null);
+                  setImgError(t("chat.imageTooLarge", { n: 20 }));
+                } else {
+                  setPendingFile(f.name);
+                }
+              }
+            }
             e.target.value = "";
           }}
         />
@@ -1031,6 +1087,24 @@ export default function BuyerChat() {
             <button
               type="button"
               onClick={() => setPendingImage(null)}
+              className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-[var(--sb-ink-40)] hover:text-[var(--sb-ink)]"
+            >
+              {t("chat.remove")}
+            </button>
+          </div>
+        )}
+        {pendingFile && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--sb-line)] bg-white px-2.5 py-2">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--sb-line)] text-[var(--sb-ink-60)]" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M4 1.5h5.5L12.5 4.5v10H4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                <path d="M9.5 1.5v3h3" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1 truncate text-xs text-[var(--sb-ink-60)]">{t("chat.docReady", { name: pendingFile })}</span>
+            <button
+              type="button"
+              onClick={() => setPendingFile(null)}
               className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-[var(--sb-ink-40)] hover:text-[var(--sb-ink)]"
             >
               {t("chat.remove")}
@@ -1053,15 +1127,31 @@ export default function BuyerChat() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            title={t("chat.imageBtnTitle")}
+            title={t("chat.attachTitle")}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
           >
             <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" strokeWidth="1.4" />
-              <circle cx="5.5" cy="6" r="1.2" fill="currentColor" />
-              <path d="m3 12 3.5-3.5 2.5 2.5 2-2 2 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
             </svg>
           </button>
+          {SpeechRec && (
+            <button
+              type="button"
+              onClick={toggleVoice}
+              title={t(listening ? "chat.voiceStop" : "chat.voiceStart")}
+              aria-pressed={listening}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+                listening
+                  ? "border-[var(--sb-brand)] bg-[var(--sb-brand-soft)] text-[var(--sb-brand)]"
+                  : "border-[var(--sb-line)] text-[var(--sb-ink-60)] hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -1070,7 +1160,7 @@ export default function BuyerChat() {
           />
           <button
             type="submit"
-            disabled={chat.isPending || (!input.trim() && !pendingImage)}
+            disabled={chat.isPending || (!input.trim() && !pendingImage && !pendingFile)}
             className="h-11 shrink-0 rounded-xl bg-[var(--sb-brand)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
           >
             {t("chat.send")}

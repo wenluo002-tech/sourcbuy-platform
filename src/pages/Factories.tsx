@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useT } from "@/i18n";
+import { useAuth } from "@/auth";
 
 const TIERS = ["金标", "银标", "铜标", "优选", "培育"];
 const CERTS = [
@@ -85,6 +86,8 @@ export default function Factories() {
         {q.isLoading ? t("factories.loading") : t("factories.totalLine", { n: q.data?.total ?? 0 })}
       </p>
 
+      <TempCheck sel={sel} />
+
       {!q.isLoading && q.data?.total === 0 && (
         <div className="rounded-xl border border-dashed border-black/15 bg-white p-8 text-center">
           <p className="font-medium">{t("factories.emptyTitle")}</p>
@@ -163,6 +166,143 @@ export default function Factories() {
           >
             {t("factories.next")}
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 临时查厂（v66）：库外工厂实时核查。结果绝不写入严选库——大字标注，分数公式全公开。 */
+function TempCheck({ sel }: { sel: string }) {
+  const { t } = useT();
+  const { me } = useAuth();
+  const [name, setName] = useState("");
+  const m = trpc.factories.tempCheck.useMutation();
+  const r = m.data;
+
+  const factRow = (label: string, value: string | null) => (
+    <div key={label} className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
+      <span className="shrink-0 text-black/45">{label}</span>
+      <span className="text-right font-medium text-black/80">{value ?? t("factories.tempMissing")}</span>
+    </div>
+  );
+
+  return (
+    <div className="rounded-xl border border-black/10 bg-white p-5">
+      <h2 className="font-semibold tracking-tight">{t("factories.tempTitle")}</h2>
+      <p className="mt-1 text-xs leading-relaxed text-black/50">{t("factories.tempDesc")}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t("factories.tempPh")}
+          className={sel + " min-w-64 flex-1"}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && me && name.trim().length >= 4 && !m.isPending) m.mutate({ name: name.trim() });
+          }}
+        />
+        {me ? (
+          <button
+            disabled={name.trim().length < 4 || m.isPending}
+            onClick={() => m.mutate({ name: name.trim() })}
+            className="sb-pill bg-[var(--sb-brand)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+          >
+            {m.isPending ? t("factories.tempChecking") : t("factories.tempBtn")}
+          </button>
+        ) : (
+          <Link
+            to="/login"
+            className="sb-pill border border-black/15 px-5 py-2.5 text-sm hover:bg-black/[0.03]"
+          >
+            {t("factories.tempLogin")}
+          </Link>
+        )}
+      </div>
+
+      {m.isError && (
+        <p className="mt-3 text-sm text-[var(--sb-warn)]">{t("factories.tempUpstream")}</p>
+      )}
+
+      {r && !r.ok && (
+        <p className="mt-3 text-sm text-[var(--sb-warn)]">
+          {r.reason === "daily_cap"
+            ? t("factories.tempDailyCap")
+            : r.reason === "fuse"
+              ? t("factories.tempFuse")
+              : r.reason === "invalid"
+                ? t("factories.tempPh")
+                : t("factories.tempUpstream")}
+        </p>
+      )}
+
+      {r?.ok && (
+        <div className="mt-4 rounded-lg border border-black/10">
+          {/* 大字免责横幅：非严选库正式评分 */}
+          <div className="rounded-t-lg bg-[var(--sb-warn)]/10 px-4 py-2.5 text-xs font-semibold text-[var(--sb-warn)]">
+            {t("factories.tempBanner")}
+            {r.report.cached && <span className="ml-2 font-normal text-black/45">· {t("factories.tempCached")}</span>}
+          </div>
+
+          {r.report.status === "not_found" && (
+            <p className="px-4 py-4 text-sm leading-relaxed text-black/60">{t("factories.tempNotFound")}</p>
+          )}
+          {r.report.status === "mismatch" && (
+            <p className="px-4 py-4 text-sm leading-relaxed text-black/60">
+              {t("factories.tempMismatch", { title: r.report.matchedTitle ?? "?" })}
+            </p>
+          )}
+
+          {r.report.status === "ok" && (
+            <div className="grid gap-5 px-4 py-4 sm:grid-cols-2">
+              {/* 左：事实 */}
+              <div>
+                <p className="mb-1 text-sm font-semibold">{r.report.matchedTitle}</p>
+                <div className="divide-y divide-black/[0.06]">
+                  {factRow(t("factories.tempFactYears"), r.report.facts.years != null ? `${r.report.facts.years}${t("factories.tempYearsSuffix")}` : null)}
+                  {factRow(t("factories.tempFactRegion"), r.report.facts.region)}
+                  {factRow(t("factories.tempFactLevel"), r.report.facts.level)}
+                  {factRow(t("factories.tempFactMode"), r.report.facts.productionType)}
+                  {factRow(t("factories.tempFactEmp"), r.report.facts.employeeCount != null ? `${r.report.facts.employeeCount}${t("factories.tempEmpSuffix")}` : null)}
+                  {factRow(t("factories.tempFactArea"), r.report.facts.areaSqm != null ? `${r.report.facts.areaSqm}${t("factories.tempAreaSuffix")}` : null)}
+                  {factRow(t("factories.tempFactCert"), r.report.facts.cert)}
+                  {factRow(t("factories.tempFactCustom"), r.report.facts.customService == null ? null : r.report.facts.customService ? t("factories.tempYes") : t("factories.tempNo"))}
+                  {factRow(t("factories.tempFactQc"), r.report.facts.qualityControl)}
+                  {factRow(t("factories.tempFactCredit"), r.report.facts.creditCode)}
+                  {factRow(t("factories.tempFactHome"), r.report.facts.home)}
+                </div>
+              </div>
+              {/* 右：初核分 + 拆解 */}
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs text-black/45">{t("factories.tempScoreLabel")}</span>
+                  <span className="sb-num text-3xl font-bold text-[var(--sb-warn)]">{r.report.score}</span>
+                  <span className="text-xs text-black/35">/ 100</span>
+                </div>
+                <p className="mb-2 mt-3 text-xs font-medium text-black/45">{t("factories.tempBreakdown")}</p>
+                <div className="space-y-2">
+                  {r.report.breakdown.map((b) => (
+                    <div key={b.key}>
+                      <div className="flex items-baseline justify-between gap-2 text-xs">
+                        <span className="text-black/60">
+                          {t(`factories.tempBd${b.key[0].toUpperCase()}${b.key.slice(1)}`)}
+                          <span className="ml-1 text-black/35">({b.fact || t("factories.tempMissing")})</span>
+                        </span>
+                        <span className="sb-num shrink-0 font-medium text-black/70">
+                          {b.points}/{b.max}
+                        </span>
+                      </div>
+                      <div className="mt-1 h-1.5 rounded-full bg-black/[0.06]">
+                        <div
+                          className="h-1.5 rounded-full bg-[var(--sb-brand)]"
+                          style={{ width: `${(b.points / b.max) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

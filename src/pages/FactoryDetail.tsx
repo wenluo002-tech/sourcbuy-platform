@@ -7,6 +7,8 @@ import { useT } from "@/i18n";
 const IMAGE_GROUP_KEYS = ["product", "workshop", "equipment", "warehouse", "gate", "catalog"] as const;
 
 const SCORE_KEYS = ["qualityCert", "factoryPower", "trustYears", "repurchase", "production", "service", "sales"] as const;
+/** scores 行存在但 7 维全空 = 子分尚未核实（等同无子分），走占位卡而不是渲染一张全空的图 */
+const hasScoreDims = (s: any) => !!s && SCORE_KEYS.some((k) => s[k] != null);
 
 export default function FactoryDetail() {
   const { id } = useParams<{ id: string }>();
@@ -105,7 +107,11 @@ function FactoryDetailView({ f }: { f: any }) {
             </div>
           </div>
           <div className="text-right">
-            <div className="sb-num text-3xl font-bold text-[var(--sb-brand)]">{f.score}</div>
+            {f.score != null ? (
+              <div className="sb-num text-3xl font-bold text-[var(--sb-brand)]">{f.score}</div>
+            ) : (
+              <div className="text-sm font-semibold text-[var(--sb-warn)]">{t("factoryDetail.scorePending")}</div>
+            )}
             <div className="text-xs text-black/45">{t("factoryDetail.scoreLabel")}</div>
           </div>
         </div>
@@ -181,7 +187,7 @@ function FactoryDetailView({ f }: { f: any }) {
           </div>
         )}
 
-      {f.scores && (
+      {hasScoreDims(f.scores) && (
         <div className="rounded-xl border border-black/10 bg-white p-6">
           <h2 className="mb-1 font-semibold">{t("factoryDetail.scoresTitle")}</h2>
           <p className="mb-4 text-xs leading-relaxed text-black/45">
@@ -262,6 +268,14 @@ function FactoryDetailView({ f }: { f: any }) {
               {t("factoryDetail.verifiedNote", { n: SCORING_FORMULA.verifiedOn, e: SCORING_FORMULA.maxError })}
             </p>
           </details>
+        </div>
+      )}
+
+      {/* 无子分的培育档新厂：不藏、不编，显式说明评分补全中 */}
+      {!hasScoreDims(f.scores) && (
+        <div className="rounded-xl border border-dashed border-black/15 bg-white p-6">
+          <h2 className="mb-1 font-semibold">{t("factoryDetail.scorePendingLabel")}</h2>
+          <p className="text-sm leading-relaxed text-black/50">{t("factoryDetail.scoresPendingDesc")}</p>
         </div>
       )}
 

@@ -5,7 +5,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 await page.goto("http://localhost:3200/factories", { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.waitForTimeout(1000);
 await page.evaluate(() => {
-  const btns = [...document.querySelectorAll("button, a")];
+  const btns = Array.from(document.querySelectorAll("button, a"));
   const zh = btns.find((b) => b.textContent?.trim() === "中文");
   if (zh) (zh as HTMLElement).click();
 });

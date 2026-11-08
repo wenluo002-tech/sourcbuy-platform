@@ -1,0 +1,11 @@
+process.loadEnvFile();
+import { getDb } from "../api/queries/connection";
+import { sql } from "drizzle-orm";
+const db: any = getDb();
+const [c1]: any = await db.execute(sql`SELECT COUNT(*) n FROM factories`);
+const [c2]: any = await db.execute(sql`SELECT COUNT(*) n FROM factory_scores`);
+console.log("factories:", c1[0].n, "scores:", c2[0].n);
+const [rows]: any = await db.execute(sql`SELECT factory_id id FROM factory_scores WHERE quality_cert IS NULL AND factory_power IS NULL AND trust_years IS NULL AND repurchase IS NULL AND production IS NULL AND service IS NULL AND sales IS NULL LIMIT 5`);
+console.log("all-null-dim rows:", rows.length);
+for (const r of rows) console.log(JSON.stringify(r));
+process.exit(0);

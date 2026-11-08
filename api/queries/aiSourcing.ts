@@ -403,6 +403,28 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     }
   }
 
+  // 图纸/文件附件直达：买家传了 PDF/DWG 等图纸类文件（前端只记文件名、不入库）。
+  // 诚实口径：不装能逐行读图——确定性话术确认收到+顺势要规格+48h 人工核价，并引导截图关键页（图片我能直接看）
+  const drawM = message.match(/\[(?:图纸附件|Drawing attached)[：:]\s*([^\]]+)\]/);
+  if (drawM) {
+    const fname = drawM[1].trim().slice(0, 80);
+    const reply = locale === "en"
+      ? `Got your file "${fname}". Straight talk: I won't pretend to read engineering drawings line by line — our sourcing team will price it manually against your drawing, with a firm quote within 48 hours.\n\nTo price it right, tell me three things: 1) material / spec requirements, 2) quantity, 3) destination country or port. And if you can, screenshot the key pages and send them as photos — I can read images directly.`
+      : `图纸《${fname}》收到。说句实话：图纸这类文件我不装能逐行看懂——采购团队会按你的图纸人工核价，48 小时内给你正式报价。\n\n为了核得准，顺手告诉我三件事：1）材质或规格要求；2）数量；3）发到哪个国家/港口。如果方便，把关键页截成图片发我，图片我能直接看、直接评。`;
+    return {
+      reply,
+      understood: true,
+      intent: { product: null, quantity: null },
+      factoryQa: false,
+      manualQuote: true,
+      factories: [],
+      products: [],
+      linkContext: null,
+      product: null,
+      followUp: null,
+    };
+  }
+
   // 外链识别：买家贴了亚马逊/TikTok/独立站等零售链接（1688 链接走 extractOfferId 老链路，不在此列）
   // 与模型清单并行抓取，不阻塞意图抽取之后的链路
   const extUrl = extractExternalUrl(message);
