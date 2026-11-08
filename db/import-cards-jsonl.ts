@@ -24,7 +24,7 @@ for (const line of lines) {
   seen.add(id);
 
   const [rows]: any = await db.execute(sql`
-    SELECT id, name, member_id, seller_user_id, years, repurchase_rate, monthly_buyers, is_super, deep_inspected, production_type, oem_mode, home, area_sqm, cert, tags
+    SELECT id, name, member_id, seller_user_id, years, repurchase_rate, monthly_buyers, near90d_sales, is_super, deep_inspected, production_type, oem_mode, home, area_sqm, cert, tags
     FROM factories WHERE id=${id} LIMIT 1`);
   const f = rows?.[0];
   if (!f) { skippedNoFactory++; continue; }
@@ -38,18 +38,26 @@ for (const line of lines) {
     // 月买家数：直读 monthlyBuyers，兼容卡片 info 原始键值「月买家数」（纯数字才采）
     const mb = c.monthlyBuyers ?? String(c.info?.["月买家数"] ?? "").match(/\d+/)?.[0];
     if (f.monthly_buyers == null && mb != null && Number(mb) > 0) writes.monthly_buyers = Number(mb);
+    // 近90天销量：卡片原生字段，原样字符串入档（如 "100+"/"1万+"），绝不换算成月均、绝不冒充月买家数
+    const n90 = c.info?.["近90天销量"];
+    if (!f.near90d_sales && typeof n90 === "string" && n90.trim()) writes.near90d_sales = n90.trim().slice(0, 32);
     // 徽章只写正向信号：卡片明确展示才写 1，不展示不动（缺席≠否定）
     if (c.isSuper === true && (f.is_super == null || f.is_super === 0)) writes.is_super = 1;
     if (c.deepInspected === true && (f.deep_inspected == null || f.deep_inspected === 0)) writes.deep_inspected = 1;
     if (!f.production_type && c.ptype) writes.production_type = c.ptype;
     if (!f.oem_mode && Array.isArray(c.oem) && c.oem.length) writes.oem_mode = c.oem.join("/");
     if (f.area_sqm == null && c.areaSqm != null) writes.area_sqm = c.areaSqm;
-    if (!f.cert && c.cert) writes.cert = String(c.cert).replace(/\s*\|\s*$/, "");
+    // cert 净化：「以上信息已通过深度验厂认证」是徽章文案不是资质认证（与 deepInspected 信号重合），绝不写进 cert
+    const certRaw = c.cert ? String(c.cert).replace(/\s*\|\s*$/, "").trim() : "";
+    const certClean = /深度验厂认证/.test(certRaw) ? "" : certRaw;
+    if (!f.cert && certClean) writes.cert = certClean;
     const uidM = String(c.memberId ?? "").match(/^b2b-(\d+)/);
     if ((!f.seller_user_id || f.seller_user_id === "") && uidM) writes.seller_user_id = uidM[1];
-    if (!/^b2b-\d/.test(f.member_id ?? "") && c.memberId) {
-      const [dup]: any = await db.execute(sql`SELECT id FROM factories WHERE member_id=${c.memberId} AND id<>${f.id} LIMIT 1`);
-      if (!dup.length) writes.member_id = c.memberId; else collisions++;
+    // member_id 回填：memberId 优先（b2b- 格式）；空则用 loginId 兜底（老格式合法 join 键，须过格式校验+查冲突）
+    const mid = c.memberId || (/^[a-z0-9_]{3,32}$/i.test(c.loginId ?? "") ? c.loginId : "");
+    if (!/^b2b-\d/.test(f.member_id ?? "") && mid) {
+      const [dup]: any = await db.execute(sql`SELECT id FROM factories WHERE member_id=${mid} AND id<>${f.id} LIMIT 1`);
+      if (!dup.length) writes.member_id = mid; else collisions++;
     }
     if (c.mainCraft) {
       let tags: string[] = [];
@@ -60,7 +68,7 @@ for (const line of lines) {
   }
 
   if (EXECUTE) {
-    const keys = Object.keys(writes).filter((k) => /^[a-z_]+$/.test(k));
+    const keys = Object.keys(writes).filter((k) => /^[a-z0-9_]+$/.test(k));
     if (keys.length) {
       const sets = keys.map((k) => sql`${sql.raw(k)} = ${writes[k] as any}`);
       await db.execute(sql`UPDATE factories SET ${sql.join(sets, sql`, `)} WHERE id=${f.id}`);

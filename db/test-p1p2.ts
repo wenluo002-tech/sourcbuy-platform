@@ -22,12 +22,13 @@ console.log(`测试账号: #${user.id} ${user.email}`);
 // ── 1. 推荐证据链：真实对话 → logRecommendation 落库 ──
 console.log("\n[1] 推荐证据链");
 const r1 = await sourcingChat("I need 500pcs yoga pants, ship to Los Angeles", [], undefined, undefined, "en", true, user.id);
-ok("对话返回", `factories=${r1.factories.length} products=${r1.products.length}`);
+ok("对话返回", `factories=${r1.factories.length} products=${(r1.products ?? []).length}`);
 await logRecommendation({
   userId: user.id, threadId: null, message: "I need 500pcs yoga pants, ship to Los Angeles",
-  intent: { product: "yoga pants", quantity: 500, destination: "Los Angeles" },
-  factories: r1.factories, productsCount: r1.products.length,
-  hadLink: false, hadImage: false, factoryQa: !!r1.factoryQa,
+  intent: { product: "yoga pants", quantity: 500 },
+  destination: "Los Angeles",
+  factories: r1.factories as unknown as Array<Record<string, unknown>>, productsCount: (r1.products ?? []).length,
+  hadLink: false, hadImage: false, factoryQa: !!(r1 as any).factoryQa,
 });
 const [rl]: any = await db.execute(dsql`SELECT * FROM recommendation_logs WHERE user_id=${user.id} ORDER BY id DESC LIMIT 1`);
 if (rl[0]) {

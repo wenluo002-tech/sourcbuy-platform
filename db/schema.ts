@@ -42,6 +42,7 @@ export const factories = mysqlTable(
     replyRate: decimal("reply_rate", { precision: 5, scale: 1 }),
     repurchaseRate: decimal("repurchase_rate", { precision: 5, scale: 1 }),
     monthlyBuyers: int("monthly_buyers"),
+    near90dSales: varchar("near90d_sales", { length: 32 }), // 卡片原生「近90天销量」原样字符串（如 "100+"/"1万+"），绝不叫月买家数、绝不换算
     oemMode: varchar("oem_mode", { length: 128 }),
     productionType: varchar("production_type", { length: 128 }),
     serviceCapability: varchar("service_capability", { length: 255 }),
