@@ -31,6 +31,7 @@ const enChat: Messages["chat"] = {
   defaultDocMsg: "Please price the product in this drawing",
   voiceStart: "Voice input",
   voiceStop: "Stop recording",
+  voiceFailed: "Voice input isn't available in this browser — typing or sending a photo works too.",
   errorRetry:
     "That query got stuck — the supply interface was too slow, and I won't serve you half-baked data. Send it once more; if it keeps failing, browse the vetted factory library or leave me your request and I'll pick it up when I'm back.",
   followTitle: "Fill these in and I'll match sharper",

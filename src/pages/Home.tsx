@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { CountUp, useReveal } from "@/hooks/useReveal";
 import { useT } from "@/i18n";
@@ -24,9 +24,11 @@ export default function Home() {
   };
 
   // 首页附件入口：图片压缩后接力给对话页；图纸/文档只带文件名（内容不入库，走 48h 人工核价通道）
-  const attachRef = useRef<HTMLInputElement>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
   function onPickAttach(f: File) {
-    if (f.size > 20 * 1024 * 1024) return; // 超限直接不带——对话页里还有显式错误提示兜底
+    // 超限必须显式告诉买家——静默 return 在演示场合就是"点了没反应"事故
+    if (f.size > 20 * 1024 * 1024) { setAttachError(t("chat.imageTooLarge", { n: 20 })); return; }
+    setAttachError(null);
     const isImg = f.type.startsWith("image/") || /\.hei[cf]$/i.test(f.name);
     if (!isImg) {
       sessionStorage.setItem("sb.attach", JSON.stringify({ kind: "doc", name: f.name }));
@@ -133,11 +135,14 @@ export default function Home() {
                 goChat(kw);
               }}
             >
+              {/* 不用 display:none + JS .click()（部分 WebView 会静默吞掉）；
+                  label htmlFor 原生触发 + 视觉隐藏但存在于布局树的 input，兼容性最好。
+                  accept 只放通用 MIME（image/*、PDF），DWG 等冷门扩展名会让某些 WebView 打不开选择器，改由 JS 校验 */}
               <input
-                ref={attachRef}
+                id="home-attach"
                 type="file"
-                accept="image/*,.heic,.heif,.pdf,.dwg,.dxf,.step,.stp,.zip"
-                className="hidden"
+                accept="image/*,application/pdf"
+                className="absolute h-px w-px overflow-hidden opacity-0"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) onPickAttach(f);
@@ -151,17 +156,17 @@ export default function Home() {
                   placeholder={t("home.placeholder")}
                   className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
                 />
-                <button
-                  type="button"
-                  onClick={() => attachRef.current?.click()}
+                <label
+                  htmlFor="home-attach"
+                  role="button"
                   title={t("home.attachBtn")}
-                  className="flex shrink-0 items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
+                  className="flex shrink-0 cursor-pointer items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
                 >
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
                   </svg>
                   <span className="hidden sm:inline">{t("home.attachBtn")}</span>
-                </button>
+                </label>
                 <button
                   type="submit"
                   className="flex shrink-0 items-center gap-2 bg-[var(--sb-brand)] px-5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)] sm:px-7"
@@ -172,6 +177,9 @@ export default function Home() {
                   </svg>
                 </button>
               </div>
+              {attachError && (
+                <p className="mt-2 text-xs text-[#92610a]">{attachError}</p>
+              )}
             </form>
 
             <div className="mt-6 flex flex-wrap items-baseline gap-x-4">

@@ -658,10 +658,11 @@ export default function BuyerChat() {
       if (txt.trim()) setInput(txt);
     };
     rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
+    // 构造器存在≠服务可用（无语音服务/麦克风被拒）：显式提示，不装死按钮
+    rec.onerror = () => { setListening(false); setImgError(t("chat.voiceFailed")); };
     recRef.current = rec;
     setListening(true);
-    try { rec.start(); } catch { setListening(false); }
+    try { rec.start(); } catch { setListening(false); setImgError(t("chat.voiceFailed")); }
   }
 
   // 首页"上传图纸/照片"入口接力：sessionStorage 一次性载荷（图片=压缩 dataURL，图纸=仅文件名）
@@ -1056,11 +1057,14 @@ export default function BuyerChat() {
           send(input);
         }}
       >
+        {/* 同首页：label htmlFor 原生触发 + 视觉隐藏但存在于布局树（display:none+JS click 会被部分 WebView 静默吞掉）；
+            accept 只放通用 MIME，DWG 等冷门扩展名改由 JS 校验 */}
         <input
+          id="chat-attach"
           ref={fileRef}
           type="file"
-          accept="image/*,.heic,.heif,.pdf,.dwg,.dxf,.step,.stp,.zip"
-          className="hidden"
+          accept="image/*,application/pdf"
+          className="absolute h-px w-px overflow-hidden opacity-0"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) {
@@ -1124,16 +1128,16 @@ export default function BuyerChat() {
           </div>
         )}
         <div className="flex items-center gap-2 rounded-2xl border border-[var(--sb-line)] bg-white p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05)]">
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
+          <label
+            htmlFor="chat-attach"
+            role="button"
             title={t("chat.attachTitle")}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
           >
             <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
             </svg>
-          </button>
+          </label>
           {SpeechRec && (
             <button
               type="button"

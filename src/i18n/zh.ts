@@ -28,6 +28,7 @@ export const zhChat = {
   defaultDocMsg: "这份图纸的产品帮我核个价",
   voiceStart: "语音输入",
   voiceStop: "停止录音",
+  voiceFailed: "这个浏览器/设备的语音识别用不了——直接打字或发图片也行。",
   errorRetry:
     "这次查询卡住了——源头货源接口响应太慢，我不拿半截数据糊弄你。再发一次试试；连着失败就先去「严选工厂库」自己逛，或把需求留给我，我缓过来接着查。",
   followTitle: "补齐这几个，我配得更准",
