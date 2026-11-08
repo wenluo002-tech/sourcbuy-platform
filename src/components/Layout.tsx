@@ -3,6 +3,7 @@ import logoHorizontal from "@/assets/logo-horizontal.png";
 import logoMark from "@/assets/logo-mark.png";
 import { useT } from "@/i18n";
 import { useAuth } from "@/auth";
+import { trpc } from "@/providers/trpc";
 
 const NAV = [
   { to: "/buyer", key: "nav.sourcing", tag: "SOURCING" },
@@ -15,6 +16,9 @@ export default function Layout() {
   const { pathname } = useLocation();
   const { lang, setLang, t } = useT();
   const { me, logout } = useAuth();
+  // M4a：未读消息角标（登录才查，60s 内不重复请求）
+  const unreadQ = trpc.notifications.unreadCount.useQuery(undefined, { enabled: !!me, staleTime: 60_000, refetchInterval: 120_000 });
+  const unread = unreadQ.data ?? 0;
   return (
     <div className="min-h-dvh bg-[var(--sb-paper)] text-[var(--sb-ink)]">
       <header className="sticky top-0 z-40 border-b border-[var(--sb-rule)] bg-[var(--sb-paper)]">
@@ -36,7 +40,7 @@ export default function Layout() {
               Agent
             </span>
           </Link>
-          <nav className="flex items-center gap-0.5 sm:gap-1.5">
+          <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5">
             {NAV.map((n) => {
               const active =
                 n.to === "/" ? pathname === "/" : pathname.startsWith(n.to);
@@ -69,10 +73,15 @@ export default function Layout() {
             {me ? (
               <span className="ml-1 flex shrink-0 items-center gap-1.5 sm:ml-2">
                 <Link
-                  to="/orders"
-                  className="border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+                  to="/dashboard"
+                  className="relative border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
                 >
-                  {t("orders.title")}
+                  {t("dash.navEntry")}
+                  {unread > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--sb-brand)] px-1 text-[9px] font-bold text-white">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
                 </Link>
                 <span className="hidden max-w-28 truncate text-xs font-medium text-[var(--sb-ink-60)] md:block">
                   {me.displayName || me.email.split("@")[0]}

@@ -382,3 +382,42 @@ export const orderEvents = mysqlTable(
   },
   (t) => [index("ix_oevents_order").on(t.orderId, t.id)]
 );
+
+// ============ M4a 买家后台（采购工作台）============
+// 收货地址簿：DDP 到门履约的结构化地址刚需；海外买家，字段按国际地址习惯（州/省州在 city 前）
+export const addresses = mysqlTable(
+  "addresses",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
+    label: varchar("label", { length: 64 }), // 标签：公司 / 仓库 / 门店
+    contactName: varchar("contact_name", { length: 128 }).notNull(),
+    phone: varchar("phone", { length: 64 }).notNull(),
+    country: varchar("country", { length: 64 }).notNull(),
+    state: varchar("state", { length: 128 }), // 州/省（美加澳必填，其他国家可空）
+    city: varchar("city", { length: 128 }),
+    address1: varchar("address1", { length: 255 }).notNull(), // 街道门牌
+    address2: varchar("address2", { length: 255 }), // 公寓/楼层/套房
+    postcode: varchar("postcode", { length: 32 }),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_addr_user").on(t.userId, t.isDefault)]
+);
+
+// 消息中心：报价好了/订单变状态/系统通知；readAt 空=未读
+export const notifications = mysqlTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
+    type: varchar("type", { length: 32 }).notNull(), // order_status / quote_ready / system
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body"),
+    link: varchar("link", { length: 255 }), // 站内跳转路径
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_notif_user").on(t.userId, t.readAt), index("ix_notif_created").on(t.userId, t.createdAt)]
+);

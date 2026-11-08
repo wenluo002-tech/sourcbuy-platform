@@ -9,6 +9,10 @@ import Radar from './pages/Radar'
 import Login from './pages/Login'
 import Orders from './pages/Orders'
 import OrderDetail from './pages/OrderDetail'
+import Dashboard from './pages/Dashboard'
+import Addresses from './pages/Addresses'
+import Notifications from './pages/Notifications'
+import Inquiries from './pages/Inquiries'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -25,6 +29,10 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/:id" element={<OrderDetail />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/addresses" element={<Addresses />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/inquiries" element={<Inquiries />} />
       </Route>
     </Routes>
   )

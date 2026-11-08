@@ -18,6 +18,10 @@ import { classifyAiError, AiUnavailable } from "./lib/ai-client";
 import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } from "../contracts/freightRates";
 import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, appendMessage, listThreads, getThreadMessages } from "./queries/auth";
 import { createInquiry, listMyOrders, getOrderDetail, transitionOrder } from "./queries/orders";
+import {
+  listAddresses, createAddress, updateAddress, removeAddress, setDefaultAddress,
+  listNotifications, unreadCount, markRead, markAllRead, dashboardSummary,
+} from "./queries/account";
 import { destroySession, sessionCookieHeader, clearSessionCookieHeader } from "./lib/auth";
 import { isUnlockedBuyer, maskFactory, maskOffer } from "./lib/mask";
 import { log } from "./lib/logger";
@@ -275,6 +279,60 @@ export const appRouter = createRouter({
         if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
         return r;
       }),
+  }),
+
+  // ---- M4a 买家后台：地址簿 / 消息中心 / 工作台汇总（全部 authed，userId 隔离）----
+  addresses: createRouter({
+    list: authedQuery.query(({ ctx }) => listAddresses(ctx.user.id)),
+    create: authedQuery
+      .input(z.object({
+        label: z.string().max(64).optional(),
+        contactName: z.string().min(1).max(128),
+        phone: z.string().min(3).max(64),
+        country: z.string().min(1).max(64),
+        state: z.string().max(128).optional(),
+        city: z.string().max(128).optional(),
+        address1: z.string().min(1).max(255),
+        address2: z.string().max(255).optional(),
+        postcode: z.string().max(32).optional(),
+      }))
+      .mutation(({ input, ctx }) => createAddress(ctx.user.id, input)),
+    update: authedQuery
+      .input(z.object({
+        id: z.number().int().positive(),
+        label: z.string().max(64).optional(),
+        contactName: z.string().min(1).max(128).optional(),
+        phone: z.string().min(3).max(64).optional(),
+        country: z.string().min(1).max(64).optional(),
+        state: z.string().max(128).optional(),
+        city: z.string().max(128).optional(),
+        address1: z.string().min(1).max(255).optional(),
+        address2: z.string().max(255).optional(),
+        postcode: z.string().max(32).optional(),
+      }))
+      .mutation(({ input, ctx }) => {
+        const { id, ...fields } = input;
+        return updateAddress(ctx.user.id, id, fields);
+      }),
+    remove: authedQuery
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(({ input, ctx }) => removeAddress(ctx.user.id, input.id)),
+    setDefault: authedQuery
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(({ input, ctx }) => setDefaultAddress(ctx.user.id, input.id)),
+  }),
+
+  notifications: createRouter({
+    list: authedQuery.query(({ ctx }) => listNotifications(ctx.user.id)),
+    unreadCount: authedQuery.query(({ ctx }) => unreadCount(ctx.user.id)),
+    markRead: authedQuery
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(({ input, ctx }) => markRead(ctx.user.id, input.id)),
+    markAllRead: authedQuery.mutation(({ ctx }) => markAllRead(ctx.user.id)),
+  }),
+
+  dashboard: createRouter({
+    summary: authedQuery.query(({ ctx }) => dashboardSummary(ctx.user.id)),
   }),
 });
 

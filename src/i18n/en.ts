@@ -379,6 +379,80 @@ const enDestGroup: Messages["destGroup"] = {
 };
 
 
+// M4a buyer dashboard key groups
+const enDash: Messages["dash"] = {
+  navEntry: "Dashboard",
+  title: "My Dashboard",
+  sub: "Orders, to-dos, messages and addresses — all in one place.",
+  welcome: "Welcome back",
+  newInquiryCta: "New inquiry",
+  statsActive: "Active",
+  statsOrders: "Total orders",
+  statsInquiries: "Inquiries",
+  statsUnread: "Unread",
+  todos: "To-do",
+  todoQuote: "Quote to confirm",
+  todoPay: "Pending payment",
+  activeOrders: "Active orders",
+  viewAll: "View all",
+  emptyOrders: "No active orders — tell me what you need and I'll file one right away.",
+  inquiries: "My inquiries",
+  inquiriesDesc: "Every sourcing conversation is saved — replay anytime",
+  addresses: "Addresses",
+  addressesDesc: "DDP door-to-door — precise address, precise landed price",
+  messages: "Messages",
+  messagesDesc: "Quote ready, order moved — it all lands here",
+  loginTitle: "Log in to see your dashboard",
+  loginBody: "Orders, inquiries and addresses follow your account — this is your sourcing desk once you log in.",
+  loginCta: "Log in",
+};
+
+const enAddr: Messages["addr"] = {
+  title: "Shipping addresses",
+  sub: "DDP door-to-door — the more precise the address, the more accurate the landed quote.",
+  add: "Add address",
+  formTitle: "New address",
+  editTitle: "Edit address",
+  label: "Label (company / warehouse / store)",
+  contactName: "Recipient",
+  phone: "Phone",
+  country: "Country",
+  state: "State / Province",
+  city: "City",
+  address1: "Street address",
+  address2: "Apt / Floor / Suite (optional)",
+  postcode: "Postal code",
+  save: "Save",
+  saving: "Saving…",
+  cancel: "Cancel",
+  edit: "Edit",
+  delete: "Delete",
+  setDefault: "Set default",
+  defaultBadge: "Default",
+  empty: "No address yet — add one and quotes can be calculated to your door.",
+  deleteConfirm: "Delete this address?",
+  needName: "Recipient required",
+  needPhone: "Phone required",
+  needCountry: "Country required",
+  needAddr: "Street address required",
+};
+
+const enNotif: Messages["notif"] = {
+  title: "Messages",
+  sub: "Quote ready, order moved — it all lands here.",
+  empty: "No messages yet — I'll push progress here the moment it happens.",
+  markAll: "Mark all read",
+};
+
+const enInq: Messages["inq"] = {
+  title: "My inquiries",
+  sub: "Every sourcing conversation is saved — cards, quotes, factory picks, replay anytime.",
+  empty: "No inquiries yet.",
+  emptyCta: "Start your first one",
+  untitled: "Untitled inquiry",
+};
+
+
 const enOrders = {
   title: "My Orders",
   sub: "Every status change is logged and auditable — quoting, sourcing, inspection, shipping. What you see is where it actually is.",
@@ -550,6 +624,10 @@ export const en: Messages = {
   },
   chat: enChat,
   orders: enOrders,
+  dash: enDash,
+  addr: enAddr,
+  notif: enNotif,
+  inq: enInq,
   radar: enRadar,
   factories: enFactories,
   factoryDetail: enFactoryDetail,

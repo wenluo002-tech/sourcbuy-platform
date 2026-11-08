@@ -10,6 +10,12 @@ import { log } from "../lib/logger";
 import { listRadar, getRadarItem } from "./radar";
 import { extractExternalUrl, resolveExternalLink, type LinkContext } from "./linkResolve";
 import { maskFactory, maskOffer, maskedFactoryName } from "../lib/mask";
+import { enrichFactoryLive } from "./shopEnrich";
+import { getDb } from "./connection";
+import { sql as dsql } from "drizzle-orm";
+
+// 买家在打听某家具体工厂底细（人数/规模/成立年份/验厂/靠不靠谱）的识别词
+const FACTORY_QA_RE = /(多少人|员工|工人|规模|面积|厂房|成立|哪年|哪一年|验厂|实力|靠不靠谱|靠谱吗|怎么样|底细|可信|真实|employees|workers|staff|how big|factory size|established|founded|audit|audited|reliable|trust|legit)/i;
 
 // ============ 选品意图：买家问"什么好卖/爆款/趋势" → 直接给真实雷达榜，不走 LLM ============
 const SELECTION_RE = /(好卖|爆款|热卖|畅销|趋势|选品|卖什么|什么.*(卖|火)|海外.*(流行|热)|trending|best[\s-]*seller|hot[\s-]*sell)/i;
@@ -104,7 +110,7 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
    清单全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
 17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。
 18. 买家消息以"[补充]"开头 = 他在回答界面上的补充问题卡：把答案并入理解，照着更新判断，别重复问已答过的项。以"[跳过补充]"开头 = 他明确不想补这些，按现有信息直接配，话术里别再追问这些信息。界面若附了补充问题卡（结构化选项由界面呈现），你话术里最多一句带过（如"数量和目的地顺手补上，我算得更准"），绝不逐条罗列问题。
-19. 工厂名显示为「严选工厂 No.XXXX」代号 = 该买家尚未完成首单付款，档案分层解锁是平台规则。你可以拿代号自然点评（如"排最前这家 12 年老厂"），但绝不猜测、编造或暗示真实厂名，也不要把证据/tags 拼回去反推厂名。买家追问真名时统一口径："首单完成后自动解锁完整工厂档案——厂名、验厂报告、直连方式一次给齐。"这是保护买家自己的交付仪式，说得自然，别说得像防贼。`;
+19. 工厂名显示为「严选工厂 No.XXXX」代号 = 该买家尚未完成首单付款，档案分层解锁是平台规则。你可以拿代号自然点评（如"排最前这家 12 年老厂"），但绝不猜测、编造或暗示真实厂名，也不要把证据/tags 拼回去反推厂名。买家追问真名时统一口径："首单完成后自动解锁完整工厂档案——厂名、验厂报告、直连方式一次给齐。"这是保护买家自己的交付仪式，说得自然，别说得像防贼。20. 如果系统事实里有 factoryCard：买家正在打听这家工厂的底细，直接正面回答。卡里的字段（员工人数/厂房面积/认证/开店年限/月买家数等）全部是核过的真实档案；注意 storeYears 是诚信通店铺年限，不是工厂成立年份，别混着说。liveChecked=true 时可以自然地说"我刚帮你现场核实了这家店铺的档案"。missingFields 列出的字段就是还没核实到的——标准口径是"这个我不猜，跟工厂核实后回复你"，绝不允许编数字或含糊带过。可以顺带给同类工厂的常见区间作参考（如"做这类产品的厂通常 50–100 人规模"），但必须明说那是同类参考、不是这家的事实。答完底细顺势往下一步引：问数量/目的地，或者说"要不要我按你的量出一份含运费到门的报价？拿不准就先下样品单（$30 起）验货再放大。"`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -145,7 +151,8 @@ Rules:
 18. A buyer message starting with "[补充]" = they're answering the follow-up question card: merge the answers into your understanding, update your judgment, don't re-ask what they've answered. Starting with "[跳过补充]" = they explicitly declined; proceed with what you have and don't ask again. If a follow-up card is attached to your reply (structured options rendered by the UI), mention it in at most one short sentence (e.g. "add quantity and destination when you can — sharper numbers"), never enumerate the questions one by one.
 19. When the buyer names a production region (e.g. "factories in Zhongshan"): open by answering the region head-on — "here are the vetted lighting factories I have in Zhongshan". If no factory in the list is from that region, say so honestly ("I don't have a vetted factory there yet"); you may share sourcing-cluster knowledge (e.g. "Guzhen, Zhongshan is China's lighting capital"), but never present a factory from another region as being in the requested one, and never imply a top pick is from the requested region when it is not.
 20. When factory names show as codenames like 「严选工厂 No.XXXX」, the buyer hasn't completed a first paid order — tiered profile unlock is platform policy. Use the codename naturally in comments ("the top pick, a 12-year veteran shop"), but NEVER guess, invent, or hint at the real factory name, and never piece it together from evidence or tags. If the buyer asks for the name, give the standard line: "the full factory profile — name, audit report, direct contact — unlocks automatically once your first order completes." Frame it as a delivery milestone that protects the buyer, not as suspicion.
-21. Always reply in English.`;
+21. Always reply in English.
+22. If system facts contain factoryCard: the buyer is asking about this specific factory's credentials — answer head-on. Every field on the card (headcount / floor area / certifications / store age / monthly buyers) is verified real profile data; note storeYears is the supplier-platform store age, NOT the factory's founding year — don't conflate them. When liveChecked=true you may naturally say "I just re-verified this shop's profile live". Fields listed in missingFields are NOT yet verified — the standard line is "I won't guess on that one; I'll confirm with the factory and get back to you", and you must NEVER invent numbers or gloss over them. You may add typical ranges for comparable factories (e.g. "factories making this usually run 50–100 staff") but must label them explicitly as category-typical reference, not this factory's fact. After answering, steer to the next step: ask quantity / destination, or offer "want a landed-cost quote at your quantity? If you're unsure, start with a sample order (from $30) to verify quality before scaling."`;
 
 // greeting 英文静态开场白
 const GREETING_FALLBACK_EN =
@@ -632,6 +639,63 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     }
   }
 
+  // 问到即采（P1，2026-11-08）：买家在打听某家具体工厂的底细（人数/规模/成立/验厂/靠不靠谱），
+  // 若该厂档案缺关键字段且 24h 内未补查过 → 实时调数据源补查这一家（约 ¥0.10，台账+当日熔断+同厂节流）。
+  // 全程 12s 封顶：超时也照常出话术，缺的字段按"我还在核实"口径诚实呈现，绝不编数字。
+  let factoryCard: Record<string, unknown> | null = null;
+  try {
+    const qaTargetId =
+      (productInfo?.factory?.id as number | undefined) ??
+      (FACTORY_QA_RE.test(message) ? factories[0]?.id : undefined);
+    if (qaTargetId && FACTORY_QA_RE.test(message)) {
+      const db = await getDb();
+      const readCard = async () => {
+        const [rows]: any = await db.execute(
+          dsql`SELECT id, name, tier, score, years, location, cert, employee_count, area_sqm, oem_mode, production_type, monthly_buyers, deep_inspected FROM factories WHERE id = ${qaTargetId} LIMIT 1`,
+        );
+        return rows?.[0] ?? null;
+      };
+      let row = await readCard();
+      let liveChecked = false;
+      if (row) {
+        // 关键字段口径：cert=管理体系认证, employee_count=员工人数, area_sqm=厂房面积, years=诚信通年限（店铺年限，非成立年份）
+        const KEY_FIELDS = ["cert", "employee_count", "area_sqm", "years"];
+        const FIELD_LABEL: Record<string, string> = { cert: "认证", employee_count: "员工人数", area_sqm: "厂房面积", years: "店铺年限" };
+        const miss = () => KEY_FIELDS.filter((k) => row![k] == null || row![k] === 0 || row![k] === "");
+        if (miss().length >= 2) {
+          const enr = await Promise.race([
+            enrichFactoryLive(qaTargetId),
+            new Promise<null>((res) => setTimeout(() => res(null), 12_000)),
+          ]);
+          if (enr?.enriched) {
+            liveChecked = true;
+            row = await readCard();
+          }
+        }
+        if (row) {
+          factoryCard = {
+            name: unlocked ? row.name : maskedFactoryName(qaTargetId),
+            tier: row.tier,
+            score: row.score != null ? Number(row.score) : null,
+            storeYears: row.years != null ? Number(row.years) : null, // 诚信通店铺年限
+            location: row.location,
+            cert: row.cert ?? null,
+            employees: row.employee_count ?? null,
+            areaSqm: row.area_sqm ?? null,
+            oemMode: row.oem_mode ?? null,
+            productionType: row.production_type ?? null,
+            monthlyBuyers: row.monthly_buyers ?? null,
+            deepInspected: row.deep_inspected === 1 ? true : null,
+            liveChecked, // true=刚刚现场核实了该厂店铺档案；false=用的既有档案
+            missingFields: miss().map((k) => FIELD_LABEL[k] ?? k), // 仍缺的字段（中文标签）——话术按"还在核实"处理，绝不允许编
+          };
+        }
+      }
+    }
+  } catch (e) {
+    log.warn("问到即采失败，按现有档案出话术", { error: e instanceof Error ? e.message : String(e) });
+  }
+
   // 阶段三：基于真实结果写话术
   const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
   const facts = JSON.stringify({
@@ -687,6 +751,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
         ? { fetchFailed: true }
         : null,
     imageContext: imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null,
+    factoryCard, // 买家在打听某家具体工厂时：该厂档案卡（缺字段见 missingFields，liveChecked=刚现场核实过）
     factories: factories.map((f) => ({
       name: f.name,
       tier: f.tier,

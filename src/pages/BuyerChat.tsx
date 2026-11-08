@@ -713,6 +713,14 @@ export default function BuyerChat() {
       const radarId = radarIdRaw && /^\d+$/.test(radarIdRaw) ? Number(radarIdRaw) : undefined;
       setParams({}, { replace: true });
       send(pre, radarId);
+      return;
+    }
+    // M4a：从「我的询价」/工作台跳入，按 URL thread 参数直接回放该会话
+    const tid = params.get("thread");
+    if (tid && /^\d+$/.test(tid) && !prefilled.current) {
+      prefilled.current = true;
+      setParams({}, { replace: true });
+      loadThread(Number(tid));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

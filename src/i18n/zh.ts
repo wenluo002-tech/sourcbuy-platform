@@ -444,6 +444,79 @@ export const zhOrders = {
   ctaInquire: "发起询价",
 };
 
+// M4a 买家后台四组键
+export const zhDash = {
+  navEntry: "工作台",
+  title: "我的工作台",
+  sub: "订单进度、待办、消息和地址，一处管全。",
+  welcome: "欢迎回来",
+  newInquiryCta: "发起新询价",
+  statsActive: "进行中",
+  statsOrders: "累计订单",
+  statsInquiries: "询价会话",
+  statsUnread: "未读消息",
+  todos: "待办",
+  todoQuote: "报价待确认",
+  todoPay: "待付款",
+  activeOrders: "进行中的订单",
+  viewAll: "查看全部",
+  emptyOrders: "暂无进行中的订单——跟我说一句你要什么，马上建档。",
+  inquiries: "我的询价",
+  inquiriesDesc: "每一次询盘对话都存着，随时回放",
+  addresses: "收货地址",
+  addressesDesc: "DDP 包税到门，地址越准报价越实",
+  messages: "消息中心",
+  messagesDesc: "报价好了、订单动了一步，都来这儿看",
+  loginTitle: "先看工作台，得登录",
+  loginBody: "订单、询价、地址都跟着账号走——登录后这里就是你的采购工作台。",
+  loginCta: "去登录",
+};
+
+export const zhAddr = {
+  title: "收货地址",
+  sub: "DDP 包税到门——地址越准，到手价算得越实。",
+  add: "新增地址",
+  formTitle: "新增地址",
+  editTitle: "编辑地址",
+  label: "标签（公司 / 仓库 / 门店）",
+  contactName: "收件人",
+  phone: "联系电话",
+  country: "国家",
+  state: "州 / 省",
+  city: "城市",
+  address1: "街道门牌",
+  address2: "公寓 / 楼层 / 套房（选填）",
+  postcode: "邮编",
+  save: "保存",
+  saving: "保存中…",
+  cancel: "取消",
+  edit: "编辑",
+  delete: "删除",
+  setDefault: "设为默认",
+  defaultBadge: "默认",
+  empty: "还没有收货地址——加一个，报价就能算到门。",
+  deleteConfirm: "确定删除这个地址？",
+  needName: "请填收件人",
+  needPhone: "请填联系电话",
+  needCountry: "请填国家",
+  needAddr: "请填街道门牌",
+};
+
+export const zhNotif = {
+  title: "消息中心",
+  sub: "报价好了、订单动了一步，都来这儿看。",
+  empty: "还没有消息——有进展我第一时间推给你。",
+  markAll: "全部已读",
+};
+
+export const zhInq = {
+  title: "我的询价",
+  sub: "每一次询盘对话都存着——卡片、报价、工厂推荐，随时回放。",
+  empty: "还没有询价记录。",
+  emptyCta: "去发起第一句",
+  untitled: "未命名询价",
+};
+
 export const zh = {
   nav: {
     sourcing: "开始采购",
@@ -546,6 +619,10 @@ export const zh = {
   },
   chat: zhChat,
   orders: zhOrders,
+  dash: zhDash,
+  addr: zhAddr,
+  notif: zhNotif,
+  inq: zhInq,
   radar: zhRadar,
   factories: zhFactories,
   factoryDetail: zhFactoryDetail,
