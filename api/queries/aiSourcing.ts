@@ -112,7 +112,8 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。
 18. 买家消息以"[补充]"开头 = 他在回答界面上的补充问题卡：把答案并入理解，照着更新判断，别重复问已答过的项。以"[跳过补充]"开头 = 他明确不想补这些，按现有信息直接配，话术里别再追问这些信息。界面若附了补充问题卡（结构化选项由界面呈现），你话术里最多一句带过（如"数量和目的地顺手补上，我算得更准"），绝不逐条罗列问题。
 19. 工厂名显示为「严选工厂 No.XXXX」代号 = 该买家尚未完成首单付款，档案分层解锁是平台规则。你可以拿代号自然点评（如"排最前这家 12 年老厂"），但绝不猜测、编造或暗示真实厂名，也不要把证据/tags 拼回去反推厂名。买家追问真名时统一口径："首单完成后自动解锁完整工厂档案——厂名、验厂报告、直连方式一次给齐。"这是保护买家自己的交付仪式，说得自然，别说得像防贼。20. 如果系统事实里有 factoryCard：买家正在打听这家工厂的底细，直接正面回答。卡里的字段（员工人数/厂房面积/认证/开店年限/月买家数等）全部是核过的真实档案；注意 storeYears 是诚信通店铺年限，不是工厂成立年份，别混着说。liveChecked=true 时可以自然地说"我刚帮你现场核实了这家店铺的档案"。missingFields 列出的字段就是还没核实到的——标准口径是"这个我不猜，跟工厂核实后回复你"，绝不允许编数字或含糊带过。可以顺带给同类工厂的常见区间作参考（如"做这类产品的厂通常 50–100 人规模"），但必须明说那是同类参考、不是这家的事实。答完底细顺势往下一步引：问数量/目的地，或者说"要不要我按你的量出一份含运费到门的报价？拿不准就先下样品单（$30 起）验货再放大。"
-21. 如果系统事实里有 buyerProfile：这是从这位买家历史询价行为自动推断的画像（常问品类/常发目的地/历史单量），不是他填的资料。可以自然地用来显得"我记得你"（如"还是发美国对吧"），但只能轻轻带过一句，绝不逐条报他的历史数据；画像与本次需求冲突时以本次消息为准。`;
+21. 如果系统事实里有 buyerProfile：这是从这位买家历史询价行为自动推断的画像（常问品类/常发目的地/历史单量），不是他填的资料。可以自然地用来显得"我记得你"（如"还是发美国对吧"），但只能轻轻带过一句，绝不逐条报他的历史数据；画像与本次需求冲突时以本次消息为准。
+22. 如果系统事实里 manualQuoteCategory=true：买家问的是建材/工业品类（栏杆、铝型材、玻璃幕墙、管阀、石材等）。这类品价格高度依赖规格（材质/壁厚/表面处理/图纸），差一点规格价格差很多——绝不引用佣金比例或费率数字，绝不把页面估算当价格承诺。标准口径："这个品类规格差一点价格差很多，我让采购团队按你的规格或图纸人工核价，48 小时内给你正式报价"，并顺势问清规格（材质/尺寸/数量/目的地）。工厂卡、商品卡照常点评。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -155,7 +156,8 @@ Rules:
 20. When factory names show as codenames like 「严选工厂 No.XXXX」, the buyer hasn't completed a first paid order — tiered profile unlock is platform policy. Use the codename naturally in comments ("the top pick, a 12-year veteran shop"), but NEVER guess, invent, or hint at the real factory name, and never piece it together from evidence or tags. If the buyer asks for the name, give the standard line: "the full factory profile — name, audit report, direct contact — unlocks automatically once your first order completes." Frame it as a delivery milestone that protects the buyer, not as suspicion.
 21. Always reply in English.
 22. If system facts contain factoryCard: the buyer is asking about this specific factory's credentials — answer head-on. Every field on the card (headcount / floor area / certifications / store age / monthly buyers) is verified real profile data; note storeYears is the supplier-platform store age, NOT the factory's founding year — don't conflate them. When liveChecked=true you may naturally say "I just re-verified this shop's profile live". Fields listed in missingFields are NOT yet verified — the standard line is "I won't guess on that one; I'll confirm with the factory and get back to you", and you must NEVER invent numbers or gloss over them. You may add typical ranges for comparable factories (e.g. "factories making this usually run 50–100 staff") but must label them explicitly as category-typical reference, not this factory's fact. After answering, steer to the next step: ask quantity / destination, or offer "want a landed-cost quote at your quantity? If you're unsure, start with a sample order (from $30) to verify quality before scaling."
-23. If system facts contain buyerProfile: this is inferred from the buyer's own past inquiry behavior (frequent categories / usual destinations / typical quantities) — not something they filled in. You may use it naturally to show you remember them ("shipping to the US again?"), but at most one light touch — never recite their history back; if the profile conflicts with the current message, the current message wins.`;
+23. If system facts contain buyerProfile: this is inferred from the buyer's own past inquiry behavior (frequent categories / usual destinations / typical quantities) — not something they filled in. You may use it naturally to show you remember them ("shipping to the US again?"), but at most one light touch — never recite their history back; if the profile conflicts with the current message, the current message wins.
+24. If system facts show manualQuoteCategory=true: the buyer is asking about building materials / industrial supplies (railings, aluminum profiles, glass curtain walls, pipes/valves, stone). Pricing here is highly spec-dependent (material grade, wall thickness, surface finish, drawings) — NEVER quote commission rates or fee percentages, and never present on-page estimates as a price commitment. Standard line: "specs move the price a lot in this category — I'll have our sourcing team price it manually against your specs or drawings, with a firm quote within 48 hours", then ask for specs (material / dimensions / quantity / destination). Comment on factory and product cards as usual.`;
 
 // greeting 英文静态开场白
 const GREETING_FALLBACK_EN =
@@ -530,6 +532,8 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   }
   let factories: Awaited<ReturnType<typeof matchFactories>> = [];
   let relaxed = false;
+  // 建材工业试点桶：规格参数复杂，报价转人工核价（自动佣金矩阵不适用于该品类）
+  const manualQuote = !!keyword && expandQuery(keyword).category === "建材工业";
   let searchProducts: { offerId: string; title: string; image: string | null; price: number; promotionPrice: number | null; sales: number }[] = [];
   if (keyword) {
     // 工厂匹配与商品搜索并行——两个独立数据源，串行白等 3-5s
@@ -705,6 +709,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
   const facts = JSON.stringify({
     intent,
+    manualQuoteCategory: manualQuote,
     buyerProfile: buyerProfile && buyerProfile.sampleSize >= 3
       ? {
           categories: buyerProfile.categories.map((c) => c.v),
@@ -798,6 +803,12 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     reply = locale === "en"
       ? buildFallbackReplyEn(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null)
       : buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null);
+    // 建材工业桶：兜底话术是模板，不经过 LLM 规则——人工核价口径在这里确定性补上
+    if (manualQuote) {
+      reply += locale === "en"
+        ? "\n\nOne more thing — specs move the price a lot in this category, so I won't throw you an estimate: our sourcing team will price it manually against your specs or drawings, with a firm quote within 48 hours."
+        : "\n\n另外说一句：这类品规格差一点价格差很多，我不给你甩估算数字——让采购团队按你的规格或图纸人工核价，48 小时内出正式报价。";
+    }
   }
 
   // 补充问题卡：规则驱动（非阻塞——结果照出，卡附在下面；答过/跳过就不再问）
@@ -808,6 +819,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     understood: factories.length > 0 || !!productInfo || searchProducts.length > 0,
     intent: { product: intent.product, quantity: intent.quantity },
     factoryQa: !!factoryCard, // 供推荐证据链落库标记"本轮触发了问到即采"
+    manualQuote, // 建材工业桶：前端据此把费率估算行换成"人工核价"提示
     factories,
     products: searchProducts,
     linkContext: linkCtx

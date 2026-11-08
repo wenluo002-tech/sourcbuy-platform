@@ -192,6 +192,7 @@ export const appRouter = createRouter({
             product: result.product ?? null,
             linkContext: result.linkContext ?? null,
             followUp: result.followUp ?? null,
+            manualQuote: (result as any).manualQuote ?? false,
           });
         } catch (e) {
           log.error("chat 落库失败（聊天本身已返回）", { error: e instanceof Error ? e.message : String(e) });

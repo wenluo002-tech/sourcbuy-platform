@@ -53,6 +53,7 @@ export const zhChat = {
   feeMin: " · 本单触发最低收费 $50",
   diyLine:
     "对照：自己找厂的隐形成本（验厂/跟单/质检/货代/纠纷）≈ 货值 15%–25% + 2–3 周（行业经验估算）；服务费已含验厂、双检、拼柜与先行赔付",
+  manualQuoteLine: "建材/工业品类：价格随规格走，采购团队按你的规格或图纸人工核价，48 小时内出正式报价",
   onSaleStock: "在售 · 可售 {n} {unit}",
   factoryVetted: "背后工厂在严选库：{name}（{tier} · {score} 分）→",
   maskedHint: "首单完成后解锁完整档案",

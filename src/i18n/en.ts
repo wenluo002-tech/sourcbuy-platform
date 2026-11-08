@@ -56,6 +56,7 @@ const enChat: Messages["chat"] = {
   feeMin: " · $50 minimum applies",
   diyLine:
     "Compare: sourcing it yourself (vetting · QC · freight · disputes) typically costs 15%–25% of goods value + 2–3 weeks, industry estimate — our fee covers vetting, double QC, consolidation & loss cover paid first",
+  manualQuoteLine: "Building/industrial supplies: pricing is spec-driven — our sourcing team quotes manually against your specs or drawings, firm quote within 48 hours",
   onSaleStock: "On sale · {n} {unit} available",
   factoryVetted: "Factory behind it is vetted: {name} ({tier} · {score}) →",
   maskedHint: "Full profile unlocks after your first order",

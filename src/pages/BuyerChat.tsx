@@ -75,6 +75,7 @@ interface Turn {
   quantity?: string | null;
   followUp?: FollowUpCardData | null;
   followUpDone?: string | null; // 已提交/已跳过后的摘要（卡片变一行灰字）
+  manualQuote?: boolean; // 建材工业桶：费率估算不适用，卡片换"人工核价"提示
 }
 
 /* 补充问题卡（追问卡优化版：多题同卡一次提交 + 跳过直寻，非阻塞——结果已先出） */
@@ -275,9 +276,11 @@ function fmtSales(n: number, lang: string = "zh"): string {
 function ProductStrip({
   products,
   quantity,
+  manualQuote,
 }: {
   products: SearchProduct[];
   quantity?: string | null;
+  manualQuote?: boolean;
 }) {
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
   const { t } = useT();
@@ -335,6 +338,14 @@ function ProductStrip({
                   </span>
                 </div>
                 {(() => {
+                  // 建材工业桶：费率估算不适用，换人工核价提示（防伪造精度）
+                  if (manualQuote) {
+                    return (
+                      <p className="mt-1 border-t border-dashed border-[var(--sb-line)] pt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                        {t("chat.manualQuoteLine")}
+                      </p>
+                    );
+                  }
                   const rule = feeRule(((qty || 1) * price) / REF_RATE);
                   if (!rule) return null;
                   const minApplied = (((qty || 1) * price) / REF_RATE) * rule.rate < rule.minFee;
@@ -382,9 +393,11 @@ function ProductStrip({
 function ProductCard({
   product,
   quantity,
+  manualQuote,
 }: {
   product: LinkedProduct;
   quantity?: string | null;
+  manualQuote?: boolean;
 }) {
   const offer = product.offer;
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
@@ -474,6 +487,14 @@ function ProductCard({
             {t("chat.fxNote", { rate: REF_RATE })}
           </p>
           {(() => {
+            // 建材工业桶：费率估算不适用，换人工核价提示（防伪造精度）
+            if (manualQuote) {
+              return (
+                <p className="mt-1 border-t border-dashed border-[var(--sb-line)] pt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                  {t("chat.manualQuoteLine")}
+                </p>
+              );
+            }
             const rule = feeRule(((qty || 1) * main.price) / REF_RATE);
             if (!rule) return null;
             const minApplied = (((qty || 1) * main.price) / REF_RATE) * rule.rate < rule.minFee;
@@ -651,6 +672,7 @@ export default function BuyerChat() {
               linkRef: (res as any).linkContext ?? null,
               quantity: (res as any).intent?.quantity ?? null,
               followUp: (res as any).followUp ?? null,
+              manualQuote: !!(res as any).manualQuote,
             },
           ]);
         },
@@ -690,6 +712,7 @@ export default function BuyerChat() {
                 linkRef: p.linkContext ?? null,
                 quantity: p.intent?.quantity ?? null,
                 followUp: null,
+                manualQuote: !!p.manualQuote,
               };
         }),
       );
@@ -817,12 +840,12 @@ export default function BuyerChat() {
 
               {/* 商品卡：产品优先，到手价入口 */}
               {turn.product && (
-                <ProductCard product={turn.product} quantity={turn.quantity} />
+                <ProductCard product={turn.product} quantity={turn.quantity} manualQuote={turn.manualQuote} />
               )}
 
               {/* 搜索商品墙：真实在售货源，出厂价 */}
               {turn.products && turn.products.length > 0 && (
-                <ProductStrip products={turn.products} quantity={turn.quantity} />
+                <ProductStrip products={turn.products} quantity={turn.quantity} manualQuote={turn.manualQuote} />
               )}
 
               {/* 工厂卡 */}
