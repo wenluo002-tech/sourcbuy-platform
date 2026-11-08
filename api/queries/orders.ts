@@ -86,6 +86,8 @@ export async function transitionOrder(input: {
   note?: string;
   quote?: OrderQuote;
   userId?: number; // 买家侧必传，用于归属校验
+  decisionTags?: string[]; // 确认报价时的选择理由（价格/交期/样品/验厂/沟通/其他）
+  decisionNote?: string; // 选择理由可选补充
 }) {
   const db = await getDb();
   const rows = await db.select().from(orders).where(eq(orders.id, input.orderId)).limit(1);
@@ -108,6 +110,10 @@ export async function transitionOrder(input: {
       status: input.to,
       updatedAt: new Date(),
       ...(input.quote ? { quote: input.quote as any } : {}),
+      // 买家确认报价时落选择理由（决策上下文核心资产；只在 quoted→pending_payment 这一跳写）
+      ...(input.decisionTags?.length || input.decisionNote
+        ? { decisionTags: (input.decisionTags ?? []) as any, decisionNote: input.decisionNote ?? null }
+        : {}),
     })
     .where(eq(orders.id, input.orderId));
   await addEvent(input.orderId, from, input.to, input.actor, input.note);

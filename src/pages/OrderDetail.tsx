@@ -1,9 +1,12 @@
 // M3b 订单详情：状态时间线（事件留痕）+ 报价单拆解 + 买家动作（接受报价/确认收货/取消）
+import { useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/auth";
 import { useT } from "@/i18n";
 import { ORDER_FLOW, type OrderStatus, type OrderQuote } from "@contracts/orderFlow";
+
+const WHY_KEYS = ["price", "leadtime", "sample", "audit", "comm", "other"] as const;
 
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +18,18 @@ export default function OrderDetail() {
   const actMut = trpc.orders.act.useMutation({
     onSuccess: () => utils.orders.detail.invalidate({ orderId: Number(id) }),
   });
+  // 选择理由埋点：点"接受报价"先展开一键标签面板（选填，可跳过）
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [whyTags, setWhyTags] = useState<string[]>([]);
+  const [whyNote, setWhyNote] = useState("");
+  const confirmQuote = (withWhy: boolean) =>
+    actMut.mutate({
+      orderId: Number(id),
+      action: "confirmQuote",
+      ...(withWhy && (whyTags.length || whyNote.trim())
+        ? { decisionTags: whyTags, decisionNote: whyNote.trim() || undefined }
+        : {}),
+    });
 
   if (loading || (!me ? false : q.isLoading)) return null;
   if (!me) {
@@ -146,13 +161,59 @@ export default function OrderDetail() {
             <span className="mr-1.5 rounded bg-[#92610a]/10 px-1.5 py-0.5 text-[10px] font-semibold">{t("orders.payPendingTag")}</span>
             {t("orders.payPending")}
           </p>
-          <button
-            onClick={() => actMut.mutate({ orderId: o.id, action: "confirmQuote" })}
-            disabled={actMut.isPending}
-            className="mt-3 w-full rounded-xl bg-[var(--sb-brand)] py-2.5 text-sm font-semibold text-[#eef4f5] hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
-          >
-            {t("orders.actQuote")}
-          </button>
+          {whyOpen ? (
+            <div className="mt-3 rounded-xl border border-[#e9d5a1] bg-white p-3.5">
+              <p className="text-xs font-medium text-[var(--sb-ink)]">{t("orders.whyTitle")}</p>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {WHY_KEYS.map((k) => {
+                  const on = whyTags.includes(k);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setWhyTags((s) => (on ? s.filter((x) => x !== k) : [...s, k]))}
+                      className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                        on ? "border-[var(--sb-brand)] bg-[var(--sb-brand-soft)] font-semibold text-[var(--sb-brand)]" : "border-[var(--sb-line)] text-[var(--sb-ink-60)] hover:border-[var(--sb-brand)]"
+                      }`}
+                    >
+                      {t(`orders.whyTags.${k}`)}
+                    </button>
+                  );
+                })}
+              </div>
+              <input
+                value={whyNote}
+                onChange={(e) => setWhyNote(e.target.value)}
+                maxLength={120}
+                placeholder={t("orders.whyPlaceholder")}
+                className="mt-2.5 w-full rounded-lg border border-[var(--sb-line)] px-3 py-2 text-xs outline-none focus:border-[var(--sb-brand)]"
+              />
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => confirmQuote(true)}
+                  disabled={actMut.isPending}
+                  className="flex-1 rounded-xl bg-[var(--sb-brand)] py-2.5 text-sm font-semibold text-[#eef4f5] hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
+                >
+                  {t("orders.whyConfirm")}
+                </button>
+                <button
+                  onClick={() => confirmQuote(false)}
+                  disabled={actMut.isPending}
+                  className="rounded-xl border border-[var(--sb-line)] px-3.5 py-2.5 text-xs text-[var(--sb-ink-60)] hover:text-[var(--sb-ink)] disabled:opacity-40"
+                >
+                  {t("orders.whySkip")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setWhyOpen(true)}
+              disabled={actMut.isPending}
+              className="mt-3 w-full rounded-xl bg-[var(--sb-brand)] py-2.5 text-sm font-semibold text-[#eef4f5] hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
+            >
+              {t("orders.actQuote")}
+            </button>
+          )}
         </div>
       )}
       {status === "shipped" && (

@@ -34,6 +34,7 @@ export const factories = mysqlTable(
     medalLevel: varchar("medal_level", { length: 32 }),
     isSuper: boolean("is_super").default(false),
     isPower: boolean("is_power").default(false),
+    deepInspected: boolean("deep_inspected"), // 深度验厂徽章（1=有，NULL=未采集到，只写正向）
     cert: varchar("cert", { length: 255 }),
     certNote: varchar("cert_note", { length: 255 }),
     employeeCount: int("employee_count"),
@@ -363,6 +364,8 @@ export const orders = mysqlTable(
     demand: text("demand"), // 买家原话需求
     status: mysqlEnum("status", ["inquiry", "quoted", "pending_payment", "sourcing", "inspecting", "shipped", "received", "cancelled"]).notNull().default("inquiry"),
     quote: json("quote"), // 报价单快照：出厂价/运费/关税/佣金/总额/汇率/渠道/时效/报价时间——报价一旦给出就是快照，不随后台数据漂移
+    decisionTags: json("decision_tags").$type<string[]>(), // 买家确认报价时的选择理由（价格/交期/样品/验厂/沟通/其他）——决策上下文核心资产
+    decisionNote: varchar("decision_note", { length: 255 }), // 选择理由可选补充（买家原话）
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -420,4 +423,42 @@ export const notifications = mysqlTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("ix_notif_user").on(t.userId, t.readAt), index("ix_notif_created").on(t.userId, t.createdAt)]
+);
+
+// ============ 买侧上下文资产（2026-11-08 姚顺雨×张亚勤对谈战略解码落地）============
+
+// 推荐证据链：每次 AI 推荐落盘"基于什么推了什么"——推荐命中率的统计基础、纠纷时的举证依据、可回放
+export const recommendationLogs = mysqlTable(
+  "recommendation_logs",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("user_id", { mode: "number", unsigned: true }), // 可空：匿名会话
+    threadId: bigint("thread_id", { mode: "number", unsigned: true }),
+    message: varchar("message", { length: 500 }), // 买家原话（截断）
+    intentProduct: varchar("intent_product", { length: 128 }),
+    intentQuantity: int("intent_quantity"),
+    intentDestination: varchar("intent_destination", { length: 64 }),
+    factories: json("factories").$type<Array<Record<string, unknown>>>(), // 推荐快照精简版：id/tier/score/matchBasis/linkedOfferId
+    productsCount: int("products_count"),
+    hadLink: boolean("had_link").default(false), // 是否贴了外部链接
+    hadImage: boolean("had_image").default(false),
+    factoryQa: boolean("factory_qa").default(false), // 是否触发"问到即采"
+    adoptedOfferId: varchar("adopted_offer_id", { length: 32 }), // 以后回写：买家最终下单的货源
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_reclog_user").on(t.userId, t.createdAt), index("ix_reclog_created").on(t.createdAt)]
+);
+
+// 买家画像：从询价/订单行为自动推断（绝不靠用户填表），每条带来源与置信度
+export const buyerProfiles = mysqlTable(
+  "buyer_profiles",
+  {
+    userId: bigint("user_id", { mode: "number", unsigned: true }).primaryKey(),
+    categories: json("categories").$type<Array<{ v: string; n: number }>>(), // 品类词按提及频次 top5
+    destinations: json("destinations").$type<Array<{ v: string; n: number }>>(), // 目的国 top3
+    quantities: json("quantities").$type<number[]>(), // 最近数量样本（最多 10 个）
+    sampleSize: int("sample_size").notNull().default(0), // 参与推断的消息条数（置信度依据）
+    inferredAt: timestamp("inferred_at").notNull().defaultNow(), // 推断时间（画像有时效）
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  }
 );

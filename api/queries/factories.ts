@@ -717,3 +717,63 @@ function buildReason(f: typeof factories.$inferSelect): string {
   if (f.cert) parts.push("第三方认证");
   return parts.join(" · ") || "综合评分入选";
 }
+
+// ============ 供应商数字护照 v1（2026-11-08 战略解码落地）============
+// 五段式结构化档案：身份/能力/证据/商业条件/状态——Agent 可读的供应商最小决策集合。
+// 纪律：①未解锁买家身份段只给代号（maskFactory 同款口径）；②没有的段诚实标 null/unavailable，绝不凑数；
+//      ③每个字段附"有/无"，让调用方知道哪些是核实过的、哪些还缺。
+export async function getFactoryPassport(id: number, unlocked = false) {
+  const db = getDb();
+  const rows = await db.select().from(factories).where(eq(factories.id, id)).limit(1);
+  const f = rows[0];
+  if (!f || f.isTrader || f.dupOf) return null; // 贸易商/重复店铺不出护照（与列表口径一致）
+
+  const imgs = (f.images ?? {}) as Record<string, string[]>;
+  const photoCount = Object.values(imgs).reduce((n, arr) => n + (Array.isArray(arr) ? arr.length : 0), 0);
+  const has = (v: unknown) => v != null && v !== "" && v !== 0;
+
+  return {
+    version: "passport.v1",
+    factoryId: f.id,
+    identity: {
+      name: unlocked ? f.name : maskedFactoryName(f.id), // 权益锁：未首单只见代号
+      verified: unlocked,
+      location: f.location ?? null,
+      province: f.province ?? null,
+      city: f.city ?? null,
+      tier: f.tier,
+      score: f.score != null ? Number(f.score) : null,
+      storeYears: f.years != null ? Number(f.years) : null, // 诚信通店铺年限（≠成立年份）
+      isSuper: !!f.isSuper,
+      deepInspected: !!f.deepInspected,
+    },
+    capability: {
+      cert: f.cert ?? null,
+      certNote: f.certNote ?? null,
+      oemMode: f.oemMode ?? null,
+      productionType: f.productionType ?? null,
+      employeeCount: has(f.employeeCount) ? f.employeeCount : null,
+      areaSqm: has(f.areaSqm) ? f.areaSqm : null,
+      monthlyBuyers: has(f.monthlyBuyers) ? f.monthlyBuyers : null,
+      repurchaseRate: f.repurchaseRate != null ? Number(f.repurchaseRate) : null,
+      productCount: f.productCount ?? null,
+      tags: (f.tags ?? []) as string[],
+    },
+    evidence: {
+      realPhotoCount: photoCount, // 实拍图张数（大门/车间/产品/仓库/设备/名录六类）
+      hasReview: !!f.review,
+      serviceCapability: f.serviceCapability ?? null,
+      auditReports: [] as string[], // 验厂报告：待线下验厂体系接入，现在为空是诚实状态
+    },
+    terms: null as null, // 商业条件（报价逻辑/账期/赔付条款）：未沉淀，v1 不提供，绝不编造
+    status: {
+      available: false, // 实时产能占用：当前无数据源，显式标记不可用
+      note: "realtime_capacity_unavailable",
+    },
+    completeness: {
+      // 档案完备度：六个关键字段已核实几个——调用方据此判断这本护照能撑多重的决策
+      filled: [f.cert, f.oemMode, f.productionType, f.employeeCount, f.areaSqm, f.monthlyBuyers].filter(has).length,
+      of: 6,
+    },
+  };
+}

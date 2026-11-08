@@ -13,6 +13,7 @@ import { maskFactory, maskOffer, maskedFactoryName } from "../lib/mask";
 import { enrichFactoryLive } from "./shopEnrich";
 import { getDb } from "./connection";
 import { sql as dsql } from "drizzle-orm";
+import { getBuyerProfile } from "./context";
 
 // 买家在打听某家具体工厂底细（人数/规模/成立年份/验厂/靠不靠谱）的识别词
 const FACTORY_QA_RE = /(多少人|员工|工人|规模|面积|厂房|成立|哪年|哪一年|验厂|实力|靠不靠谱|靠谱吗|怎么样|底细|可信|真实|employees|workers|staff|how big|factory size|established|founded|audit|audited|reliable|trust|legit)/i;
@@ -110,7 +111,8 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
    清单全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
 17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。
 18. 买家消息以"[补充]"开头 = 他在回答界面上的补充问题卡：把答案并入理解，照着更新判断，别重复问已答过的项。以"[跳过补充]"开头 = 他明确不想补这些，按现有信息直接配，话术里别再追问这些信息。界面若附了补充问题卡（结构化选项由界面呈现），你话术里最多一句带过（如"数量和目的地顺手补上，我算得更准"），绝不逐条罗列问题。
-19. 工厂名显示为「严选工厂 No.XXXX」代号 = 该买家尚未完成首单付款，档案分层解锁是平台规则。你可以拿代号自然点评（如"排最前这家 12 年老厂"），但绝不猜测、编造或暗示真实厂名，也不要把证据/tags 拼回去反推厂名。买家追问真名时统一口径："首单完成后自动解锁完整工厂档案——厂名、验厂报告、直连方式一次给齐。"这是保护买家自己的交付仪式，说得自然，别说得像防贼。20. 如果系统事实里有 factoryCard：买家正在打听这家工厂的底细，直接正面回答。卡里的字段（员工人数/厂房面积/认证/开店年限/月买家数等）全部是核过的真实档案；注意 storeYears 是诚信通店铺年限，不是工厂成立年份，别混着说。liveChecked=true 时可以自然地说"我刚帮你现场核实了这家店铺的档案"。missingFields 列出的字段就是还没核实到的——标准口径是"这个我不猜，跟工厂核实后回复你"，绝不允许编数字或含糊带过。可以顺带给同类工厂的常见区间作参考（如"做这类产品的厂通常 50–100 人规模"），但必须明说那是同类参考、不是这家的事实。答完底细顺势往下一步引：问数量/目的地，或者说"要不要我按你的量出一份含运费到门的报价？拿不准就先下样品单（$30 起）验货再放大。"`;
+19. 工厂名显示为「严选工厂 No.XXXX」代号 = 该买家尚未完成首单付款，档案分层解锁是平台规则。你可以拿代号自然点评（如"排最前这家 12 年老厂"），但绝不猜测、编造或暗示真实厂名，也不要把证据/tags 拼回去反推厂名。买家追问真名时统一口径："首单完成后自动解锁完整工厂档案——厂名、验厂报告、直连方式一次给齐。"这是保护买家自己的交付仪式，说得自然，别说得像防贼。20. 如果系统事实里有 factoryCard：买家正在打听这家工厂的底细，直接正面回答。卡里的字段（员工人数/厂房面积/认证/开店年限/月买家数等）全部是核过的真实档案；注意 storeYears 是诚信通店铺年限，不是工厂成立年份，别混着说。liveChecked=true 时可以自然地说"我刚帮你现场核实了这家店铺的档案"。missingFields 列出的字段就是还没核实到的——标准口径是"这个我不猜，跟工厂核实后回复你"，绝不允许编数字或含糊带过。可以顺带给同类工厂的常见区间作参考（如"做这类产品的厂通常 50–100 人规模"），但必须明说那是同类参考、不是这家的事实。答完底细顺势往下一步引：问数量/目的地，或者说"要不要我按你的量出一份含运费到门的报价？拿不准就先下样品单（$30 起）验货再放大。"
+21. 如果系统事实里有 buyerProfile：这是从这位买家历史询价行为自动推断的画像（常问品类/常发目的地/历史单量），不是他填的资料。可以自然地用来显得"我记得你"（如"还是发美国对吧"），但只能轻轻带过一句，绝不逐条报他的历史数据；画像与本次需求冲突时以本次消息为准。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -152,14 +154,15 @@ Rules:
 19. When the buyer names a production region (e.g. "factories in Zhongshan"): open by answering the region head-on — "here are the vetted lighting factories I have in Zhongshan". If no factory in the list is from that region, say so honestly ("I don't have a vetted factory there yet"); you may share sourcing-cluster knowledge (e.g. "Guzhen, Zhongshan is China's lighting capital"), but never present a factory from another region as being in the requested one, and never imply a top pick is from the requested region when it is not.
 20. When factory names show as codenames like 「严选工厂 No.XXXX」, the buyer hasn't completed a first paid order — tiered profile unlock is platform policy. Use the codename naturally in comments ("the top pick, a 12-year veteran shop"), but NEVER guess, invent, or hint at the real factory name, and never piece it together from evidence or tags. If the buyer asks for the name, give the standard line: "the full factory profile — name, audit report, direct contact — unlocks automatically once your first order completes." Frame it as a delivery milestone that protects the buyer, not as suspicion.
 21. Always reply in English.
-22. If system facts contain factoryCard: the buyer is asking about this specific factory's credentials — answer head-on. Every field on the card (headcount / floor area / certifications / store age / monthly buyers) is verified real profile data; note storeYears is the supplier-platform store age, NOT the factory's founding year — don't conflate them. When liveChecked=true you may naturally say "I just re-verified this shop's profile live". Fields listed in missingFields are NOT yet verified — the standard line is "I won't guess on that one; I'll confirm with the factory and get back to you", and you must NEVER invent numbers or gloss over them. You may add typical ranges for comparable factories (e.g. "factories making this usually run 50–100 staff") but must label them explicitly as category-typical reference, not this factory's fact. After answering, steer to the next step: ask quantity / destination, or offer "want a landed-cost quote at your quantity? If you're unsure, start with a sample order (from $30) to verify quality before scaling."`;
+22. If system facts contain factoryCard: the buyer is asking about this specific factory's credentials — answer head-on. Every field on the card (headcount / floor area / certifications / store age / monthly buyers) is verified real profile data; note storeYears is the supplier-platform store age, NOT the factory's founding year — don't conflate them. When liveChecked=true you may naturally say "I just re-verified this shop's profile live". Fields listed in missingFields are NOT yet verified — the standard line is "I won't guess on that one; I'll confirm with the factory and get back to you", and you must NEVER invent numbers or gloss over them. You may add typical ranges for comparable factories (e.g. "factories making this usually run 50–100 staff") but must label them explicitly as category-typical reference, not this factory's fact. After answering, steer to the next step: ask quantity / destination, or offer "want a landed-cost quote at your quantity? If you're unsure, start with a sample order (from $30) to verify quality before scaling."
+23. If system facts contain buyerProfile: this is inferred from the buyer's own past inquiry behavior (frequent categories / usual destinations / typical quantities) — not something they filled in. You may use it naturally to show you remember them ("shipping to the US again?"), but at most one light touch — never recite their history back; if the profile conflicts with the current message, the current message wins.`;
 
 // greeting 英文静态开场白
 const GREETING_FALLBACK_EN =
   "Hi — I'm your AI sourcing buyer, 15+ years in China supply chains. Tell me what you need, how much, and where it ships. I find source goods at honest prices, and every factory I put forward has been vetted. I'll show you the evidence and the landed cost for every pick — and if the ask doesn't add up, I'll say so.";
 
-// 常见目的地词表（国名/热门城市），供 LLM 挂掉时的本地意图兜底提取
-const DEST_WORDS = [
+// 常见目的地词表（国名/热门城市），供 LLM 挂掉时的本地意图兜底提取（buyerProfile 画像推断复用）
+export const DEST_WORDS = [
   "美国", "加拿大", "英国", "德国", "法国", "意大利", "西班牙", "荷兰", "比利时", "波兰", "捷克", "奥地利", "瑞典", "挪威", "丹麦", "芬兰", "爱尔兰", "葡萄牙", "希腊", "瑞士",
   "澳大利亚", "新西兰", "日本", "韩国", "新加坡", "马来西亚", "泰国", "越南", "菲律宾", "印尼", "印度", "阿联酋", "沙特", "迪拜", "土耳其", "以色列",
   "墨西哥", "巴西", "智利", "阿根廷", "哥伦比亚", "秘鲁", "南非", "埃及", "尼日利亚", "肯尼亚", "俄罗斯", "乌克兰",
@@ -386,7 +389,7 @@ function buildFallbackReplyEn(
   return parts.join("\n\n");
 }
 
-async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh", unlocked = false) {
+async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh", unlocked = false, userId: number | null = null) {
   // 雷达卡 CTA 直达：radarId 钉死品类与信号上下文，跳过 LLM 意图抽取（词库没收录的品也不受影响）
   // 必须在选品意图拦截之前——CTA 话术含"爆款"字样，否则会被误判成选品意图
   let radarCtx: Awaited<ReturnType<typeof getRadarItem>> | null = null;
@@ -697,9 +700,19 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   }
 
   // 阶段三：基于真实结果写话术
+  // 买家画像（买侧上下文资产 v1）：登录买家的历史行为推断，供话术个性化引用；画像条数太少/没有=null，绝不硬提
+  const buyerProfile = userId ? await getBuyerProfile(userId).catch(() => null) : null;
   const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
   const facts = JSON.stringify({
     intent,
+    buyerProfile: buyerProfile && buyerProfile.sampleSize >= 3
+      ? {
+          categories: buyerProfile.categories.map((c) => c.v),
+          destinations: buyerProfile.destinations.map((d) => d.v),
+          quantities: buyerProfile.quantities.slice(0, 3),
+          sampleSize: buyerProfile.sampleSize,
+        }
+      : null,
     radarContext: radarCtx
       ? {
           title: radarCtx.title,
@@ -794,6 +807,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     reply,
     understood: factories.length > 0 || !!productInfo || searchProducts.length > 0,
     intent: { product: intent.product, quantity: intent.quantity },
+    factoryQa: !!factoryCard, // 供推荐证据链落库标记"本轮触发了问到即采"
     factories,
     products: searchProducts,
     linkContext: linkCtx
@@ -807,9 +821,9 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
 }
 
 // 最外层保险：任何漏网异常都不让买家看到报错——返回诚实的降级话术（HTTP 200），并留日志可查
-export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh", unlocked = false) {
+export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh", unlocked = false, userId: number | null = null) {
   try {
-    return await sourcingChatInner(message, history, radarId, imageData, locale, unlocked);
+    return await sourcingChatInner(message, history, radarId, imageData, locale, unlocked, userId);
   } catch (e) {
     log.error("ai.chat 未捕获异常，走全兜底", { error: e instanceof Error ? e.message : String(e) });
     return {

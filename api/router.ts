@@ -9,8 +9,10 @@ import {
   calcLandedPrice,
   listCommissionRules,
   matchFactories,
+  getFactoryPassport,
 } from "./queries/factories";
 import { sourcingChat } from "./queries/aiSourcing";
+import { logRecommendation, updateBuyerProfile } from "./queries/context";
 import { listRadar } from "./queries/radar";
 import { offerWithFactory } from "./queries/products";
 import { getOfferDetail, searchOffers } from "./sourcing/offerService";
@@ -51,7 +53,10 @@ export const appRouter = createRouter({
     detail: publicQuery
       .input(z.object({ id: z.number() }))
       .query(async ({ input, ctx }) => findFactoryById(input.id, await isUnlockedBuyer(ctx.user?.id))),
-
+    // 供应商数字护照 v1：五段式结构化档案（身份/能力/证据/商业条件/状态），Agent 可读
+    passport: publicQuery
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => getFactoryPassport(input.id, await isUnlockedBuyer(ctx.user?.id))),
     stats: publicQuery.query(() => factoryStats()),
     categoryStats: publicQuery.query(() => factoryCategoryStats()),
 
@@ -158,7 +163,7 @@ export const appRouter = createRouter({
       .mutation(async ({ input, ctx }) => {
         let result: any;
         try {
-          result = await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale, await isUnlockedBuyer(ctx.user?.id));
+          result = await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale, await isUnlockedBuyer(ctx.user?.id), ctx.user?.id ?? null);
         } catch (err) {
           const classified = classifyAiError(err);
           if (classified instanceof AiUnavailable) {
@@ -191,6 +196,21 @@ export const appRouter = createRouter({
         } catch (e) {
           log.error("chat 落库失败（聊天本身已返回）", { error: e instanceof Error ? e.message : String(e) });
         }
+        // 买侧上下文资产（2026-11-08）：推荐证据链落库 + 买家画像增量更新。
+        // 全部 fire-and-forget：失败只记日志，绝不拖慢聊天响应。
+        void logRecommendation({
+          userId: ctx.user?.id ?? null,
+          threadId,
+          message: input.message,
+          intent: result.intent ?? null,
+          destination: null, // intent.destination 未透出，证据链以 message 原文为准
+          factories: result.factories ?? [],
+          productsCount: Array.isArray(result.products) ? result.products.length : 0,
+          hadLink: !!result.linkContext,
+          hadImage: !!input.imageData,
+          factoryQa: !!result.factoryQa,
+        });
+        if (ctx.user?.id) void updateBuyerProfile(ctx.user.id);
         return { ...result, threadId };
       }),
   }),
@@ -272,10 +292,15 @@ export const appRouter = createRouter({
         orderId: z.number().int().positive(),
         action: z.enum(["confirmQuote", "confirmReceive", "cancel"]),
         note: z.string().max(500).optional(),
+        decisionTags: z.array(z.string().max(32)).max(6).optional(), // 选择理由埋点（决策上下文资产）
+        decisionNote: z.string().max(255).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const to = input.action === "confirmQuote" ? "pending_payment" : input.action === "confirmReceive" ? "received" : "cancelled";
-        const r = await transitionOrder({ orderId: input.orderId, to, actor: "buyer", note: input.note, userId: ctx.user.id });
+        const r = await transitionOrder({
+          orderId: input.orderId, to, actor: "buyer", note: input.note, userId: ctx.user.id,
+          ...(input.action === "confirmQuote" ? { decisionTags: input.decisionTags, decisionNote: input.decisionNote } : {}),
+        });
         if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
         return r;
       }),
