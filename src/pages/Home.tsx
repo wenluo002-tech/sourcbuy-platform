@@ -104,9 +104,9 @@ export default function Home() {
             {t("home.eyebrow")}
           </span>
 
-            <h1 className={`sb-display mt-6 text-[clamp(30px,7vw,44px)] leading-[1.14] tracking-tight ${lang === "en" ? "md:text-[clamp(36px,4.5vw,56px)] md:leading-[1.1]" : "md:text-[64px] md:leading-[1.08]"}`}>
-              <span className="sb-line-mask"><span className={lang === "en" ? undefined : "whitespace-nowrap"}>{t("home.h1Line1")}</span></span>
-              <span className="sb-line-mask"><span className={lang === "en" ? undefined : "whitespace-nowrap"} style={{ ["--sb-delay" as string]: "100ms" }}>{t("home.h1Line2Pre")}<span className="text-[var(--sb-brand)]">{t("home.h1Line2Accent")}</span>{t("home.h1Line2Post")}</span></span>
+            <h1 className={`sb-display mt-6 text-[clamp(30px,7vw,44px)] leading-[1.14] tracking-tight ${lang !== "zh" ? "md:text-[clamp(36px,4.5vw,56px)] md:leading-[1.1]" : "md:text-[64px] md:leading-[1.08]"}`}>
+              <span className="sb-line-mask"><span className={lang !== "zh" ? undefined : "whitespace-nowrap"}>{t("home.h1Line1")}</span></span>
+              <span className="sb-line-mask"><span className={lang !== "zh" ? undefined : "whitespace-nowrap"} style={{ ["--sb-delay" as string]: "100ms" }}>{t("home.h1Line2Pre")}<span className="text-[var(--sb-brand)]">{t("home.h1Line2Accent")}</span>{t("home.h1Line2Post")}</span></span>
             </h1>
 
             {/* 信任信号：主线一句 + 三条优势（对勾精致版） */}
@@ -309,7 +309,7 @@ export default function Home() {
               <button
                 key={row.category}
                 type="button"
-                onClick={() => goChat(lang === "en" ? `I'm looking for factories making ${label}` : `我想找做${label}的工厂`)}
+                onClick={() => goChat(lang !== "zh" ? `I'm looking for factories making ${label}` : `我想找做${label}的工厂`)}
                 className="sb-reveal group border-b border-[var(--sb-line)] px-1 py-4 text-left transition-colors duration-300 hover:bg-white/60 sm:px-4"
                 style={{ ["--sb-delay" as string]: `${Math.min(i, 8) * 60}ms` }}
               >

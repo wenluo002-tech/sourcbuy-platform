@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/auth";
@@ -9,7 +9,7 @@ import { useT } from "@/i18n";
 const REF_RATE = FX_SETTLEMENT;
 
 function fmtSalesNum(n: number, lang: string = "zh"): string {
-  if (lang === "en") return n.toLocaleString("en-US");
+  if (lang !== "zh") return n.toLocaleString("en-US");
   if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")}万`;
   return n.toLocaleString();
 }
@@ -44,12 +44,13 @@ export default function ProductDetail() {
   const inquireMut = trpc.orders.create.useMutation({
     onSuccess: (r) => nav(`/orders/${r.orderId}`),
   });
-  const q = trpc.products.detailV2.useQuery({ offerId }, { retry: false });
+  const q = trpc.products.detailV2.useQuery({ offerId, locale: lang }, { retry: false });
   const offer = q.data?.offer ?? null;
   const factory = q.data?.factory ?? null;
 
   const [imgIdx, setImgIdx] = useState(0);
   const [skuImg, setSkuImg] = useState<string | null>(null); // 选规格时切到该规格的颜色图
+  const touchStartX = useRef<number | null>(null); // 主图左右滑动手势（移动端原相册习惯）
   const [skuIdx, setSkuIdx] = useState(0);
   const [qty, setQty] = useState("");
   const [dest, setDest] = useState("");
@@ -126,13 +127,45 @@ export default function ProductDetail() {
       </Link>
 
       <div className="mt-4 grid gap-8 md:grid-cols-2">
-        {/* 图廊 */}
+        {/* 图廊：主图支持左右滑动切换（移动端），指示点显示当前位置 */}
         <div className="min-w-0">
-          <div className="overflow-hidden rounded-2xl border border-[var(--sb-line)] bg-white">
+          <div
+            className="relative overflow-hidden rounded-2xl border border-[var(--sb-line)] bg-white"
+            style={{ touchAction: "pan-y" }} /* 纵向滚动不受影响，横向手势归图廊 */
+            onTouchStart={(e) => {
+              touchStartX.current = e.touches[0].clientX;
+            }}
+            onTouchEnd={(e) => {
+              const startX = touchStartX.current;
+              touchStartX.current = null;
+              if (startX == null || offer.images.length <= 1) return;
+              const dx = e.changedTouches[0].clientX - startX;
+              if (Math.abs(dx) < 40) return; // 防误触：位移不足不翻页
+              setSkuImg(null); // 滑动时离开规格图，回到图廊序列
+              const n = offer.images.length;
+              setImgIdx((i) => (dx < 0 ? (i + 1) % n : (i - 1 + n) % n));
+            }}
+          >
             {mainImg ? (
-              <img src={mainImg} alt={offer.title} referrerPolicy="no-referrer" className="aspect-square w-full object-cover" />
+              <img
+                src={mainImg}
+                alt={offer.title}
+                referrerPolicy="no-referrer"
+                draggable={false}
+                className="aspect-square w-full object-cover select-none"
+              />
             ) : (
               <div className="aspect-square w-full bg-[var(--sb-paper)]" />
+            )}
+            {offer.images.length > 1 && !skuImg && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1.5">
+                {offer.images.map((_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 w-1.5 rounded-full ${i === imgIdx ? "bg-[var(--sb-brand)]" : "bg-black/20"}`}
+                  />
+                ))}
+              </div>
             )}
           </div>
           {offer.images.length > 1 && (
@@ -254,7 +287,7 @@ export default function ProductDetail() {
                       <option value="">{t("product.destGeneric")}</option>
                       {DESTINATIONS.map((d) => (
                         <option key={d.code} value={d.code}>
-                          {lang === "en" ? d.en : d.zh}
+                          {lang !== "zh" ? d.en : d.zh}
                         </option>
                       ))}
                     </select>

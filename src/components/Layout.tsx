@@ -1,7 +1,7 @@
 import { Link, Outlet, useLocation } from "react-router";
 import logoHorizontal from "@/assets/logo-horizontal.png";
 import logoMark from "@/assets/logo-mark.png";
-import { useT } from "@/i18n";
+import { useT, LANGS, LANG_LABEL, type Lang } from "@/i18n";
 import { useAuth } from "@/auth";
 import { trpc } from "@/providers/trpc";
 
@@ -101,13 +101,19 @@ export default function Layout() {
                 {t("nav.signIn")}
               </Link>
             )}
-            <button
-              onClick={() => setLang(lang === "zh" ? "en" : "zh")}
-              className="ml-1 shrink-0 border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)] sm:ml-2"
+            {/* 五语言切换：原生 select（移动端系统级滚轮选择器，可靠性高于自绘下拉） */}
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value as Lang)}
+              className="ml-1 shrink-0 cursor-pointer appearance-none border border-[var(--sb-rule)] bg-transparent px-2 py-1 text-center text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)] sm:ml-2"
               aria-label="Switch language"
             >
-              {lang === "zh" ? "EN" : "中文"}
-            </button>
+              {LANGS.map((l) => (
+                <option key={l} value={l}>
+                  {LANG_LABEL[l]}
+                </option>
+              ))}
+            </select>
           </nav>
         </div>
       </header>

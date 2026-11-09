@@ -194,7 +194,7 @@ export default function Calculator() {
                 <optgroup key={g} label={t(`destGroup.${g}`)}>
                   {DESTINATIONS.filter((d) => d.group === g).map((d) => (
                     <option key={d.code} value={d.code}>
-                      {lang === "en" ? d.en : `${d.zh} ${d.en}`}
+                      {lang !== "zh" ? d.en : `${d.zh} ${d.en}`}
                     </option>
                   ))}
                 </optgroup>
@@ -498,7 +498,7 @@ export default function Calculator() {
               <div className="mt-1.5">
                 <span className="sb-num text-xs text-black/45">
                   {t("calc.approxLine", {
-                    total: q.data.totalCny.toLocaleString(lang === "en" ? "en-US" : "zh-CN"),
+                    total: q.data.totalCny.toLocaleString(lang !== "zh" ? "en-US" : "zh-CN"),
                     per: q.data.perUnit.toFixed(2),
                     perCny: q.data.perUnitCny.toFixed(2),
                   })}

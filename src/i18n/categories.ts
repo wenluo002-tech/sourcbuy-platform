@@ -24,5 +24,5 @@ export const CAT_LABELS: Record<string, { zh: string; en: string }> = {
 export function catLabel(cat: string, lang: string): string {
   const m = CAT_LABELS[cat];
   if (!m) return cat;
-  return lang === "en" ? m.en : m.zh;
+  return lang !== "zh" ? m.en : m.zh;
 }

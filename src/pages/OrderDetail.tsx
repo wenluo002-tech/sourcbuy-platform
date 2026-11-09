@@ -45,7 +45,7 @@ export default function OrderDetail() {
   const curGroup = STATUS_GROUP[status];
   const groupIdx = GROUP_FLOW.indexOf(curGroup);
   const quote = (o.quote ?? null) as OrderQuote | null;
-  const fmtDate = (d: any) => new Date(d).toLocaleString(lang === "en" ? "en-US" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const fmtDate = (d: any) => new Date(d).toLocaleString(lang !== "zh" ? "en-US" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">

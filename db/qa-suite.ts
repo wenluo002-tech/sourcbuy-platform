@@ -53,6 +53,58 @@ console.log("\n[3] 字段级来源标注（四态：user/ai/derived/unknown）")
   }
 }
 
+console.log("\n[3c] 数据层翻译管线（detailV2 locale=en → 标题英文化；第二次走缓存零成本）");
+{
+  const db = await getDb();
+  const rows: any = await db.execute(sql`SELECT offer_id, title FROM offer_pool WHERE title IS NOT NULL AND CHAR_LENGTH(title) > 8 LIMIT 1`);
+  const row = rows?.[0]?.[0] ?? rows?.[0];
+  if (!row) check("商品池取样", false, "offer_pool 空");
+  else {
+    const q = async () => {
+      const r = await fetch(`${BASE}/api/trpc/products.detailV2?input=${encodeURIComponent(JSON.stringify({ json: { offerId: row.offer_id, locale: "en" } }))}`, { signal: AbortSignal.timeout(45_000) });
+      const j: any = await r.json();
+      return j.result?.data?.json;
+    };
+    const d1 = await q();
+    const noCjk = (x: string) => !/[一-鿿]/.test(x);
+    check("英文标题返回且不含中文", !!d1?.offer?.title && noCjk(d1.offer.title), d1?.offer?.title?.slice(0, 50));
+    const t0 = Date.now();
+    const d2 = await q();
+    check("第二次命中缓存（<3s）", !!d2?.offer?.title && Date.now() - t0 < 3000, `${Date.now() - t0}ms`);
+    const cached: any = await db.execute(sql`SELECT COUNT(*) AS c FROM text_translations WHERE target_lang = 'en'`);
+    const cnt = cached?.[0]?.[0]?.c ?? cached?.[0]?.c;
+    check("翻译结果已落库", Number(cnt) > 0, `${cnt} 条`);
+  }
+}
+
+console.log("\n[3d] 多语言字典键集一致性（es/fr/pt 与 zh 同键，占位符在位）");
+{
+  const flat = (obj: any, prefix = ""): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const p = prefix ? `${prefix}.${k}` : k;
+      if (typeof v === "string") out[p] = v;
+      else if (Array.isArray(v)) v.forEach((x, i) => { if (typeof x === "string") out[`${p}.${i}`] = x; else Object.assign(out, flat(x, `${p}.${i}`)); });
+      else if (v && typeof v === "object") Object.assign(out, flat(v, p));
+    }
+    return out;
+  };
+  const { zh: zd } = await import("../src/i18n/zh");
+  const zhKeys = Object.keys(flat(zd));
+  const ph = (s: string) => (s.match(/\{(\w+)\}/g) ?? []).sort().join(",");
+  for (const l of ["es", "fr", "pt"]) {
+    try {
+      const mod: any = await import(`../src/i18n/${l}`);
+      const ld = flat(mod[l]);
+      const missing = zhKeys.filter((k) => ld[k] == null);
+      const badPh = zhKeys.filter((k) => ld[k] != null && ph(ld[k]) !== ph(flat(zd)[k]));
+      check(`${l} 键集一致（缺 ${missing.length}）且占位符无误（错 ${badPh.length}）`, missing.length === 0 && badPh.length === 0, missing.slice(0, 2).concat(badPh.slice(0, 2)).join(" ") || "OK");
+    } catch {
+      check(`${l} 字典文件存在`, false, "import 失败");
+    }
+  }
+}
+
 console.log("\n[3b] 追问卡四场景");
 {
   const a = await chat("我想采购一批瑜伽裤");

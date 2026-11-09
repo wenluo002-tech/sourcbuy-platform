@@ -24,7 +24,7 @@ export async function registerUser(email: string, password: string, displayName?
   const r = await db.insert(users).values({
     email: em, passwordHash: hashPassword(password),
     displayName: displayName?.trim().slice(0, 64) || null,
-    locale: locale === "en" || locale === "zh" ? locale : null,
+    locale: ["zh", "en", "es", "fr", "pt"].includes(locale ?? "") ? locale! : null,
   });
   const userId = Number(r[0].insertId);
   await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId));

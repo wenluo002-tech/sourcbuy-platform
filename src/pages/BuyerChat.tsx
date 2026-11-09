@@ -133,7 +133,7 @@ function IntentEcho({ sources, intent }: { sources: IntentSourcesData; intent?: 
         <span key={i} className="inline-flex items-center gap-1">
           <span className="text-[var(--sb-ink-60)]">{it.label} {it.value}</span>
           <span
-            title={lang === "en" ? it.n.note.en : it.n.note.zh}
+            title={lang !== "zh" ? it.n.note.en : it.n.note.zh}
             className={
               it.n.source === "user"
                 ? "rounded-full border border-[var(--sb-line)] px-1.5 py-px text-[9px] text-[var(--sb-ink-40)]"
@@ -325,7 +325,7 @@ function SourcingStatus() {
 const REF_RATE = FX_SETTLEMENT; // 与到手价引擎一致的结汇汇率（牌价 − 0.3，见 contracts/fx.ts）
 
 function fmtSales(n: number, lang: string = "zh"): string {
-  if (lang === "en") return n.toLocaleString("en-US");
+  if (lang !== "zh") return n.toLocaleString("en-US");
   if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")} 万`;
   if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")} 千`;
   return String(n);
@@ -709,7 +709,7 @@ export default function BuyerChat() {
       return;
     }
     const rec = new SpeechRec();
-    rec.lang = lang === "en" ? "en-US" : "zh-CN";
+    rec.lang = ({ zh: "zh-CN", en: "en-US", es: "es-ES", fr: "fr-FR", pt: "pt-BR" } as Record<string, string>)[lang] ?? "en-US";
     rec.interimResults = true;
     rec.onresult = (e: any) => {
       let txt = "";
@@ -743,7 +743,7 @@ export default function BuyerChat() {
   }, [turns, chat.isPending]);
 
   function send(text: string, radarId?: number) {
-    const fileMarker = pendingFile ? (lang === "en" ? `[Drawing attached: ${pendingFile}]` : `[图纸附件：${pendingFile}]`) : "";
+    const fileMarker = pendingFile ? (lang !== "zh" ? `[Drawing attached: ${pendingFile}]` : `[图纸附件：${pendingFile}]`) : "";
     const base = text.trim() || (pendingImage ? t("chat.defaultImageMsg") : pendingFile ? t("chat.defaultDocMsg") : "");
     const msg = fileMarker ? `${base ? base + " " : ""}${fileMarker}` : base;
     if (!msg || chat.isPending) return;
@@ -892,7 +892,7 @@ export default function BuyerChat() {
               >
                 <span className="truncate">{th.title || `#${th.id}`}</span>
                 <span className="shrink-0 text-[10px] text-[var(--sb-ink-40)]">
-                  {new Date(th.updatedAt).toLocaleDateString(lang === "en" ? "en-US" : "zh-CN")}
+                  {new Date(th.updatedAt).toLocaleDateString(lang !== "zh" ? "en-US" : "zh-CN")}
                 </span>
               </button>
             ))

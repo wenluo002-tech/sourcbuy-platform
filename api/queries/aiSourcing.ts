@@ -220,7 +220,7 @@ function buildFollowUpCard(
   intent: { product: string | null; quantity: number | null; destination: string | null; isGreeting: boolean },
   message: string,
   history: ChatMsg[],
-  locale: "zh" | "en" = "zh"
+  locale: string = "zh"
 ): FollowUpCard | null {
   if (!intent.product || intent.isGreeting) return null;
   if (message.startsWith("[补充]") || message.startsWith("[跳过补充]")) return null; // 本轮就是答卡/跳卡
@@ -229,7 +229,7 @@ function buildFollowUpCard(
   );
   if (answered) return null; // 答过/跳过，不再追问
   const qs: FollowUpQuestion[] = [];
-  const en = locale === "en";
+  const en = locale !== "zh"; // 追问卡硬编码文案只有中英两套：非中文买家走英文（UI 壳已是买家语言，话术文案逐步补）
   if (!intent.quantity) {
     qs.push({
       key: "quantity",
@@ -392,7 +392,15 @@ function buildFallbackReplyEn(
   return parts.join("\n\n");
 }
 
-async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh", unlocked = false, userId: number | null = null) {
+// 话术语言指令：非中文买家走英文人格体系，es/fr/pt/de/ja 追加"用买家语言回复"指令（LLM 多语言能力足够）
+const REPLY_LANG_NAME: Record<string, string> = { es: "Spanish", fr: "French", pt: "Portuguese", de: "German", ja: "Japanese" };
+function replySystemFor(locale: string): string {
+  if (locale === "zh") return REPLY_SYSTEM;
+  const langName = REPLY_LANG_NAME[locale];
+  return REPLY_SYSTEM_EN + (langName ? `\n25. Always reply in ${langName}.` : "");
+}
+
+async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: string = "zh", unlocked = false, userId: number | null = null) {
   // 雷达卡 CTA 直达：radarId 钉死品类与信号上下文，跳过 LLM 意图抽取（词库没收录的品也不受影响）
   // 必须在选品意图拦截之前——CTA 话术含"爆款"字样，否则会被误判成选品意图
   let radarCtx: Awaited<ReturnType<typeof getRadarItem>> | null = null;
@@ -409,7 +417,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   const drawM = message.match(/\[(?:图纸附件|Drawing attached)[：:]\s*([^\]]+)\]/);
   if (drawM) {
     const fname = drawM[1].trim().slice(0, 80);
-    const reply = locale === "en"
+    const reply = locale !== "zh"
       ? `Got your file "${fname}". Straight talk: I won't pretend to read engineering drawings line by line — our sourcing team will price it manually against your drawing, with a firm quote within 48 hours.\n\nTo price it right, tell me three things: 1) material / spec requirements, 2) quantity, 3) destination country or port. And if you can, screenshot the key pages and send them as photos — I can read images directly.`
       : `图纸《${fname}》收到。说句实话：图纸这类文件我不装能逐行看懂——采购团队会按你的图纸人工核价，48 小时内给你正式报价。\n\n为了核得准，顺手告诉我三件事：1）材质或规格要求；2）数量；3）发到哪个国家/港口。如果方便，把关键页截成图片发我，图片我能直接看、直接评。`;
     return {
@@ -534,8 +542,8 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     try {
       const { text } = await generateText({
         model: kimiGw(defaultModelId),
-        system: locale === "en" ? REPLY_SYSTEM_EN : REPLY_SYSTEM,
-        prompt: locale === "en"
+        system: replySystemFor(locale),
+        prompt: locale !== "zh"
           ? `User message: ${message}\nSourcing intent: small talk / no clear category\nFactory list: []`
           : `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
         abortSignal: AbortSignal.timeout(12_000),
@@ -543,7 +551,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       return { reply: text, understood: false, intent, intentSources, factories: [], product: null, followUp: null };
     } catch (e) {
       log.warn("greeting 话术生成失败，用静态开场白", { error: e instanceof Error ? e.message : String(e) });
-      return { reply: locale === "en" ? GREETING_FALLBACK_EN : GREETING_FALLBACK, understood: false, intent, intentSources, factories: [], product: null, followUp: null };
+      return { reply: locale !== "zh" ? GREETING_FALLBACK_EN : GREETING_FALLBACK, understood: false, intent, intentSources, factories: [], product: null, followUp: null };
     }
   }
 
@@ -816,10 +824,10 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   try {
     const r = await generateText({
       model: kimiGw(defaultModelId),
-      system: locale === "en" ? REPLY_SYSTEM_EN : REPLY_SYSTEM,
+      system: replySystemFor(locale),
       messages: [
         ...messages,
-        { role: "user" as const, content: locale === "en"
+        { role: "user" as const, content: locale !== "zh"
           ? `[System facts] ${facts}\nReply to the user based on these facts.`
           : `[系统事实] ${facts}\n请基于以上事实回复用户。` },
       ],
@@ -828,12 +836,12 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     reply = r.text;
   } catch (e) {
     log.warn("reply 话术生成失败，走规则模板兜底", { error: e instanceof Error ? e.message : String(e) });
-    reply = locale === "en"
+    reply = locale !== "zh"
       ? buildFallbackReplyEn(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null)
       : buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null);
     // 建材工业桶：兜底话术是模板，不经过 LLM 规则——人工核价口径在这里确定性补上
     if (manualQuote) {
-      reply += locale === "en"
+      reply += locale !== "zh"
         ? "\n\nOne more thing — specs move the price a lot in this category, so I won't throw you an estimate: our sourcing team will price it manually against your specs or drawings, with a firm quote within 48 hours."
         : "\n\n另外说一句：这类品规格差一点价格差很多，我不给你甩估算数字——让采购团队按你的规格或图纸人工核价，48 小时内出正式报价。";
     }
@@ -841,6 +849,13 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
 
   // 补充问题卡：规则驱动（非阻塞——结果照出，卡附在下面；答过/跳过就不再问）
   const followUp = buildFollowUpCard(intent, message, history, locale);
+
+  // 商品墙数据层翻译：locale≠zh 时批量翻标题（缓存终身有效；失败/超时回落原文，绝不阻塞回复）
+  if (locale !== "zh" && searchProducts.length) {
+    const { translateTexts } = await import("../lib/translate");
+    const map = await translateTexts(searchProducts.map((p) => p.title), locale);
+    for (const p of searchProducts) if (map[p.title]) p.title = map[p.title];
+  }
 
   return {
     reply,
@@ -862,14 +877,14 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
 }
 
 // 最外层保险：任何漏网异常都不让买家看到报错——返回诚实的降级话术（HTTP 200），并留日志可查
-export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: "zh" | "en" = "zh", unlocked = false, userId: number | null = null) {
+export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: string = "zh", unlocked = false, userId: number | null = null) {
   try {
     return await sourcingChatInner(message, history, radarId, imageData, locale, unlocked, userId);
   } catch (e) {
     log.error("ai.chat 未捕获异常，走全兜底", { error: e instanceof Error ? e.message : String(e) });
     return {
       reply:
-        locale === "en"
+        locale !== "zh"
           ? "My system hiccuped — not your fault, my upstream interface threw a tantrum. I've noted your message; resend it in a moment. In a hurry? Browse the vetted factory library and send me whatever catches your eye — I'll dig into it."
           : "我这边系统卡了一下——不是你的问题，是我这头的接口闹脾气。你的话我记住了，稍等片刻再发一次就行；急着看货就先去「严选工厂库」自己逛，看中的发我，我接着帮你查底细。",
       understood: false,

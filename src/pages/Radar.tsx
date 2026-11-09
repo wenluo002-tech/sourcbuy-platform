@@ -77,7 +77,7 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
       </div>
 
       {/* 品名 */}
-      <h3 className="sb-display mt-3 text-[21px] leading-snug text-[var(--sb-ink)]">{lang === "en" && it.titleEn ? it.titleEn : it.title}</h3>
+      <h3 className="sb-display mt-3 text-[21px] leading-snug text-[var(--sb-ink)]">{lang !== "zh" && it.titleEn ? it.titleEn : it.title}</h3>
       {it.titleEn && lang !== "en" && (
         <p className="mt-1 line-clamp-1 text-[11px] tracking-[0.04em] text-[var(--sb-ink-40)]">{it.titleEn}</p>
       )}
@@ -160,7 +160,7 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
             {sales ? t("radar.topSalesSuffix", { n: sales }) : ""}
           </span>
           <Link
-            to={`/buyer?radar=${it.id}&prefill=${encodeURIComponent(t("radar.ctaPrefill", { title: lang === "en" && it.titleEn ? it.titleEn : it.title }))}`}
+            to={`/buyer?radar=${it.id}&prefill=${encodeURIComponent(t("radar.ctaPrefill", { title: lang !== "zh" && it.titleEn ? it.titleEn : it.title }))}`}
             className="shrink-0 border border-[var(--sb-rule)] px-3.5 py-1.5 text-xs font-semibold text-[var(--sb-ink)] transition-colors duration-150 hover:border-[var(--sb-brand)] hover:bg-[var(--sb-brand)] hover:text-white"
           >
             {t("radar.cta")}

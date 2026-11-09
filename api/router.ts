@@ -133,14 +133,29 @@ export const appRouter = createRouter({
         const unlocked = await isUnlockedBuyer(ctx.user?.id);
         return { offer: maskOffer(offer, unlocked), factory: maskFactory(factory, unlocked) };
       }),
-    // V2：缓存→万邦→点金→legacy 四级链路（同一商品 24h 内零成本）
+    // V2：缓存→万邦→点金→legacy 四级链路（同一商品 24h 内零成本）；locale≠zh 时数据层按需翻译（终身缓存，失败回落原文）
     detailV2: publicQuery
-      .input(z.object({ offerId: z.string().min(6).max(20) }))
+      .input(z.object({ offerId: z.string().min(6).max(20), locale: z.string().max(8).optional() }))
       .query(async ({ input, ctx }) => {
         const { offer, factory } = await getOfferDetail(input.offerId);
         if (!offer) throw new Error("未能获取该商品，请确认货号或链接有效");
         const unlocked = await isUnlockedBuyer(ctx.user?.id);
-        return { offer: maskOffer(offer, unlocked), factory: maskFactory(factory, unlocked) };
+        const mOffer = maskOffer(offer, unlocked)!; // offer 已非空（上面 404 拦截），maskOffer 只可能因 null 输入返 null
+        if (input.locale && input.locale !== "zh") {
+          const { translateTexts } = await import("./lib/translate");
+          const skuTexts = mOffer.skus.map((s) => s.specText).filter(Boolean);
+          // 标题/发货说明同步翻（小批 5s 内）；SKU 规格少（≤8）一起同步，多则后台填缓存、下次访问生效——绝不让买家为几十个规格名等 20 秒
+          const syncTexts = [mOffer.title, mOffer.dispatchNote ?? "", ...(skuTexts.length <= 8 ? skuTexts : [])].filter(Boolean);
+          const map = await translateTexts(syncTexts, input.locale);
+          if (map[mOffer.title]) mOffer.title = map[mOffer.title];
+          if (mOffer.dispatchNote && map[mOffer.dispatchNote]) mOffer.dispatchNote = map[mOffer.dispatchNote];
+          if (skuTexts.length <= 8) {
+            for (const s of mOffer.skus) if (map[s.specText]) s.specText = map[s.specText];
+          } else {
+            translateTexts(skuTexts, input.locale).catch(() => {}); // fire-and-forget 填缓存
+          }
+        }
+        return { offer: mOffer, factory: maskFactory(factory, unlocked) };
       }),
     // 关键词搜品：搜索缓存 30 分钟防刷
     search: publicQuery
@@ -161,7 +176,7 @@ export const appRouter = createRouter({
             .max(20),
           radarId: z.number().int().positive().optional(), // 雷达卡 CTA 直达：钉死品类与信号上下文
           imageData: z.string().max(6_000_000).optional(), // 商品图（base64 data URL，前端已压到 1024px JPEG）
-          locale: z.enum(["zh", "en"]).optional(), // 界面语言：英文买家走英文话术体系
+          locale: z.enum(["zh", "en", "es", "fr", "pt"]).optional(), // 界面语言：非中文走英文话术体系+语言指令（LLM 按买家语言回复）
           threadId: z.number().int().positive().optional(), // M3a：续写已有会话
           anonId: z.string().max(36).optional(), // M3a：匿名设备 ID，登录后归并
         })
@@ -174,7 +189,7 @@ export const appRouter = createRouter({
           const classified = classifyAiError(err);
           if (classified instanceof AiUnavailable) {
             result = {
-              reply: input.locale === "en"
+              reply: input.locale != null && input.locale !== "zh"
                 ? "The AI sourcing assistant is temporarily unavailable (service quota exhausted). Please try again later, or use the search above to find factories by category."
                 : "AI 采购助手暂时不可用（服务额度已用尽），请稍后再试，或先用上方搜索框按品类查找工厂。",
               understood: false,
@@ -230,7 +245,7 @@ export const appRouter = createRouter({
         email: z.string().max(191),
         password: z.string().min(8).max(72),
         displayName: z.string().max(64).optional(),
-        locale: z.enum(["zh", "en"]).optional(),
+        locale: z.enum(["zh", "en", "es", "fr", "pt"]).optional(),
         anonId: z.string().max(36).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
