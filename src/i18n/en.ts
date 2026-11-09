@@ -59,6 +59,14 @@ const enChat: Messages["chat"] = {
   fxNote:
     "Converted at settlement rate {rate} (daily fix − 0.3). Landed cost = EXW + freight + duty + fulfillment commission — tap 'Landed cost' for the line-item breakdown",
   feeLine: "Service fee {rate}% · Tier B estimate (the calculator prices your exact category & amount)",
+  echoTitle: "What I heard",
+  echoProduct: "Item",
+  echoQty: "Qty",
+  echoDest: "Ship to",
+  echoBudget: "Budget",
+  echoRegion: "Origin",
+  srcUser: "you said",
+  srcAi: "AI guess",
   feeMin: " · $50 minimum applies",
   diyLine:
     "Compare: sourcing it yourself (vetting · QC · freight · disputes) typically costs 15%–25% of goods value + 2–3 weeks, industry estimate — our fee covers vetting, double QC, consolidation & loss cover paid first",

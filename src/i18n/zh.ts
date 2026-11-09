@@ -56,6 +56,14 @@ export const zhChat = {
   fxNote:
     "按结汇汇率 {rate} 折算（当日牌价 − 0.3）；到手价 = 出厂价 + 运费 + 关税 + 履约佣金，点「算到手价」逐行试算",
   feeLine: "服务费 {rate}% · 按 B 档估（到手价试算按实际类目与金额精确算）",
+  echoTitle: "我理解的需求",
+  echoProduct: "品类",
+  echoQty: "数量",
+  echoDest: "发往",
+  echoBudget: "预算",
+  echoRegion: "产地",
+  srcUser: "你说的",
+  srcAi: "AI 推断",
   feeMin: " · 本单触发最低收费 $50",
   diyLine:
     "对照：自己找厂的隐形成本（验厂/跟单/质检/货代/纠纷）≈ 货值 15%–25% + 2–3 周（行业经验估算）；服务费已含验厂、双检、拼柜与先行赔付",

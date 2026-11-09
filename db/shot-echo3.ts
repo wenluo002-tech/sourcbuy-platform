@@ -1,0 +1,16 @@
+import { chromium } from "playwright-core";
+const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+await page.goto("http://localhost:3200/buyer", { waitUntil: "networkidle" });
+const box = page.getByPlaceholder(/Name the product|说出你要的品/);
+await box.click();
+await box.fill("I need 2000 yoga pants shipped to Germany");
+await page.keyboard.press("Enter");
+await page.getByText(/What I heard|我理解的需求/).waitFor({ timeout: 60_000 });
+await page.waitForTimeout(1500);
+await page.getByText(/What I heard|我理解的需求/).scrollIntoViewIfNeeded();
+await page.waitForTimeout(400);
+await page.screenshot({ path: "shot/echo3-en.png" });
+const body = await page.textContent("body");
+console.log("AI guess 徽标数:", (body?.match(/AI guess/g) ?? []).length, "| you said 徽标数:", (body?.match(/you said/g) ?? []).length);
+await browser.close();

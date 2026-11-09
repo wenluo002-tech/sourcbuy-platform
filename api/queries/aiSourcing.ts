@@ -14,6 +14,7 @@ import { enrichFactoryLive } from "./shopEnrich";
 import { getDb } from "./connection";
 import { sql as dsql } from "drizzle-orm";
 import { getBuyerProfile } from "./context";
+import { tagIntentSources } from "../../contracts/sourceNote";
 
 // 买家在打听某家具体工厂底细（人数/规模/成立年份/验厂/靠不靠谱）的识别词
 const FACTORY_QA_RE = /(多少人|员工|工人|规模|面积|厂房|成立|哪年|哪一年|验厂|实力|靠不靠谱|靠谱吗|怎么样|底细|可信|真实|employees|workers|staff|how big|factory size|established|founded|audit|audited|reliable|trust|legit)/i;
@@ -503,6 +504,11 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       intent = localIntentFallback(message.replace(/https?:\/\/\S+/g, " ")); // 数量只在买家原话里找——链接标题里的"50 Pack"是规格不是采购量
     }
   }
+
+  // 字段级来源标注：不信 LLM 自报，由规则在买家语料里找证据（user/ai/derived/unknown 四态，AI 推断必须亮身份）
+  const historyUserText = history.filter((m) => m.role === "user").map((m) => m.content).join(" ");
+  const intentSources = tagIntentSources(message, historyUserText, intent, { fromImage: !!imageData, fromRadar: !!radarCtx });
+
   const messages = [
     ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
     { role: "user" as const, content: message },
@@ -534,10 +540,10 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
           : `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
         abortSignal: AbortSignal.timeout(12_000),
       });
-      return { reply: text, understood: false, intent, factories: [], product: null, followUp: null };
+      return { reply: text, understood: false, intent, intentSources, factories: [], product: null, followUp: null };
     } catch (e) {
       log.warn("greeting 话术生成失败，用静态开场白", { error: e instanceof Error ? e.message : String(e) });
-      return { reply: locale === "en" ? GREETING_FALLBACK_EN : GREETING_FALLBACK, understood: false, intent, factories: [], product: null, followUp: null };
+      return { reply: locale === "en" ? GREETING_FALLBACK_EN : GREETING_FALLBACK, understood: false, intent, intentSources, factories: [], product: null, followUp: null };
     }
   }
 
@@ -839,7 +845,8 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   return {
     reply,
     understood: factories.length > 0 || !!productInfo || searchProducts.length > 0,
-    intent: { product: intent.product, quantity: intent.quantity },
+    intent: { product: intent.product, quantity: intent.quantity, destination: intent.destination, region: intent.region, budgetNote: intent.budgetNote },
+    intentSources, // 字段级来源标注（四态）——前端逐字段亮明"你说的/AI推断"
     factoryQa: !!factoryCard, // 供推荐证据链落库标记"本轮触发了问到即采"
     manualQuote, // 建材工业桶：前端据此把费率估算行换成"人工核价"提示
     factories,
@@ -867,6 +874,7 @@ export async function sourcingChat(message: string, history: ChatMsg[], radarId?
           : "我这边系统卡了一下——不是你的问题，是我这头的接口闹脾气。你的话我记住了，稍等片刻再发一次就行；急着看货就先去「严选工厂库」自己逛，看中的发我，我接着帮你查底细。",
       understood: false,
       intent: { product: null, quantity: null },
+      intentSources: null, // 全兜底出口：无可信意图，前端不渲染来源行
       factories: [],
       products: [],
       product: null,

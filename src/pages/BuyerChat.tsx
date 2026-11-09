@@ -73,6 +73,8 @@ interface Turn {
   products?: SearchProduct[];
   linkRef?: LinkRef | null;
   quantity?: string | null;
+  echoIntent?: EchoIntent | null; // 「我理解的需求」来源行的展示值（product/quantity/destination/region/budgetNote）
+  intentSources?: IntentSourcesData | null;
   followUp?: FollowUpCardData | null;
   followUpDone?: string | null; // 已提交/已跳过后的摘要（卡片变一行灰字）
   manualQuote?: boolean; // 建材工业桶：费率估算不适用，卡片换"人工核价"提示
@@ -87,6 +89,63 @@ interface FollowUpQuestion {
 }
 interface FollowUpCardData {
   questions: FollowUpQuestion[];
+}
+
+/* 字段级来源标注（四态）：AI 推断的必须亮明身份，缺的不猜 */
+interface SourceNoteData {
+  source: "user" | "ai" | "derived" | "unknown";
+  confidence: number | null;
+  note: { zh: string; en: string };
+}
+interface IntentSourcesData {
+  product: SourceNoteData;
+  quantity: SourceNoteData;
+  destination: SourceNoteData;
+  budget: SourceNoteData;
+  region: SourceNoteData;
+}
+
+/* 「我理解的需求」来源行：逐字段亮明 你说的 / AI推断；unknown 不显示（缺失项由追问卡负责） */
+interface EchoIntent {
+  product: string | null;
+  quantity: number | null;
+  destination?: string | null;
+  region?: string | null;
+  budgetNote?: string | null;
+}
+function IntentEcho({ sources, intent }: { sources: IntentSourcesData; intent?: EchoIntent | null }) {
+  const { t, lang } = useT();
+  const items: { label: string; value: string; n: SourceNoteData }[] = [];
+  const push = (label: string, value: string | number | null, n: SourceNoteData) => {
+    if (value == null || n.source === "unknown") return;
+    items.push({ label, value: String(value), n });
+  };
+  push(t("chat.echoProduct"), intent?.product ?? null, sources.product);
+  push(t("chat.echoQty"), intent?.quantity ?? null, sources.quantity);
+  push(t("chat.echoDest"), intent?.destination ?? null, sources.destination);
+  push(t("chat.echoRegion"), intent?.region ?? null, sources.region);
+  push(t("chat.echoBudget"), intent?.budgetNote?.replace(/^(预算|目标价|budget[:：]?\s*)/i, "") ?? null, sources.budget);
+  if (!items.length) return null;
+  return (
+    <div className="max-w-[94%] flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-[var(--sb-ink-40)]">
+      <span className="font-semibold uppercase tracking-[0.14em]">{t("chat.echoTitle")}</span>
+      {items.map((it, i) => (
+        <span key={i} className="inline-flex items-center gap-1">
+          <span className="text-[var(--sb-ink-60)]">{it.label} {it.value}</span>
+          <span
+            title={lang === "en" ? it.n.note.en : it.n.note.zh}
+            className={
+              it.n.source === "user"
+                ? "rounded-full border border-[var(--sb-line)] px-1.5 py-px text-[9px] text-[var(--sb-ink-40)]"
+                : "rounded-full border border-amber-300/70 bg-amber-50 px-1.5 py-px text-[9px] font-medium text-amber-700"
+            }
+          >
+            {it.n.source === "user" ? t("chat.srcUser") : `${t("chat.srcAi")}${it.n.confidence != null ? ` ${Math.round(it.n.confidence * 100)}%` : ""}`}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /* 补充问题卡：多题同卡、chips 只选不发、选完一次提交；常驻"跳过，直接寻源"。非阻塞——结果已先出 */
@@ -715,6 +774,8 @@ export default function BuyerChat() {
               products: (res as any).products?.length ? (res as any).products : undefined,
               linkRef: (res as any).linkContext ?? null,
               quantity: (res as any).intent?.quantity ?? null,
+              echoIntent: (res as any).intent ?? null,
+              intentSources: (res as any).intentSources ?? null,
               followUp: (res as any).followUp ?? null,
               manualQuote: !!(res as any).manualQuote,
             },
@@ -755,6 +816,8 @@ export default function BuyerChat() {
                 products: p.products?.length ? p.products : undefined,
                 linkRef: p.linkContext ?? null,
                 quantity: p.intent?.quantity ?? null,
+                echoIntent: p.intent ?? null,
+                intentSources: p.intentSources ?? null,
                 followUp: null,
                 manualQuote: !!p.manualQuote,
               };
@@ -865,6 +928,9 @@ export default function BuyerChat() {
               <div className="max-w-[94%] border-l-2 border-[var(--sb-brand)]/60 pl-4 text-sm leading-[1.75] whitespace-pre-wrap text-[var(--sb-ink)]">
                 {turn.content}
               </div>
+
+              {/* 「我理解的需求」来源行：AI 推断的字段亮明身份（不编数据铁律的界面化） */}
+              {turn.intentSources && <IntentEcho sources={turn.intentSources} intent={turn.echoIntent} />}
 
               {/* 补充问题卡：多题同卡一次提交 / 跳过直寻 */}
               {turn.followUp && (

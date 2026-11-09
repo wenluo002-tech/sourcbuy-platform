@@ -40,7 +40,20 @@ for (const q of ["衣架", "蓝牙耳机", "保温杯", "瑜伽裤"]) {
   } catch (e: any) { check(`${q} 命中严选厂在册货`, false, String(e?.message).slice(0, 60)); }
 }
 
-console.log("\n[3] 追问卡四场景");
+console.log("\n[3] 字段级来源标注（四态：user/ai/derived/unknown）");
+{
+  const d = await chat("我要500条瑜伽裤预算8000美元发美国");
+  const s = d.intentSources;
+  check("intentSources 结构存在", !!s && typeof s === "object");
+  if (s) {
+    check("品类标 user", s.product?.source === "user", s.product?.source);
+    check("数量标 user", s.quantity?.source === "user", s.quantity?.source);
+    check("目的地标 user", s.destination?.source === "user", s.destination?.source);
+    check("产地缺→unknown 不猜", s.region?.source === "unknown", s.region?.source);
+  }
+}
+
+console.log("\n[3b] 追问卡四场景");
 {
   const a = await chat("我想采购一批瑜伽裤");
   check("缺信息→出卡", !!a.followUp && a.followUp.questions.length >= 2, `${a.followUp?.questions?.length ?? 0}题`);
