@@ -145,6 +145,12 @@ console.log("\n[7] M3a 账号与会话记忆");
   // 登录老账号能取回
   const login = await call("auth.login", { email: em, password: pw });
   check("重新登录成功", login.status === 200 && login.json?.result?.data?.json?.user?.email === em);
+  // 2026-11-09 iframe 预览修复：cookie 会被浏览器第三方策略拦截，token 必须双通道下发+可用
+  const bearerToken = login.json?.result?.data?.json?.token;
+  check("登录响应体回 token（双通道）", typeof bearerToken === "string" && bearerToken.length === 64);
+  const meBearer = await fetch(`${BASE}/api/trpc/auth.me`, { headers: { Authorization: `Bearer ${bearerToken}` }, signal: AbortSignal.timeout(30_000) });
+  const meBearerJson: any = await meBearer.json().catch(() => null);
+  check("Bearer 头可认证（无 cookie 场景）", meBearerJson?.result?.data?.json?.email === em);
 }
 
 console.log("\n[8] M3b 订单状态机");

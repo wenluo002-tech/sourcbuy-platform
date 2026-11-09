@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
-import { useAuth } from "@/auth";
+import { useAuth, withAuthToken } from "@/auth";
 import { useT } from "@/i18n";
 import { GROUP_FLOW, STATUS_GROUP, type OrderStatus, type OrderQuote } from "@contracts/orderFlow";
 
@@ -154,7 +154,7 @@ export default function OrderDetail() {
                 )}
                 {r.hasPdf && (
                   <a
-                    href={`/api/qc/${r.id}/pdf`}
+                    href={withAuthToken(`/api/qc/${r.id}/pdf`)}
                     target="_blank"
                     rel="noreferrer"
                     className="mt-2 inline-block text-xs font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"

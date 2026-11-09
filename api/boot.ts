@@ -10,7 +10,7 @@ import { env } from "./lib/env";
 import { log } from "./lib/logger";
 import { handleClientLog } from "./lib/clientlog";
 import { REQUEST_ID_HEADER, runWithRequestId } from "./lib/requestcontext";
-import { getSessionUser, readSessionCookie } from "./lib/auth";
+import { getSessionUser, readSessionToken } from "./lib/auth";
 import { validateUpload, registerEvidence, evidenceCounts, canAccessReport, getEvidenceWithReport, getOpsDetail } from "./queries/inspection";
 import { generateReportPdf } from "./lib/qcPdf";
 
@@ -91,7 +91,7 @@ const QC_EXT: Record<string, string> = {
 };
 
 async function qcUser(c: any) {
-  const user = await getSessionUser(readSessionCookie(c.req.raw)).catch(() => null);
+  const user = await getSessionUser(readSessionToken(c.req.raw)).catch(() => null);
   const allow = (process.env.OPS_ADMIN_EMAILS ?? "").split(",").map((s: string) => s.trim().toLowerCase()).filter(Boolean);
   const isOps = !!user && !!user.email && allow.includes(user.email.toLowerCase());
   return { user, isOps };

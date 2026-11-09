@@ -79,6 +79,25 @@ export function sessionCookieHeader(token: string, expiresAt: Date, secure: bool
   return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Expires=${expiresAt.toUTCString()}${secure ? "; Secure" : ""}`;
 }
 
+// 会话 token 三通道读取（2026-11-09 登录修复）：预览面板是跨站 iframe，Chrome/Safari
+// 拦截第三方 cookie——Set-Cookie 明明 200 发出却被浏览器丢弃，用户怎么登录都是匿名。
+// 所以登录响应体同时回 token，前端存 localStorage，之后每个请求带 Authorization: Bearer；
+// <img>/PDF 这类无法带 header 的直接引用走 ?at= query。cookie 通道保留给正常第一方访问。
+export function readSessionToken(req: Request): string | null {
+  const c = readSessionCookie(req);
+  if (c) return c;
+  const h = req.headers.get("authorization");
+  if (h?.startsWith("Bearer ")) {
+    const t = h.slice(7).trim();
+    if (/^[0-9a-f]{64}$/i.test(t)) return t;
+  }
+  try {
+    const at = new URL(req.url).searchParams.get("at");
+    if (at && /^[0-9a-f]{64}$/i.test(at)) return at;
+  } catch { /* ignore */ }
+  return null;
+}
+
 export function clearSessionCookieHeader(): string {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }

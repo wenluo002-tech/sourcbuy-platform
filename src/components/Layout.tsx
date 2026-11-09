@@ -95,7 +95,7 @@ export default function Layout() {
               </span>
             ) : (
               <Link
-                to="/login"
+                to={"/login?next=" + encodeURIComponent(pathname)}
                 className="ml-1 shrink-0 border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)] sm:ml-2"
               >
                 {t("nav.signIn")}

@@ -211,7 +211,7 @@ function TempCheck({ sel }: { sel: string }) {
           </button>
         ) : (
           <Link
-            to="/login"
+            to="/login?next=%2Ffactories"
             className="sb-pill border border-black/15 px-5 py-2.5 text-sm hover:bg-black/[0.03]"
           >
             {t("factories.tempLogin")}

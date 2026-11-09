@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useT } from "@/i18n";
-import { getAnonId, useAuth } from "@/auth";
+import { getAnonId, setToken, useAuth } from "@/auth";
 
 export default function Login() {
   const { t, lang } = useT();
@@ -17,7 +17,9 @@ export default function Login() {
   const [displayName, setDisplayName] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
-  const onOk = () => {
+  const onOk = (data?: { token?: string }) => {
+    // 双通道：cookie 之外把 token 存本地，iframe 预览里 cookie 会被浏览器拦掉
+    if (data?.token) setToken(data.token);
     refresh();
     utils.threads.list.invalidate();
     nav(sp.get("next") || "/buyer");

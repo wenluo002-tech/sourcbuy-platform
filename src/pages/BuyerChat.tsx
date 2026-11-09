@@ -813,7 +813,7 @@ export default function BuyerChat() {
         <div className="mb-2 max-h-56 overflow-y-auto rounded-xl border border-[var(--sb-line)] bg-white p-2">
           {!me ? (
             <p className="px-2 py-3 text-center text-xs text-[var(--sb-ink-40)]">
-              <Link to="/login" className="font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline">{t("nav.signIn")}</Link>
+              <Link to="/login?next=%2Fbuyer" className="font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline">{t("nav.signIn")}</Link>
               {" · "}{t("history.loginHint")}
             </p>
           ) : threadsQ.isLoading ? (

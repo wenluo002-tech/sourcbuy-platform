@@ -244,7 +244,8 @@ export const appRouter = createRouter({
         const { user, token, expiresAt } = r;
         await claimAnonThreads(input.anonId, user.id);
         ctx.resHeaders.append("Set-Cookie", sessionCookieHeader(token, expiresAt, ctx.req.url.startsWith("https:")));
-        return { user };
+        // token 同时回响应体：跨站 iframe 预览里 cookie 会被浏览器拦截，前端存 localStorage 走 Bearer
+        return { user, token };
       }),
     login: publicQuery
       .input(z.object({ email: z.string().max(191), password: z.string().min(1).max(72), anonId: z.string().max(36).optional() }))
@@ -259,7 +260,7 @@ export const appRouter = createRouter({
         const { user, token, expiresAt } = r;
         await claimAnonThreads(input.anonId, user.id);
         ctx.resHeaders.append("Set-Cookie", sessionCookieHeader(token, expiresAt, ctx.req.url.startsWith("https:")));
-        return { user };
+        return { user, token };
       }),
     logout: publicQuery.mutation(async ({ ctx }) => {
       await destroySession(ctx.sessionToken);

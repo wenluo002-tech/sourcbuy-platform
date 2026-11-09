@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { trpc } from "@/providers/trpc";
-import { useAuth } from "@/auth";
+import { useAuth, withAuthToken } from "@/auth";
 
 const VERDICTS = [
   { v: "pass", label: "合格", cls: "bg-[#0a7a30]" },
@@ -83,9 +83,9 @@ export default function OpsInspection() {
               {evs.length === 0 && <p className="mt-2 text-xs text-[var(--sb-ink-40)]">（未上传）</p>}
               <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {evs.map((e: any) => (
-                  <button key={e.id} onClick={() => setPreview(`/api/qc/file/${e.id}`)} className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--sb-line)] bg-black/5">
+                  <button key={e.id} onClick={() => setPreview(withAuthToken(`/api/qc/file/${e.id}`))} className="group relative aspect-square overflow-hidden rounded-lg border border-[var(--sb-line)] bg-black/5">
                     {e.mediaType === "photo" ? (
-                      <img src={`/api/qc/file/${e.id}`} alt="" className="h-full w-full object-cover" />
+                      <img src={withAuthToken(`/api/qc/file/${e.id}`)} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center text-2xl">{e.mediaType === "video" ? "🎬" : "📄"}</span>
                     )}
@@ -162,7 +162,7 @@ export default function OpsInspection() {
           </button>
         )}
         {d.verdict && (
-          <a href={`/api/qc/${d.id}/pdf`} target="_blank" rel="noreferrer" className="rounded-lg border border-[var(--sb-line)] px-4 py-2 text-xs font-semibold hover:border-[var(--sb-brand)]">
+          <a href={withAuthToken(`/api/qc/${d.id}/pdf`)} target="_blank" rel="noreferrer" className="rounded-lg border border-[var(--sb-line)] px-4 py-2 text-xs font-semibold hover:border-[var(--sb-brand)]">
             查看/重生成 PDF 报告
           </a>
         )}
