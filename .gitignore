@@ -40,3 +40,4 @@ build/
 coverage/
 .nyc_output/
 .1688-session.json
+uploads/
