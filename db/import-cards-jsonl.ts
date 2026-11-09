@@ -60,8 +60,10 @@ for (const line of lines) {
       if (!dup.length) writes.member_id = mid; else collisions++;
     }
     if (c.mainCraft) {
+      // 坑：mysql2 对 JSON 列自动解析，f.tags 可能是数组也可能是字符串，双形态都要接
       let tags: string[] = [];
-      try { tags = JSON.parse(f.tags ?? "[]"); } catch { tags = []; }
+      if (Array.isArray(f.tags)) tags = f.tags.map(String);
+      else { try { tags = JSON.parse(f.tags ?? "[]"); } catch { tags = []; } }
       const add = String(c.mainCraft).split(/[|、,，]/).map((s) => s.trim()).filter((s) => s && !tags.includes(s));
       if (add.length) writes.tags = JSON.stringify([...tags, ...add]);
     }

@@ -175,8 +175,10 @@ async function main() {
           if (!dup.length) writes.member_id = matched.memberId; else writes.member_id_collision = dup[0].id;
         }
         if (matched.mainCraft) {
+          // mysql2 对 JSON 列自动解析，tags 双形态都要接
           let tags: string[] = [];
-          try { tags = JSON.parse(f.tags ?? "[]"); } catch { tags = []; }
+          if (Array.isArray(f.tags)) tags = f.tags.map(String);
+          else { try { tags = JSON.parse(f.tags ?? "[]"); } catch { tags = []; } }
           const add = matched.mainCraft.split(/[|、,，]/).map((s) => s.trim()).filter((s) => s && !tags.includes(s));
           if (add.length) writes.tags = JSON.stringify([...tags, ...add]);
         }
