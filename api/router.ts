@@ -1,4 +1,4 @@
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, opsQuery } from "./middleware";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -21,6 +21,7 @@ import { classifyAiError, AiUnavailable } from "./lib/ai-client";
 import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } from "../contracts/freightRates";
 import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, appendMessage, listThreads, getThreadMessages } from "./queries/auth";
 import { createInquiry, listMyOrders, getOrderDetail, transitionOrder } from "./queries/orders";
+import * as qc from "./queries/inspection";
 import {
   listAddresses, createAddress, updateAddress, removeAddress, setDefaultAddress,
   listNotifications, unreadCount, markRead, markAllRead, dashboardSummary,
@@ -364,6 +365,88 @@ export const appRouter = createRouter({
 
   dashboard: createRouter({
     summary: authedQuery.query(({ ctx }) => dashboardSummary(ctx.user.id)),
+  }),
+
+  // ---- 质检双检（2026-11-09 PRD v1.1）：买家看自己订单的报告；运营走 opsQuery 白名单闸 ----
+  // 工厂/仓库 H5 上传走 REST /api/qc/upload（multipart 视频装不进 tRPC 50MB bodyLimit，见 boot.ts）
+  inspection: createRouter({
+    // 买家：自己订单的质检报告列表（归属校验在查询层，越权返回 null）
+    listMine: authedQuery
+      .input(z.object({ orderId: z.number().int().positive() }))
+      .query(({ input, ctx }) => qc.listForBuyer(input.orderId, ctx.user.id)),
+    // 工厂/仓库 H5：凭 token 读上传页数据 + 提交待判定（token 即凭证，永不透给买家侧）
+    byToken: publicQuery
+      .input(z.object({ token: z.string().min(16).max(64) }))
+      .query(({ input }) => qc.getByToken(input.token)),
+    submitByToken: publicQuery
+      .input(z.object({ token: z.string().min(16).max(64) }))
+      .mutation(async ({ input }) => {
+        const r = await qc.submitByToken(input.token);
+        if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
+        return r;
+      }),
+    // 运营：开报告（一检挂 goods_ready / 二检挂 in_warehouse），返回上传 token（发给工厂的 H5 链接）
+    create: opsQuery
+      .input(z.object({
+        orderId: z.number().int().positive(),
+        phase: z.union([z.literal(1), z.literal(2)]),
+        template: z.string().max(32).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const r = await qc.createReport(input);
+        if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
+        return r;
+      }),
+    // 运营：质检工作台——待判定/全部报告列表
+    list: opsQuery
+      .input(z.object({ status: z.string().max(20).optional() }))
+      .query(({ input }) => qc.listForOps(input)),
+    // 运营：可操作订单列表（报完工/已到仓/质检中的订单 + 各自报告状态）
+    actionable: opsQuery.query(() => qc.listActionableOrders()),
+    // 运营：报告详情（含证据清单）
+    detail: opsQuery
+      .input(z.object({ reportId: z.number().int().positive() }))
+      .query(({ input }) => qc.getOpsDetail(input.reportId)),
+    // 运营：人工判定（AI 只预检，判定权永远在人）
+    review: opsQuery
+      .input(z.object({
+        reportId: z.number().int().positive(),
+        verdict: z.enum(["pass", "conditional", "rework", "reject"]),
+        note: z.string().max(2000).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const r = await qc.reviewReport({ ...input, inspectorId: ctx.user.id });
+        if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
+        return r;
+      }),
+    // 运营：返工后重新开放上传（令牌换新）
+    reopen: opsQuery
+      .input(z.object({ reportId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        const r = await qc.reopenUpload(input.reportId);
+        if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
+        return r;
+      }),
+    // 运营：确认工厂盖章回传（触发 60% 货款节点）
+    markSigned: opsQuery
+      .input(z.object({ reportId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        const r = await qc.markSigned(input.reportId);
+        if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
+        return r;
+      }),
+    // 运营/仓库：二检实测重量体积（第二段账单出账依据）
+    measure: opsQuery
+      .input(z.object({
+        reportId: z.number().int().positive(),
+        weightKg: z.number().positive(),
+        volumeCbm: z.number().positive(),
+      }))
+      .mutation(async ({ input }) => {
+        const r = await qc.recordMeasurements(input);
+        if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
+        return r;
+      }),
   }),
 });
 

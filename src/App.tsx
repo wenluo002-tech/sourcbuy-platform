@@ -13,11 +13,16 @@ import Dashboard from './pages/Dashboard'
 import Addresses from './pages/Addresses'
 import Notifications from './pages/Notifications'
 import Inquiries from './pages/Inquiries'
+import QcUpload from './pages/QcUpload'
+import OpsOrders from './pages/OpsOrders'
+import OpsInspection from './pages/OpsInspection'
 import Layout from './components/Layout'
 
 export default function App() {
   return (
     <Routes>
+      {/* 工厂端质检上传页：独立路由不进 Layout（无导航/无页脚，纯取证界面） */}
+      <Route path="/qc/:token" element={<QcUpload />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
         <Route path="/buyer" element={<BuyerChat />} />
@@ -33,6 +38,9 @@ export default function App() {
         <Route path="/addresses" element={<Addresses />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/inquiries" element={<Inquiries />} />
+        {/* 运营质检工作台（白名单闸在服务端 opsQuery，页面只兜展示） */}
+        <Route path="/ops" element={<OpsOrders />} />
+        <Route path="/ops/qc/:id" element={<OpsInspection />} />
       </Route>
     </Routes>
   )

@@ -204,6 +204,50 @@ console.log("\n[8] M3b 订单状态机");
   check("事件链完整（3 条留痕）", (d4.json?.result?.data?.json?.events?.length ?? 0) === 3);
 }
 
+console.log("\n[8] 质检双检（2026-11-09 PRD v1.1）：表结构 + 鉴权边界（判卷不碰凭证，ops 凭证永不进 git）");
+{
+  const db = getDb();
+  // 表存在且有 e2e 产物（人工全流程已通过：上传→提交→判定→签章→PDF）
+  const [t1]: any = await db.execute(sql`SHOW TABLES LIKE 'inspection_reports'`);
+  const [t2]: any = await db.execute(sql`SHOW TABLES LIKE 'inspection_evidences'`);
+  check("inspection_reports / inspection_evidences 表存在", t1.length === 1 && t2.length === 1);
+  const [cols]: any = await db.execute(sql`SHOW COLUMNS FROM orders LIKE 'status'`);
+  check("orders.status 枚举含双检新态", typeof cols[0]?.Type === "string" && cols[0].Type.includes("insp1_passed") && cols[0].Type.includes("dispatched"));
+  const [rep]: any = await db.execute(sql`SELECT COUNT(*) AS c FROM inspection_reports`);
+  check("已有质检报告落库（e2e 产物）", Number(rep[0].c) >= 1, `${rep[0].c} 份`);
+
+  // 鉴权边界（全部不需要凭证）
+  const badTok = await fetch(`${BASE}/api/trpc/inspection.byToken?input=${encodeURIComponent(JSON.stringify({ json: { token: "badtoken1234567890" } }))}`);
+  const badTokJson: any = await badTok.json();
+  check("错 token 读上传页返回 null（不暴露报告是否存在）", badTokJson?.result?.data?.json === null);
+
+  const upNoFile = await fetch(`${BASE}/api/qc/upload`, { method: "POST", body: new FormData() });
+  check("上传缺参数被拒（400）", upNoFile.status === 400);
+
+  const badUp = await fetch(`${BASE}/api/qc/upload`, {
+    method: "POST",
+    body: (() => { const f = new FormData(); f.append("token", "badtoken1234567890"); f.append("itemCode", "appearance"); f.append("file", new Blob(["x"], { type: "image/jpeg" }), "x.jpg"); return f; })(),
+  });
+  check("错 token 上传被拒（403）", badUp.status === 403);
+
+  const anonFile = await fetch(`${BASE}/api/qc/file/1`);
+  check("匿名访问证据文件被拒（403）", anonFile.status === 403);
+
+  const anonPdf = await fetch(`${BASE}/api/qc/1/pdf`);
+  check("匿名访问报告 PDF 被拒（403）", anonPdf.status === 403);
+
+  const noSess = await fetch(`${BASE}/api/trpc/inspection.review`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ json: { reportId: 1, verdict: "pass" } }),
+  });
+  const noSessJson: any = await noSess.json();
+  check("无会话调判定接口被拒（UNAUTHORIZED）", noSessJson?.error?.json?.data?.code === "UNAUTHORIZED");
+
+  const noSessList = await fetch(`${BASE}/api/trpc/inspection.listMine?input=${encodeURIComponent(JSON.stringify({ json: { orderId: 1 } }))}`);
+  const noSessListJson: any = await noSessList.json();
+  check("无会话查买家报告被拒（UNAUTHORIZED）", noSessListJson?.error?.json?.data?.code === "UNAUTHORIZED");
+}
+
 console.log(`\n═══ 验收结果：${pass} PASS / ${fail} FAIL ═══`);
 if (fail) { console.log("失败项：", fails.join(" | ")); process.exit(1); }
 console.log("检查单全过，允许存版本。");

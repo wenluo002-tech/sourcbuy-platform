@@ -4,7 +4,7 @@ import { Link, useParams, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/auth";
 import { useT } from "@/i18n";
-import { ORDER_FLOW, type OrderStatus, type OrderQuote } from "@contracts/orderFlow";
+import { GROUP_FLOW, STATUS_GROUP, type OrderStatus, type OrderQuote } from "@contracts/orderFlow";
 
 const WHY_KEYS = ["price", "leadtime", "sample", "audit", "comm", "other"] as const;
 
@@ -15,6 +15,7 @@ export default function OrderDetail() {
   const nav = useNavigate();
   const utils = trpc.useUtils();
   const q = trpc.orders.detail.useQuery({ orderId: Number(id) }, { enabled: !!me });
+  const qcQ = trpc.inspection.listMine.useQuery({ orderId: Number(id) }, { enabled: !!me });
   const actMut = trpc.orders.act.useMutation({
     onSuccess: () => utils.orders.detail.invalidate({ orderId: Number(id) }),
   });
@@ -40,7 +41,9 @@ export default function OrderDetail() {
   if (!o) return <p className="mx-auto max-w-3xl px-4 py-16 text-center text-sm text-[var(--sb-ink-40)]">404</p>;
 
   const status = o.status as OrderStatus;
-  const flowIdx = ORDER_FLOW.indexOf(status);
+  // 进度条按 7 组折叠（17 态直排会爆版）：当前组 = 精确状态所属组；组内精确状态由顶部状态标签展示
+  const curGroup = STATUS_GROUP[status];
+  const groupIdx = GROUP_FLOW.indexOf(curGroup);
   const quote = (o.quote ?? null) as OrderQuote | null;
   const fmtDate = (d: any) => new Date(d).toLocaleString(lang === "en" ? "en-US" : "zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
@@ -82,33 +85,89 @@ export default function OrderDetail() {
         )}
       </div>
 
-      {/* 主流程进度条 */}
+      {/* 主流程进度条（7 组折叠） */}
       {status !== "cancelled" && (
         <div className="mt-4 rounded-2xl border border-[var(--sb-line)] bg-white p-5">
           <div className="flex items-center">
-            {ORDER_FLOW.map((s, i) => (
-              <div key={s} className="flex flex-1 items-center last:flex-none">
+            {GROUP_FLOW.map((g, i) => (
+              <div key={g} className="flex flex-1 items-center last:flex-none">
                 <div className="flex flex-col items-center">
                   <div
                     className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold ${
-                      i < flowIdx
+                      i < groupIdx
                         ? "bg-[var(--sb-brand)] text-white"
-                        : i === flowIdx
+                        : i === groupIdx
                           ? "bg-[var(--sb-brand)] text-white ring-4 ring-[var(--sb-brand)]/15"
                           : "border border-[var(--sb-line)] text-[var(--sb-ink-40)]"
                     }`}
                   >
                     {i + 1}
                   </div>
-                  <span className={`mt-1.5 whitespace-nowrap text-[10px] ${i <= flowIdx ? "font-medium text-[var(--sb-brand)]" : "text-[var(--sb-ink-40)]"}`}>
-                    {t(`orders.status.${s}`)}
+                  <span className={`mt-1.5 whitespace-nowrap text-[10px] ${i <= groupIdx ? "font-medium text-[var(--sb-brand)]" : "text-[var(--sb-ink-40)]"}`}>
+                    {t(`orders.status.${g}`)}
                   </span>
                 </div>
-                {i < ORDER_FLOW.length - 1 && (
-                  <div className={`mx-1 mb-5 h-px flex-1 ${i < flowIdx ? "bg-[var(--sb-brand)]" : "bg-[var(--sb-line)]"}`} />
+                {i < GROUP_FLOW.length - 1 && (
+                  <div className={`mx-1 mb-5 h-px flex-1 ${i < groupIdx ? "bg-[var(--sb-brand)]" : "bg-[var(--sb-line)]"}`} />
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 质检报告区块：双检报告 + 先行赔付承诺（有报告才显示） */}
+      {qcQ.data && qcQ.data.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-[var(--sb-line)] bg-white p-5">
+          <h2 className="text-sm font-semibold">{t("orders.qcTitle")}</h2>
+          <p className="mt-1 text-[11px] leading-relaxed text-[var(--sb-ink-40)]">{t("orders.qcSub")}</p>
+          <div className="mt-3 space-y-3">
+            {qcQ.data.map((r: any) => (
+              <div key={r.id} className="rounded-xl border border-[var(--sb-line)] p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold">
+                    {t(r.phase === 1 ? "orders.qcPhase1" : "orders.qcPhase2")}
+                    <span className="ml-2 font-normal text-[var(--sb-ink-40)]">{r.reportNo}</span>
+                  </p>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                      r.status === "passed" || r.status === "signed"
+                        ? "bg-[#e7f6ec] text-[#0a7a30]"
+                        : r.status === "rejected"
+                          ? "bg-[#fdeaea] text-[#b00020]"
+                          : r.status === "rework"
+                            ? "bg-[#fdf6e3] text-[#92610a]"
+                            : "bg-black/5 text-[var(--sb-ink-60)]"
+                    }`}
+                  >
+                    {r.verdict ? t(`orders.qcVerdict.${r.verdict}`) : t(`orders.qcStatus.${r.status}`)}
+                  </span>
+                </div>
+                {r.inspectorNote && r.status !== "uploading" && r.status !== "pending_review" && (
+                  <p className="mt-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
+                    <span className="font-medium">{t("orders.qcInspectorNote")}：</span>
+                    {r.inspectorNote}
+                  </p>
+                )}
+                {r.phase === 2 && r.measuredWeightKg != null && r.measuredVolumeCbm != null && (
+                  <p className="mt-2 text-xs text-[var(--sb-ink-60)]">{t("orders.qcMeasure", { kg: r.measuredWeightKg, cbm: r.measuredVolumeCbm })}</p>
+                )}
+                {r.hasPdf && (
+                  <a
+                    href={`/api/qc/${r.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-block text-xs font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline"
+                  >
+                    {t("orders.qcViewPdf")} →
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 space-y-1 border-t border-[var(--sb-line)] pt-3 text-[11px] leading-relaxed text-[var(--sb-ink-40)]">
+            <p className="font-medium text-[#92610a]">{t("orders.qcCompensation")}</p>
+            <p>{t("orders.qcIncluded")}</p>
           </div>
         </div>
       )}
@@ -216,7 +275,7 @@ export default function OrderDetail() {
           )}
         </div>
       )}
-      {status === "shipped" && (
+      {status === "dispatched" && (
         <button
           onClick={() => actMut.mutate({ orderId: o.id, action: "confirmReceive" })}
           disabled={actMut.isPending}

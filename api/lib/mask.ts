@@ -5,14 +5,18 @@
 // 纪律：mask 只做减法（替换/抽空），绝不编造字段；代号由 id 确定性生成，同一厂永远同一代号。
 import { getDb } from "../queries/connection";
 import { sql } from "drizzle-orm";
+import { PAID_STATUSES } from "../../contracts/orderFlow";
 
 export async function isUnlockedBuyer(userId: number | null | undefined): Promise<boolean> {
   if (!userId) return false;
   try {
     const db = getDb();
-    // 已付款状态：pending_payment 之后的四态（inquiry/quoted/pending_payment 都未付款，不解锁）
+    // 已付款状态从 ORDER_FLOW 派生（sourcing 及以后全部主态，2026-11-09 状态机扩展后不再硬编码清单）
     const [r]: any = await db.execute(
-      sql`SELECT 1 FROM orders WHERE user_id = ${userId} AND status IN ('sourcing','inspecting','shipped','received') LIMIT 1`
+      sql`SELECT 1 FROM orders WHERE user_id = ${userId} AND status IN (${sql.join(
+        PAID_STATUSES.map((s) => sql`${s}`),
+        sql`, `
+      )}) LIMIT 1`
     );
     return Array.isArray(r) && r.length > 0;
   } catch {

@@ -363,7 +363,7 @@ export const orders = mysqlTable(
     quantity: int("quantity"),
     destination: varchar("destination", { length: 128 }),
     demand: text("demand"), // 买家原话需求
-    status: mysqlEnum("status", ["inquiry", "quoted", "pending_payment", "sourcing", "inspecting", "shipped", "received", "cancelled"]).notNull().default("inquiry"),
+    status: mysqlEnum("status", ["inquiry", "quoted", "pending_payment", "sourcing", "producing", "goods_ready", "insp1_uploading", "insp1_review", "insp1_passed", "shipped", "in_warehouse", "insp2_review", "insp2_passed", "awaiting_phase2_pay", "phase2_paid", "dispatched", "received", "cancelled"]).notNull().default("inquiry"), // 完整 17+1 态见 contracts/orderFlow.ts（2026-11-09 双检扩展）
     quote: json("quote"), // 报价单快照：出厂价/运费/关税/佣金/总额/汇率/渠道/时效/报价时间——报价一旦给出就是快照，不随后台数据漂移
     decisionTags: json("decision_tags").$type<string[]>(), // 买家确认报价时的选择理由（价格/交期/样品/验厂/沟通/其他）——决策上下文核心资产
     decisionNote: varchar("decision_note", { length: 255 }), // 选择理由可选补充（买家原话）
@@ -462,4 +462,54 @@ export const buyerProfiles = mysqlTable(
     inferredAt: timestamp("inferred_at").notNull().defaultNow(), // 推断时间（画像有时效）
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   }
+);
+
+// ============ 质检双检（2026-11-09 罗总拍板，PRD v1.1）============
+// 一检=工厂完工后出货检（工厂按清单自拍证据→运营人工判定）；二检=入仓质检（实测重量/体积出第二段账单）
+// 判定四值见 contracts/inspection.ts；报告编号 SB-QC-XXXXX 由 inspReportNo() 生成
+
+export const inspectionReports = mysqlTable(
+  "inspection_reports",
+  {
+    id: serial("id").primaryKey(),
+    reportNo: varchar("report_no", { length: 24 }).notNull(), // SB-QC-00001（展示编号，生成见 contracts/inspection.ts）
+    orderId: bigint("order_id", { mode: "number", unsigned: true }).notNull(),
+    phase: int("phase").notNull(), // 1=出厂质检（一检） 2=入仓质检（二检）
+    template: varchar("template", { length: 32 }).notNull().default("generic"), // 清单模板 id（baluster_ss / generic）
+    status: mysqlEnum("status", ["uploading", "pending_review", "passed", "rework", "rejected", "signed"]).notNull().default("uploading"),
+    uploadToken: varchar("upload_token", { length: 64 }).notNull(), // 工厂 H5 上传页令牌（一次性、可过期）
+    tokenExpiresAt: timestamp("token_expires_at"), // 令牌过期时间（空=不过期，P0 默认 7 天）
+    verdict: mysqlEnum("verdict", ["pass", "conditional", "rework", "reject"]), // 运营人工判定（AI 只预检，永不下判定）
+    inspectorNote: text("inspector_note"), // 质检员批注（对买家可见，英文优先）
+    inspectorId: bigint("inspector_id", { mode: "number", unsigned: true }), // 判定人（ops 账号 user id）
+    factorySignPath: varchar("factory_sign_path", { length: 512 }), // 工厂盖章回传件路径（触发 60% 货款节点）
+    pdfPath: varchar("pdf_path", { length: 512 }), // 生成的英文 PDF 报告路径
+    measuredWeightKg: decimal("measured_weight_kg", { precision: 10, scale: 3 }), // 二检实测重量（出账依据）
+    measuredVolumeCbm: decimal("measured_volume_cbm", { precision: 10, scale: 4 }), // 二检实测体积（出账依据）
+    reviewedAt: timestamp("reviewed_at"), // 判定时间
+    signedAt: timestamp("signed_at"), // 工厂签章回传时间
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_insp_no").on(t.reportNo),
+    uniqueIndex("uq_insp_token").on(t.uploadToken),
+    index("ix_insp_order").on(t.orderId, t.phase),
+  ]
+);
+
+export const inspectionEvidences = mysqlTable(
+  "inspection_evidences",
+  {
+    id: serial("id").primaryKey(),
+    reportId: bigint("report_id", { mode: "number", unsigned: true }).notNull(),
+    itemCode: varchar("item_code", { length: 32 }).notNull(), // 清单项 code（batch_tag/appearance/spectrometer/...）
+    mediaType: mysqlEnum("media_type", ["photo", "video", "file"]).notNull(), // file=PDF 等文档（材质单/盖章回传）
+    filePath: varchar("file_path", { length: 512 }).notNull(), // 相对 uploads/ 的存储路径（按 id 鉴权访问，不直接暴露）
+    fileSize: int("file_size").notNull(), // 字节
+    uploadedBy: mysqlEnum("uploaded_by", ["factory", "warehouse", "ops"]).notNull(), // 一检=factory 二检=warehouse 补传=ops
+    note: varchar("note", { length: 255 }), // 上传备注（可选）
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_ievd_report").on(t.reportId, t.itemCode)]
 );

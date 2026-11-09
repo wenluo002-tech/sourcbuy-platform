@@ -16,6 +16,11 @@ async function addEvent(orderId: number, from: string | null, to: string, actor:
   await db.insert(orderEvents).values({ orderId, fromStatus: from, toStatus: to, actor, note: note ?? null });
 }
 
+// 纯留痕（状态不变）：异常处置等"不改变状态但必须可回放"的场景用，如二检不合格停在 insp2_review
+export async function logOrderEvent(orderId: number, status: string, actor: "buyer" | "ops" | "system", note: string) {
+  await addEvent(orderId, status, status, actor, note);
+}
+
 // 发起询价：必须登录（询价即建档，订单跟着账号走）；商品快照 + 买家原话都留底
 export async function createInquiry(input: {
   userId: number;
@@ -100,7 +105,7 @@ export async function transitionOrder(input: {
   if (input.actor === "buyer") {
     const allowed =
       (from === "quoted" && input.to === "pending_payment") ||
-      (from === "shipped" && input.to === "received") ||
+      (from === "dispatched" && input.to === "received") ||
       (input.to === "cancelled" && (from === "inquiry" || from === "quoted" || from === "pending_payment"));
     if (!allowed) return { ok: false as const, error: "BAD_TRANSITION", from, to: input.to };
   }
