@@ -43,6 +43,7 @@ export const es = {
     h1Line2Pre: "Fábricas verificadas. ",
     h1Line2Accent: "Precios de fábrica",
     h1Line2Post: ".",
+    slogan: "Compra con IA. Nosotros cubrimos el resto.",
     trustMain: "IA que selecciona y conecta directo con fábricas de origen",
     trustPoints: [
       "Miles de fábricas verificadas",

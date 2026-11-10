@@ -655,6 +655,7 @@ export const zh = {
     h1Line2Pre: "好货与",
     h1Line2Accent: "底价",
     h1Line2Post: "一次给齐。",
+    slogan: "AI 采购，全程兜底。",
     trustMain: "AI 严选直连源头工厂",
     trustPoints: ["数千家严选工厂", "评分公开可核验", "全程只站你这边"],
     placeholder: "例如：LED 灯带 500 卷，暖白，欧规插头，发德国…",

@@ -660,6 +660,7 @@ export const en: Messages = {
     h1Line2Pre: "Vetted factories. ",
     h1Line2Accent: "Floor prices",
     h1Line2Post: ".",
+    slogan: "Source with AI. We cover the rest.",
     trustMain: "AI-matched, direct from source factories",
     trustPoints: ["Thousands of vetted factories", "Open, verifiable scores", "On your side, end to end"],
     placeholder: "e.g. LED strip lights, 500 rolls, warm white, EU plugs, ship to Germany…",

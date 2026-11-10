@@ -43,6 +43,7 @@ export const fr = {
     h1Line2Pre: "Usines vérifiées. ",
     h1Line2Accent: "Prix plancher",
     h1Line2Post: ".",
+    slogan: "Achetez avec l'IA. Nous couvrons le reste.",
     trustMain: "IA sélectionnée, en direct des usines sources",
     trustPoints: [
       "Des milliers d'usines sélectionnées",
