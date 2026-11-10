@@ -1,0 +1,15 @@
+process.loadEnvFile();
+import { getDb } from "../api/queries/connection";
+import { sql } from "drizzle-orm";
+const db = getDb();
+const r1: any = await db.execute(sql.raw(`SELECT COUNT(*) c FROM legacy_products`));
+console.log("总数:", r1[0][0].c);
+const r2: any = await db.execute(sql.raw(`SELECT product_id, LEFT(title,30) t, price_cny, price_suspect, tier_legacy, image IS NOT NULL AND image!='' AS has_img FROM legacy_products LIMIT 3`));
+console.log("样例:", JSON.stringify(r2[0], null, 1));
+const r3: any = await db.execute(sql.raw(`SELECT COUNT(*) c FROM legacy_products WHERE title LIKE '%饭盒%'`));
+console.log("饭盒 LIKE:", r3[0][0].c);
+const r4: any = await db.execute(sql.raw(`SELECT COUNT(*) c FROM legacy_products WHERE price_suspect=0 AND price_cny>0.01 AND price_cny<50000`));
+console.log("价格过滤后:", r3[0] && r4[0][0].c);
+const r5: any = await db.execute(sql.raw(`SELECT COUNT(*) c FROM legacy_products WHERE image IS NOT NULL AND image!=''`));
+console.log("有图:", r5[0][0].c);
+process.exit(0);

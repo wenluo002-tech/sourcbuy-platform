@@ -220,6 +220,7 @@ export const es = {
     sellingItem: "En venta: 「{title}」",
     rankLine: "N.º {rank} / {total} en la categoría {cat}",
     goldBadge: "✓ Registrada en banco verificado · con stock: desde ¥{price} · ventas {sales}（verificado en tiempo real）",
+    goldBadgeArchive: "✓ Registrada en banco verificado · con stock: desde ¥{price}",
     bucketNote: "Fábrica de alto puntaje en la misma categoría · para este producto, confirma primero con fotos",
     whyRecommend: "¿Por qué la recomendamos?（{n} evidencias）",
     factoryProfile: "Expediente de fábrica →",

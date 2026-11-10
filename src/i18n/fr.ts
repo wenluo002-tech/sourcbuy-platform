@@ -220,6 +220,7 @@ export const fr = {
     sellingItem: "En vente « {title} »",
     rankLine: "{cat} · classé {rank}/{total} usines",
     goldBadge: "✓ Réseau sélectionné · ce produit en vente : dès ¥{price} · ventes {sales} (vérifié en temps réel)",
+    goldBadgeArchive: "✓ Réseau sélectionné · ce produit en vente : dès ¥{price}",
     bucketNote: "Usine à haute note, même grand domaine · envoyez vos plans pour confirmer ce produit",
     whyRecommend: "Pourquoi cette recommandation ? ({n} preuves)",
     factoryProfile: "Dossier usine →",

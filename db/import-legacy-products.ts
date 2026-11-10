@@ -5,8 +5,8 @@
 //   ⑤ tier 是对方口径（tier≠分数档，3.3 节实证），存 tier_legacy 与我们五档分层物理隔离；
 //   ⑥ 综合分是工厂快照分非商品分，字段名 factory_score 防止误用；
 //   ⑦ 32.5% 商品无工厂档案是数据现状，如实入库，查询层 join 落空走降级；
-//   ⑧ INSERT IGNORE 幂等（product_id 主键），可断点重跑；
-//   ⑨ 入库后必须实际 SELECT 抽查（tags 事故教训）。
+//   ⑧ 幂等（product_id 主键），可断点重跑；v2 修复：image 列曾漏插，ON DUPLICATE 只补空 image 不覆盖；
+//   ⑨ 入库后必须实际 SELECT 抽查（tags 事故教训——正是这条抓住了 image 漏插）。
 // 用法: npx tsx db/import-legacy-products.ts <csv路径> [--execute] [--limit N]
 process.loadEnvFile();
 import { getDb } from "../api/queries/connection";
@@ -105,9 +105,11 @@ async function main() {
     if (batch.length === 0) return;
     if (EXECUTE) {
       const values = batch.map((r) => "(" + r.map(esc).join(",") + ")").join(",");
+      // image 列历史漏插（v1 bug），ON DUPLICATE 只补空值不覆盖——幂等重跑即回填
       await db.execute(sql.raw(
-        `INSERT IGNORE INTO legacy_products
-         (product_id,title,spec_json,spec_text,fine_category,member_id,factory_name,factory_score,tier_legacy,price_cny,price_suspect,moq_text,moq_min) VALUES ${values}`));
+        `INSERT INTO legacy_products
+         (product_id,title,spec_json,spec_text,fine_category,member_id,factory_name,factory_score,tier_legacy,price_cny,price_suspect,moq_text,moq_min,image) VALUES ${values}
+         ON DUPLICATE KEY UPDATE image = IF(image IS NULL OR image = '', VALUES(image), image)`));
     }
     batch = [];
   };
@@ -144,6 +146,7 @@ async function main() {
       suspect ? priceN : (priceN != null && Number.isFinite(priceN) ? priceN : null), // 异常价也原样存，靠 flag 隔离
       suspect,
       moq || null, moqMin,
+      img || null,
     ]);
     if (batch.length >= 500) await flush2();
     if (total % 50000 === 0) console.log(`  …已处理 ${total.toLocaleString()} 行`);

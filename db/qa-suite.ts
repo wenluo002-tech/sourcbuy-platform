@@ -105,6 +105,31 @@ console.log("\n[3d] 多语言字典键集一致性（es/fr/pt 与 zh 同键，�
   }
 }
 
+console.log("\n[3e] legacy 商品库召回层（39.6 万对方资产：商品召回 + 以货带厂直挂严选厂）");
+{
+  const db = await getDb();
+  const total: any = await db.execute(sql`SELECT COUNT(*) AS c FROM legacy_products`);
+  const cnt = Number(total?.[0]?.[0]?.c ?? total?.[0]?.c ?? 0);
+  check("legacy_products 全量在库（396,445）", cnt === 396445, `${cnt}`);
+  const img: any = await db.execute(sql`SELECT COUNT(*) AS c FROM legacy_products WHERE image IS NOT NULL AND image != ''`);
+  const ic = Number(img?.[0]?.[0]?.c ?? img?.[0]?.c ?? 0);
+  check("image 字段已回填（>30 万有图）", ic > 300000, `${ic}`);
+
+  const { legacySearchItems, legacyLinkedFactories } = await import("../api/sourcing/offerService");
+  const items = await legacySearchItems("饭盒", 8);
+  check("legacy 商品召回非空、价格正常、有图", items.length >= 3 && items.every((i) => i.price > 0.01 && i.price < 50000 && !!i.image), `${items.length} 条`);
+  check("legacy 召回销量口径=0（档案库无销量，不编造）", items.length > 0 && items.every((i) => i.sales === 0), "sales=0");
+
+  const linked = await legacyLinkedFactories("饭盒", 3);
+  if (!linked.length) check("legacy 以货带厂命中严选厂", false, "0 命中");
+  else {
+    const ids = linked.map((l) => l.factory.id);
+    const fr: any = await db.execute(sql`SELECT COUNT(*) AS c FROM factories WHERE id IN (${sql.join(ids.map((i) => sql`${i}`), sql`,`)}) AND is_trader = 0 AND dup_of IS NULL`);
+    const fc = Number(fr?.[0]?.[0]?.c ?? fr?.[0]?.c ?? 0);
+    check("legacy 以货带厂全部命中严选库在册厂（非贸易商/未去重）", fc === linked.length, `${fc}/${linked.length}`);
+  }
+}
+
 console.log("\n[3b] 追问卡四场景");
 {
   const a = await chat("我想采购一批瑜伽裤");

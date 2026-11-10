@@ -4,7 +4,7 @@ import { z } from "zod";
 import { listModels } from "../lib/ai-client";
 import { matchFactories } from "./factories";
 import { extractOfferId, offerWithFactory } from "./products";
-import { searchOffers, linkTopOffersToFactories, poolSearch } from "../sourcing/offerService";
+import { searchOffers, linkTopOffersToFactories, poolSearch, legacyLinkedFactories } from "../sourcing/offerService";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import { log } from "../lib/logger";
 import { listRadar, getRadarItem } from "./radar";
@@ -106,7 +106,7 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 14. 如果系统事实里有 linkContext：买家贴了海外零售平台的商品链接。先用一两句确认你从链接里读到了什么（平台 + 品名；有 priceText 就报海外售价），再给国内货源和工厂。priceText 与出厂价带的差可以点一句"毛利空间看着不错"，但必须提醒零售价不是净利润（平台佣金、广告、尾程运费都没算）。linkContext.source 为 slug 时说明"链接页面挡了抓取，我从链接路径认出来的，你核对下对不对"；fetchFailed=true 时老实说"这个链接我没打开"，让买家补一句品名或截个图，绝不要假装认识这个链接。
 15. 如果系统事实里有 imageContext：买家发来了商品图。先确认你从图里认出的品类和可见规格（原样引用 specsNote），补一句"认错了你纠正我"。imageContext.failed=true 时老实说图片没认出来，让买家补一句品名，绝不要假装看懂了。
 16. 工厂清单里每家带 matchBasis，三级证据口径必须严格区分：
-   - productLinked=这家厂就在我们严选库里、且有这款的在售货源（linkedOffer 给了标题/出厂价/销量，全是实时核对的真实数据）。这是最硬证据，你可以笃定地说"这家厂就在卖这款，在售链接、出厂价、销量我都核过了"，并引用 linkedOffer 里的真实价格与销量点评。
+   - productLinked=这家厂就在我们严选库里、且有这款的在售货源（linkedOffer 给了标题/出厂价/销量）。这是最硬证据，你可以笃定地说"这家厂就在卖这款，在售链接、出厂价我都核过了"，并引用 linkedOffer 里的真实价格点评。注意：sales>0 的销量才是实时核对过的，可以引用；sales=0 表示该货源来自档案库、销量未知，绝口不提销量。
    - direct=这家厂的名称/评语/标签里明确出现过这类产品词，可以说"做这类产品的"。
    - bucket=它只是该类目大类下的高分厂，没有直接证据表明做过这款——你必须说清楚"这几家是大类下的高分厂，做没做过这款要拿图询价确认，我不打包票"，绝不暗示它们做这款。
    清单全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
@@ -147,7 +147,7 @@ Rules:
 14. If system facts contain linkContext: the buyer pasted an overseas retail link. First confirm what you read from the link (platform + item name; quote priceText as the overseas price), then give domestic supply and factories. You may note the gap between priceText and the EXW band as "the margin looks decent", but must warn that retail price is not net profit (platform fees, ads, last-mile not deducted). If linkContext.source is "slug", say "the page blocked scraping — I recognized it from the link path, double-check me"; if fetchFailed=true, honestly say "I couldn't open this link" and ask for a product name or screenshot — never pretend to know the link.
 15. If system facts contain imageContext: the buyer sent a product photo. Confirm what you recognized (quote specsNote verbatim) and add "correct me if I'm wrong". If failed=true, honestly say you couldn't recognize it and ask for a product name — never pretend you understood it.
 16. Every factory in the list carries matchBasis — three evidence grades, strictly distinguished:
-   - productLinked = this factory is in our vetted database AND has this exact item on sale (linkedOffer gives title / EXW price / sales, all verified live). Hardest evidence: you may state confidently "this factory sells this exact item — listing, price and sales all verified", quoting linkedOffer's real price and sales.
+   - productLinked = this factory is in our vetted database AND has this exact item on sale (linkedOffer gives title / EXW price / sales). Hardest evidence: you may state confidently "this factory sells this exact item — listing and price verified", quoting linkedOffer's real price. Note: sales>0 means live-verified sales you may quote; sales=0 means the listing comes from our archive and sales is unknown — never mention sales then.
    - direct = the factory's name / review / tags explicitly mention this product type — you can say "they make this kind of product".
    - bucket = merely a high scorer in the broader category, no direct evidence they've made this exact item — you must say clearly "these are high scorers in the broader category; whether they've made this exact item needs confirmation with photos and an inquiry — no promises", never imply they make it.
    If the whole list is bucket, use rule 12's framing: "no vetted factory verified for this exact item", and present the category high-scorers as inquiry leads.
@@ -299,7 +299,7 @@ function buildFallbackReply(
   const directCount = factories.filter((f) => f.matchBasis === "direct").length;
   if (linkedCount > 0) {
     const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
-    const sample = l0?.linkedOffer ? `比如清单最前这家（${l0.name}），这款它正在卖，出厂 ¥${l0.linkedOffer.price} 起、上游销量 ${l0.linkedOffer.sales.toLocaleString()}——在售数据我刚核过` : "";
+    const sample = l0?.linkedOffer ? `比如清单最前这家（${l0.name}），这款它正在卖，出厂 ¥${l0.linkedOffer.price} 起${l0.linkedOffer.sales > 0 ? `、上游销量 ${l0.linkedOffer.sales.toLocaleString()}——在售数据我刚核过` : "——在册档案货源"}` : "";
     parts.push(
       `${what}有个硬证据：${linkedCount} 家严选厂就在卖这款，在售链接、出厂价、销量我都逐一核对过${sample ? "——" + sample : ""}。${directCount > 0 ? `另有 ${directCount} 家明确做这类产品的厂，` : ""}${factories.length - linkedCount - directCount > 0 ? `再附 ${factories.length - linkedCount - directCount} 家同大类高分厂做参考，` : ""}卡片在下面，证据都摊开着。`,
     );
@@ -366,7 +366,7 @@ function buildFallbackReplyEn(
   const directCount = factories.filter((f) => f.matchBasis === "direct").length;
   if (linkedCount > 0) {
     const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
-    const sample = l0?.linkedOffer ? ` The top pick (${l0.name}) is selling this exact item — from ¥${l0.linkedOffer.price}, upstream sales ${l0.linkedOffer.sales.toLocaleString()}; I verified the listing just now.` : "";
+    const sample = l0?.linkedOffer ? ` The top pick (${l0.name}) is selling this exact item — from ¥${l0.linkedOffer.price}${l0.linkedOffer.sales > 0 ? `, upstream sales ${l0.linkedOffer.sales.toLocaleString()}; I verified the listing just now.` : " — a vetted-archive listing."}` : "";
     parts.push(
       `${what} comes with hard evidence: ${linkedCount} vetted factories are selling this exact item — listing, EXW price and sales all checked live.${sample}${directCount > 0 ? ` Another ${directCount} explicitly make this kind of product.` : ""}${factories.length - linkedCount - directCount > 0 ? ` Plus ${factories.length - linkedCount - directCount} high scorers in the broader category for reference.` : ""} Cards are below, evidence laid out.`,
     );
@@ -608,12 +608,20 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   if (keyword) {
     try {
       const pooled = await poolSearch(keyword, 20).catch(() => [] as Awaited<ReturnType<typeof poolSearch>>);
-      const linked = pooled.length
+      let linked = pooled.length
         ? await Promise.race([
             linkTopOffersToFactories(pooled, 3),
             new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
           ])
         : null;
+      // legacy 商品库补位：产品池以货带厂不足 3 家时，用对方 39.6 万资产里 member_id 直挂严选厂的货（零 API 成本）
+      if (!linked || linked.length < 3) {
+        const legacyLinked = await legacyLinkedFactories(keyword, 3 - (linked?.length ?? 0)).catch(() => [] as Awaited<ReturnType<typeof legacyLinkedFactories>>);
+        if (legacyLinked.length) {
+          const seenF = new Set((linked ?? []).map((l) => l.factory.id));
+          linked = [...(linked ?? []), ...legacyLinked.filter((l) => !seenF.has(l.factory.id))];
+        }
+      }
       if (linked?.length) {
         // 买家指定产地（region）时，以货带厂只保留该地区的厂——别地区厂即使在售这款货也不插队（买家立场）
         const regionFiltered = intent.region
@@ -632,7 +640,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
             linkedOffer: { offerId: l.offerId, title: l.title, price: l.price, sales: l.sales },
             categoryRank: f.categoryRank, // 保留原排名（若有）
             evidence: [
-              `在售这款货：「${l.title.slice(0, 40)}」¥${l.price} 起 · 上游销量 ${l.sales.toLocaleString()}（实时核对）`,
+              `在售这款货：「${l.title.slice(0, 40)}」¥${l.price} 起` + (l.sales > 0 ? ` · 上游销量 ${l.sales.toLocaleString()}（实时核对）` : " · 在册档案货源"),
               ...f.evidence,
             ],
           };
@@ -656,7 +664,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
             matchBasis: "productLinked" as const,
             linkedOffer: { offerId: l.offerId, title: l.title, price: l.price, sales: l.sales },
             categoryRank: null,
-            evidence: [`在售这款货：「${l.title.slice(0, 40)}」¥${l.price} 起 · 上游销量 ${l.sales.toLocaleString()}（实时核对）`],
+            evidence: [`在售这款货：「${l.title.slice(0, 40)}」¥${l.price} 起` + (l.sales > 0 ? ` · 上游销量 ${l.sales.toLocaleString()}（实时核对）` : " · 在册档案货源")],
           });
         }
         // productLinked 置前，其余保持 direct 前 bucket 后的原序；封顶 6 家

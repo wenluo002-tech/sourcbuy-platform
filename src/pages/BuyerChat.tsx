@@ -1031,7 +1031,9 @@ export default function BuyerChat() {
                       )}
                       {f.matchBasis === "productLinked" && f.linkedOffer && (
                         <p className="mt-2 rounded-md bg-[#fdf6e3] px-2 py-1.5 text-xs font-medium leading-relaxed text-[#92610a] ring-1 ring-[#e9d5a1]">
-                          {t("chat.goldBadge", { price: f.linkedOffer.price, sales: f.linkedOffer.sales.toLocaleString() })}
+                          {f.linkedOffer.sales > 0
+                            ? t("chat.goldBadge", { price: f.linkedOffer.price, sales: f.linkedOffer.sales.toLocaleString() })
+                            : t("chat.goldBadgeArchive", { price: f.linkedOffer.price })}
                         </p>
                       )}
                       {f.matchBasis === "bucket" && (

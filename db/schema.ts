@@ -513,3 +513,27 @@ export const inspectionEvidences = mysqlTable(
   },
   (t) => [index("ix_ievd_report").on(t.reportId, t.itemCode)]
 );
+
+// ============ 对方系统 products 全量资产（2026-11-10 灌库 396,445 条，db/import-legacy-products.ts）============
+// 纪律：原样入库不清洗；tier_legacy 与对方口径物理隔离；factory_score 是工厂快照分非商品分
+export const legacyProducts = mysqlTable(
+  "legacy_products",
+  {
+    productId: varchar("product_id", { length: 32 }).primaryKey(), // 1688 offer id
+    title: varchar("title", { length: 512 }).notNull(),
+    specJson: text("spec_json"),
+    specText: text("spec_text"),
+    fineCategory: varchar("fine_category", { length: 128 }),
+    memberId: varchar("member_id", { length: 64 }), // → join factories.member_id
+    factoryName: varchar("factory_name", { length: 255 }),
+    factoryScore: decimal("factory_score", { precision: 4, scale: 1 }),
+    tierLegacy: varchar("tier_legacy", { length: 16 }),
+    priceCny: decimal("price_cny", { precision: 12, scale: 2 }),
+    priceSuspect: int("price_suspect").notNull().default(0),
+    moqText: varchar("moq_text", { length: 64 }),
+    moqMin: int("moq_min"),
+    image: text("image"),
+    importedAt: timestamp("imported_at").notNull().defaultNow(),
+  },
+  (t) => [index("ix_lp_member").on(t.memberId), index("ix_lp_cat").on(t.fineCategory), index("ix_lp_score").on(t.factoryScore)]
+);

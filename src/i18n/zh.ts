@@ -78,6 +78,7 @@ export const zhChat = {
   sellingItem: "在售「{title}」",
   rankLine: "{cat}类目第 {rank} / {total} 家",
   goldBadge: "✓ 严选库在册 · 有这款在售：¥{price} 起 · 销量 {sales}（已实时核对）",
+  goldBadgeArchive: "✓ 严选库在册 · 有这款在售：¥{price} 起",
   bucketNote: "同大类高分厂 · 做这款请先拿图确认",
   whyRecommend: "为什么推荐它？（{n} 条证据）",
   factoryProfile: "工厂档案 →",

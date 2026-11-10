@@ -81,6 +81,7 @@ const enChat: Messages["chat"] = {
   sellingItem: 'Selling "{title}"',
   rankLine: "#{rank} of {total} in {cat}",
   goldBadge: "✓ Vetted & selling this exact item: from ¥{price} · {sales} sold (verified live)",
+  goldBadgeArchive: "✓ Vetted & selling this exact item: from ¥{price}",
   bucketNote: "High scorer in the broader category · confirm with photos before assuming they make this",
   whyRecommend: "Why this one? ({n} pieces of evidence)",
   factoryProfile: "Factory profile →",
