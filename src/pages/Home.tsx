@@ -140,20 +140,9 @@ export default function Home() {
                 goChat(kw);
               }}
             >
-              {/* 不用 display:none + JS .click()（部分 WebView 会静默吞掉）；
-                  label htmlFor 原生触发 + 视觉隐藏但存在于布局树的 input，兼容性最好。
+              {/* 真实 input 全尺寸覆盖在按钮上（opacity-0），指尖直接点在文件控件本体——
+                  htmlFor 转发和 JS click 在部分 WebView 都会被吞（v81 罗总手机实测复现后的根治形态）。
                   accept 只放通用 MIME（image/*、PDF），DWG 等冷门扩展名会让某些 WebView 打不开选择器，改由 JS 校验 */}
-              <input
-                id="home-attach"
-                type="file"
-                accept="image/*,application/pdf"
-                className="absolute h-px w-px overflow-hidden opacity-0"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onPickAttach(f);
-                  e.target.value = "";
-                }}
-              />
               <div className="flex items-stretch border border-[var(--sb-rule)] bg-white">
                 <input
                   value={kw}
@@ -162,15 +151,24 @@ export default function Home() {
                   className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
                 />
                 <label
-                  htmlFor="home-attach"
-                  role="button"
                   title={t("home.attachBtn")}
-                  className="flex shrink-0 cursor-pointer items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
+                  className="relative flex shrink-0 cursor-pointer items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
                 >
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
                   </svg>
                   <span className="hidden sm:inline">{t("home.attachBtn")}</span>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    aria-label={t("home.attachBtn")}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) onPickAttach(f);
+                      e.target.value = "";
+                    }}
+                  />
                 </label>
                 <button
                   type="submit"

@@ -172,6 +172,7 @@ export const es = {
     imageAlt: "Imagen de producto",
     defaultImageMsg: "Ayúdame a encontrar el proveedor del producto de la imagen",
     attachTitle: "Sube una imagen del producto o un archivo de planos (PDF/DWG, etc.)",
+    cameraTitle: "Fotografía el producto y busco las fábricas de origen",
     docReady: "Planos listos: {name} — el equipo de compras verificará el precio manualmente según los planos; cotización oficial en 48 horas",
     defaultDocMsg: "Cotiza el producto de estos planos",
     voiceStart: "Entrada de voz",

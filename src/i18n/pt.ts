@@ -172,6 +172,7 @@ export const pt = {
     imageAlt: "Imagem do produto",
     defaultImageMsg: "Ache a fonte do produto na imagem",
     attachTitle: "Envie imagem do produto ou arquivo de desenho (PDF/DWG etc.)",
+    cameraTitle: "Fotografe o produto — eu encontro as fábricas de origem",
     docReady: "Desenho pronto: {name} — equipe de compras cota manualmente pelo desenho, proposta formal em 48h",
     defaultDocMsg: "Cote para mim o produto deste desenho",
     voiceStart: "Entrada de voz",

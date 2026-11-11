@@ -24,6 +24,7 @@ export const zhChat = {
   imageAlt: "商品图",
   defaultImageMsg: "帮我找图里这个产品的货源",
   attachTitle: "上传商品图或图纸文件（PDF/DWG 等）",
+  cameraTitle: "拍照寻源：对着商品拍一张，我来找源头工厂",
   docReady: "图纸已就绪：{name}——采购团队按图人工核价，48 小时内出正式报价",
   defaultDocMsg: "这份图纸的产品帮我核个价",
   voiceStart: "语音输入",

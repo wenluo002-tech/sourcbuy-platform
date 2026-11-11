@@ -27,6 +27,7 @@ const enChat: Messages["chat"] = {
   imageAlt: "product photo",
   defaultImageMsg: "Find the source of the product in this photo",
   attachTitle: "Send a product photo or a drawing file (PDF/DWG etc.)",
+  cameraTitle: "Snap a photo of the product — I'll find the source factories",
   docReady: "Drawing ready: {name} — our sourcing team will price it manually, firm quote within 48 hours",
   defaultDocMsg: "Please price the product in this drawing",
   voiceStart: "Voice input",

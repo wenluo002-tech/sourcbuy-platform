@@ -639,7 +639,6 @@ export default function BuyerChat() {
   const [showHistory, setShowHistory] = useState(false);
   const threadsQ = trpc.threads.list.useQuery(undefined, { enabled: !!me && showHistory, staleTime: 10_000 });
   const utils = trpc.useUtils();
-  const fileRef = useRef<HTMLInputElement>(null);
   const chat = trpc.ai.chat.useMutation();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -686,6 +685,25 @@ export default function BuyerChat() {
         setImgError(t("chat.imageBadFormat"));
       }
     }
+  }
+
+  // 附件/拍照共用入口：图片走视觉识别寻源管线；图纸/文档只记文件名（内容不入库不进模型），走 48h 人工核价通道
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (f) {
+      if (f.type.startsWith("image/") || /\.hei[cf]$/i.test(f.name)) {
+        pickImage(f);
+      } else {
+        setImgError(null);
+        if (f.size > 20 * 1024 * 1024) {
+          setPendingFile(null);
+          setImgError(t("chat.imageTooLarge", { n: 20 }));
+        } else {
+          setPendingFile(f.name);
+        }
+      }
+    }
+    e.target.value = "";
   }
 
   function paintToCanvas(srcW: number, srcH: number, draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void) {
@@ -1145,33 +1163,8 @@ export default function BuyerChat() {
           send(input);
         }}
       >
-        {/* 同首页：label htmlFor 原生触发 + 视觉隐藏但存在于布局树（display:none+JS click 会被部分 WebView 静默吞掉）；
-            accept 只放通用 MIME，DWG 等冷门扩展名改由 JS 校验 */}
-        <input
-          id="chat-attach"
-          ref={fileRef}
-          type="file"
-          accept="image/*,application/pdf"
-          className="absolute h-px w-px overflow-hidden opacity-0"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) {
-              // 图片走视觉识别管线；图纸/文档只记文件名（内容不入库不进模型），走 48h 人工核价通道
-              if (f.type.startsWith("image/") || /\.hei[cf]$/i.test(f.name)) {
-                pickImage(f);
-              } else {
-                setImgError(null);
-                if (f.size > 20 * 1024 * 1024) {
-                  setPendingFile(null);
-                  setImgError(t("chat.imageTooLarge", { n: 20 }));
-                } else {
-                  setPendingFile(f.name);
-                }
-              }
-            }
-            e.target.value = "";
-          }}
-        />
+        {/* 附件/相机入口：真实 input 全尺寸覆盖在图标上（opacity-0），指尖直接点在文件控件本体——
+            htmlFor 转发和 JS click 在部分 WebView 都会被吞，这是兼容性最强的形态（v81） */}
         {pendingImage && (
           <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--sb-line)] bg-white px-2.5 py-2">
             <img src={pendingImage} alt={t("chat.imageAlt")} className="h-10 w-10 rounded-lg border border-[var(--sb-line)] object-cover" />
@@ -1217,14 +1210,37 @@ export default function BuyerChat() {
         )}
         <div className="flex items-center gap-2 rounded-2xl border border-[var(--sb-line)] bg-white p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05)]">
           <label
-            htmlFor="chat-attach"
-            role="button"
             title={t("chat.attachTitle")}
-            className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+            className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
           >
             <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
             </svg>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              aria-label={t("chat.attachTitle")}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              onChange={onPickFile}
+            />
+          </label>
+          {/* 拍照寻源：capture=environment 直接唤起后置相机（桌面端回落为文件选择），拍完即走图片识别寻源管线 */}
+          <label
+            title={t("chat.cameraTitle")}
+            className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2L9 4.8A1 1 0 0 1 9.9 4.3h4.2a1 1 0 0 1 .9.5l1.5 2.2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+              <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              aria-label={t("chat.cameraTitle")}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              onChange={onPickFile}
+            />
           </label>
           {SpeechRec && (
             <button

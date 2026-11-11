@@ -172,6 +172,7 @@ export const fr = {
     imageAlt: "Photo produit",
     defaultImageMsg: "Trouve la source du produit sur cette image",
     attachTitle: "Envoyez une photo produit ou un plan (PDF/DWG, etc.)",
+    cameraTitle: "Photographiez le produit — je trouve les usines sources",
     docReady: "Plan prêt : {name} — l’équipe achat chiffre manuellement sur plan, devis officiel sous 48 h",
     defaultDocMsg: "Chiffrez le produit de ce plan pour moi",
     voiceStart: "Saisie vocale",
