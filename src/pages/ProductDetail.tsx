@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/auth";
@@ -36,6 +36,39 @@ function FulfillmentChain({ dispatchNote }: { dispatchNote: string | null }) {
   );
 }
 
+/* 加载等待态：直连源头工厂核价核库存的过程话术（不提"翻译"，符合老采购人设）+ 转圈动画 + 副话术轮换。
+   外语首次访问要实时翻译数据层文本，等待 5–15s——绝不能白屏干等。 */
+function ProductLoading() {
+  const { t } = useT();
+  const [subIdx, setSubIdx] = useState(0);
+  useEffect(() => {
+    const tm = setInterval(() => setSubIdx((i) => (i + 1) % 3), 2400);
+    return () => clearInterval(tm);
+  }, []);
+  const subs = [t("product.loadingSub1"), t("product.loadingSub2"), t("product.loadingSub3")];
+  return (
+    <div className="mx-auto max-w-5xl py-4">
+      <div className="flex items-center gap-3.5 rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] px-4 py-3.5">
+        <span className="sb-spinner shrink-0" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{t("product.loadingMain")}</p>
+          <p key={subIdx} className="mt-0.5 text-xs text-[var(--sb-ink-60)]" style={{ animation: "sb-rise .45s ease both" }}>
+            {subs[subIdx]}
+          </p>
+        </div>
+      </div>
+      <div className="mt-6 grid animate-pulse gap-8 md:grid-cols-2">
+        <div className="aspect-square rounded-2xl bg-[var(--sb-paper)]" />
+        <div className="space-y-3">
+          <div className="h-6 w-3/4 rounded bg-[var(--sb-paper)]" />
+          <div className="h-10 w-1/2 rounded bg-[var(--sb-paper)]" />
+          <div className="h-24 rounded bg-[var(--sb-paper)]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProductDetail() {
   const { offerId = "" } = useParams();
   const { lang, t } = useT();
@@ -47,6 +80,21 @@ export default function ProductDetail() {
   const q = trpc.products.detailV2.useQuery({ offerId, locale: lang }, { retry: false });
   const offer = q.data?.offer ?? null;
   const factory = q.data?.factory ?? null;
+
+  // SKU 规格名 >8 个时后端异步分批填翻译缓存（绝不让买家为几百个规格名干等）——
+  // 前端检测到规格名仍含中文时每 4s 静默重取一次，缓存填到哪批就换上哪批；中文消完或满 20 次（80s）即停。
+  const skuRefetchTried = useRef(0);
+  useEffect(() => {
+    skuRefetchTried.current = 0; // 换商品/换语言时重计
+  }, [offerId, lang]);
+  useEffect(() => {
+    if (!offer || lang === "zh" || skuRefetchTried.current >= 20) return;
+    const hasZhSku = offer.skus?.some((s: { specText?: string }) => s.specText && /[\u4e00-\u9fff]/.test(s.specText));
+    if (!hasZhSku) return;
+    skuRefetchTried.current += 1;
+    const tm = setTimeout(() => q.refetch(), 4000);
+    return () => clearTimeout(tm);
+  }, [offer, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [imgIdx, setImgIdx] = useState(0);
   const [skuImg, setSkuImg] = useState<string | null>(null); // 选规格时切到该规格的颜色图
@@ -73,19 +121,7 @@ export default function ProductDetail() {
   const landed = trpc.pricing.landed.useQuery(calcInput!, { enabled: !!calcInput });
 
   if (q.isLoading) {
-    return (
-      <div className="mx-auto max-w-5xl animate-pulse py-4">
-        <div className="h-4 w-32 rounded bg-[var(--sb-paper)]" />
-        <div className="mt-6 grid gap-8 md:grid-cols-2">
-          <div className="aspect-square rounded-2xl bg-[var(--sb-paper)]" />
-          <div className="space-y-3">
-            <div className="h-6 w-3/4 rounded bg-[var(--sb-paper)]" />
-            <div className="h-10 w-1/2 rounded bg-[var(--sb-paper)]" />
-            <div className="h-24 rounded bg-[var(--sb-paper)]" />
-          </div>
-        </div>
-      </div>
-    );
+    return <ProductLoading />;
   }
 
   if (!offer) {
@@ -394,7 +430,7 @@ export default function ProductDetail() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <Link to={`/factories/${factory.id}`} className="text-base font-semibold hover:text-[var(--sb-brand)]">
-                  {factory.name}
+                  {(factory as any).masked ? t("chat.maskedName", { n: String(factory.id).padStart(4, "0") }) : factory.name}
                 </Link>
                 <p className="mt-1 text-xs text-[var(--sb-ink-40)]">
                   {[factory.tier ? t("product.factoryMetaTier", { tier: t(`home.tierName.${factory.tier}`) }) : null, factory.location, factory.years ? t("product.yearsOld", { n: factory.years }) : null].filter(Boolean).join(" · ")}

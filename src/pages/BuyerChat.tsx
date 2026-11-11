@@ -4,6 +4,7 @@ import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
 import { FX_SETTLEMENT } from "@contracts/fx";
 import { useT } from "@/i18n";
+import { unitLabel } from "@/lib/unit";
 import { getAnonId, useAuth } from "@/auth";
 
 interface MatchedFactory {
@@ -342,7 +343,7 @@ function ProductStrip({
   manualQuote?: boolean;
 }) {
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
-  const { t } = useT();
+  const { t, lang } = useT();
   // 佣金费率表 v1.0（单一事实源在后端 commission_rules 表；卡片按 B 档估，显式标注）
   const commissionQ = trpc.pricing.commissionTable.useQuery(undefined, { staleTime: 60 * 60_000 });
   const feeRule = (amtUsd: number) =>
@@ -422,7 +423,7 @@ function ProductStrip({
                 })()}
                 <div className="mt-1.5 flex items-center justify-between gap-1">
                   <span className="text-[10px] text-[var(--sb-ink-40)]">
-                    {p.sales > 0 ? t("chat.sold", { n: fmtSales(p.sales) }) : t("chat.onSale")}
+                    {p.sales > 0 ? t("chat.sold", { n: fmtSales(p.sales, lang) }) : t("chat.onSale")}
                   </span>
                   <div className="flex items-center gap-2">
                     <Link
@@ -460,7 +461,7 @@ function ProductCard({
 }) {
   const offer = product.offer;
   const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
-  const { t } = useT();
+  const { t, lang } = useT();
   const { me } = useAuth();
   const nav = useNavigate();
   const inquireMut = trpc.orders.create.useMutation({
@@ -502,7 +503,7 @@ function ProductCard({
           {offer.amountOnSale != null && offer.amountOnSale > 0 && (
             <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[var(--sb-ink-60)]">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-              {t("chat.onSaleStock", { n: offer.amountOnSale.toLocaleString(), unit: offer.unit ?? t("chat.unitPc") })}
+              {t("chat.onSaleStock", { n: offer.amountOnSale.toLocaleString(), unit: unitLabel(offer.unit, lang, t) })}
             </p>
           )}
         </div>
@@ -515,14 +516,14 @@ function ProductCard({
               ¥{main.price}
             </span>
             <span className="text-xs text-[var(--sb-ink-40)]">
-              {t("chat.perUnitExw", { unit: offer.unit ?? t("chat.unitPc") })}
+              {t("chat.perUnitExw", { unit: unitLabel(offer.unit, lang, t) })}
             </span>
             <span className="text-xs tabular-nums text-[var(--sb-ink-40)]">
               ≈ US${(main.price / REF_RATE).toFixed(2)}
             </span>
             {qty > 0 && (
               <span className="rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--sb-brand)]">
-                {t("chat.qtyTier", { qty: qty.toLocaleString(), unit: offer.unit ?? t("chat.unitPc") })}
+                {t("chat.qtyTier", { qty: qty.toLocaleString(), unit: unitLabel(offer.unit, lang, t) })}
               </span>
             )}
           </div>
@@ -988,7 +989,8 @@ export default function BuyerChat() {
                           to={`/factories/${f.id}`}
                           className="line-clamp-1 text-sm font-semibold hover:text-[var(--sb-brand)]"
                         >
-                          {f.name}
+                          {/* 未解锁代号按界面语言显示（后端 mask 固定中文模板，外语界面这里换 i18n 版） */}
+                          {(f as any).masked ? t("chat.maskedName", { n: String(f.id).padStart(4, "0") }) : f.name}
                         </Link>
                         <span className="shrink-0 rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
                           {f.score}

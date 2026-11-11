@@ -152,6 +152,10 @@ export const appRouter = createRouter({
           if (skuTexts.length <= 8) {
             for (const s of mOffer.skus) if (map[s.specText]) s.specText = map[s.specText];
           } else {
+            // 多 SKU：先查缓存把已翻好的批次立刻换上（渐进变译文），缺失部分后台分批补——下次刷新更全
+            const { lookupCached } = await import("./lib/translate");
+            const cached = await lookupCached(skuTexts, input.locale);
+            for (const s of mOffer.skus) if (cached[s.specText]) s.specText = cached[s.specText];
             translateTexts(skuTexts, input.locale).catch(() => {}); // fire-and-forget 填缓存
           }
         }

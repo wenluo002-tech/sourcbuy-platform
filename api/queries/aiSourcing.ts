@@ -22,11 +22,23 @@ const FACTORY_QA_RE = /(多少人|员工|工人|规模|面积|厂房|成立|哪�
 // ============ 选品意图：买家问"什么好卖/爆款/趋势" → 直接给真实雷达榜，不走 LLM ============
 const SELECTION_RE = /(好卖|爆款|热卖|畅销|趋势|选品|卖什么|什么.*(卖|火)|海外.*(流行|热)|trending|best[\s-]*seller|hot[\s-]*sell)/i;
 
-async function radarSelectionReply() {
+async function radarSelectionReply(locale: string = "zh") {
   try {
     const { items } = await listRadar();
     if (!items.length) return null;
     const top = items.slice(0, 5);
+    if (locale !== "zh") {
+      // 外语版：标题用 titleEn，信号文本走翻译管线（终身缓存；失败回落原文）
+      const { translateTexts } = await import("../lib/translate");
+      const sigMap = await translateTexts(top.map((it) => it.signalText), locale);
+      const lines = top.map((it, i) => {
+        const price = it.factoryPriceMin != null && it.factoryPriceMax != null ? `EXW range ¥${it.factoryPriceMin}–${it.factoryPriceMax}` : "ask me for a live factory quote";
+        const retail = it.retailPriceUsd != null ? ` · overseas retail ≈ $${it.retailPriceUsd}` : "";
+        return `${i + 1}. ${it.titleEn ?? it.title}\n   ${sigMap[it.signalText] ?? it.signalText}${retail}\n   ${price} · ~${it.vettedCount ?? 0} vetted factories in our database`;
+      });
+      const reply = `Good timing — here are the ${items.length} items climbing overseas this week that our factories can actually make, each with a verifiable source on the Best-Seller Radar board. Top 5:\n\n${lines.join("\n\n")}\n\nThe full board is on the Radar page — I wrote an honest note for every item, including the traps to avoid. Tell me which one catches your eye and I'll check the right factories and price it landed to your door. One reminder: the board shows demand signals, not guarantees — test small first, then scale.`;
+      return { reply, understood: true, intent: { product: null, quantity: null }, factories: [], products: [], product: null, followUp: null };
+    }
     const lines = top.map((it, i) => {
       const price = it.factoryPriceMin != null && it.factoryPriceMax != null ? `出厂价带 ¥${it.factoryPriceMin}–${it.factoryPriceMax}` : "出厂价询我查实价";
       const retail = it.retailPriceUsd != null ? `，海外零售约 $${it.retailPriceUsd}` : "";
@@ -440,7 +452,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
 
   // 选品意图（"什么好卖/爆款/趋势"）走真实雷达榜，零 LLM 延迟，绝不编数据
   if (!radarCtx && !extUrl && SELECTION_RE.test(message) && !extractOfferId(message)) {
-    const radar = await radarSelectionReply();
+    const radar = await radarSelectionReply(locale);
     if (radar) return radar;
   }
 
@@ -858,11 +870,37 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   // 补充问题卡：规则驱动（非阻塞——结果照出，卡附在下面；答过/跳过就不再问）
   const followUp = buildFollowUpCard(intent, message, history, locale);
 
-  // 商品墙数据层翻译：locale≠zh 时批量翻标题（缓存终身有效；失败/超时回落原文，绝不阻塞回复）
-  if (locale !== "zh" && searchProducts.length) {
+  // 商品数据层翻译：locale≠zh 时批量翻标题+类目路径（缓存终身有效；失败/超时回落原文，绝不阻塞回复）。
+  // 覆盖商品墙 searchProducts 与雷达/链接直达的单品卡 productInfo.offer——同一批一次调用，不多花时间。
+  if (locale !== "zh" && (searchProducts.length || productInfo?.offer || factories.length)) {
     const { translateTexts } = await import("../lib/translate");
-    const map = await translateTexts(searchProducts.map((p) => p.title), locale);
+    const texts: string[] = [];
+    for (const p of searchProducts) texts.push(p.title);
+    if (productInfo?.offer) texts.push(productInfo.offer.title, productInfo.offer.categoryName ?? "");
+    // 工厂卡可显示中文字段：地名/拿货理由/标签/在售同款标题/排名类目名（代号「严选工厂 No.」由前端 i18n 处理，不走 LLM）
+    for (const f of factories) {
+      texts.push(f.location ?? "", f.reason ?? "", ...(f.tags ?? []).slice(0, 4), f.categoryRank?.category ?? "");
+      const lo = (f as any).linkedOffer;
+      if (lo?.title) texts.push(lo.title);
+    }
+    if (intent.product) texts.push(intent.product); // 意图卡产品词（radarCtx.keyword 等中文）
+    const map = await translateTexts(texts.filter(Boolean), locale);
     for (const p of searchProducts) if (map[p.title]) p.title = map[p.title];
+    if (productInfo?.offer) {
+      const o = productInfo.offer;
+      if (map[o.title]) o.title = map[o.title];
+      if (o.categoryName && map[o.categoryName]) o.categoryName = map[o.categoryName];
+    }
+    for (const f of factories) {
+      if (f.location && map[f.location]) f.location = map[f.location];
+      if (f.reason && map[f.reason]) f.reason = map[f.reason];
+      if (f.tags?.length) f.tags = f.tags.map((tg) => map[tg] ?? tg);
+      if (f.categoryRank && map[f.categoryRank.category]) f.categoryRank.category = map[f.categoryRank.category];
+      const lo = (f as any).linkedOffer;
+      if (lo?.title && map[lo.title]) lo.title = map[lo.title];
+    }
+    // 意图卡的产品词（radarCtx.keyword 等中文）一并翻，否则英文界面出"Item 穿戴甲"
+    if (intent.product && map[intent.product]) intent.product = map[intent.product];
   }
 
   return {

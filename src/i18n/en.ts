@@ -54,6 +54,8 @@ const enChat: Messages["chat"] = {
   details: "Details",
   calcLink: "Landed cost →",
   unitPc: "pc",
+  // Data-layer Chinese units mapped for foreign-language UI (unitLabel)
+  u_pcs: "pcs", u_pairs: "pairs", u_sets: "sets", u_boxes: "boxes", u_units: "units", u_rolls: "rolls", u_bottles: "bottles", u_packs: "packs", u_bags: "bags", u_dozen: "dozen",
   perUnitExw: "/ {unit} · EXW",
   qtyTier: "Tier at {qty} {unit}",
   fxNote:
@@ -74,6 +76,7 @@ const enChat: Messages["chat"] = {
   onSaleStock: "On sale · {n} {unit} available",
   factoryVetted: "Factory behind it is vetted: {name} ({tier} · {score}) →",
   maskedHint: "Full profile unlocks after your first order",
+  maskedName: "Vetted Factory No.{n}", // codename before unlock (shared across pages)
   shopNotVetted: "This shop isn't in our vetted database — audit before ordering",
   viewDetails: "Details",
   shopVettedShort: "Vetted · this item on sale",
@@ -277,6 +280,10 @@ const enProduct: Messages["product"] = {
   skuLabel: "Variants ({n}{stock})",
   skuStock: " · {n} pcs available for current variant",
   quickCalc: "Quick landed-cost check",
+  loadingMain: "Connecting to source factories — checking live price & stock…",
+  loadingSub1: "Comparing tier prices & MOQ…",
+  loadingSub2: "Checking dispatch lead time…",
+  loadingSub3: "Preparing the landed-cost view…",
   quickCalcWeight: " (~{w} kg/pc)",
   noWeight: "Upstream didn't give a reliable weight for this one — I won't make one up. Use the full calculator below to enter weight manually.",
   qtyLabel: "Quantity (pcs)",

@@ -51,6 +51,8 @@ export const zhChat = {
   details: "详情",
   calcLink: "算到手价 →",
   unitPc: "件",
+  // 数据层中文单位的外语映射目标词（unitLabel 用；中文界面原样显示不经过这里）
+  u_pcs: "件", u_pairs: "双", u_sets: "套", u_boxes: "箱", u_units: "台", u_rolls: "卷", u_bottles: "瓶", u_packs: "包", u_bags: "袋", u_dozen: "打",
   perUnitExw: "/ {unit} · 出厂价",
   qtyTier: "按 {qty} {unit}档",
   fxNote:
@@ -71,6 +73,7 @@ export const zhChat = {
   onSaleStock: "在售 · 可售 {n} {unit}",
   factoryVetted: "背后工厂在严选库：{name}（{tier} · {score} 分）→",
   maskedHint: "首单完成后解锁完整档案",
+  maskedName: "严选工厂 No.{n}", // 未解锁代号（跨页复用：对话工厂卡/详情页/工厂档案页）
   shopNotVetted: "该店铺不在严选库，下单前建议验厂",
   viewDetails: "看详情",
   shopVettedShort: "严选库在册 · 有这款在售货",
@@ -274,6 +277,10 @@ export const zhProduct = {
   skuLabel: "规格（{n} 个{stock}）",
   skuStock: " · 当前规格可订 {n} 件",
   quickCalc: "到手价快算",
+  loadingMain: "正在直连源头工厂，核实在售价格与库存…",
+  loadingSub1: "比对阶梯价与起订量…",
+  loadingSub2: "核对发货时效…",
+  loadingSub3: "准备到手价试算视图…",
   quickCalcWeight: "（单件约 {w} kg）",
   noWeight: "这款的重量上游没给可靠数据，我不瞎填——点下方「完整试算」手动输入重量再算。",
   qtyLabel: "数量（件）",
