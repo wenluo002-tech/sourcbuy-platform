@@ -5,6 +5,8 @@ import { CountUp, useReveal } from "@/hooks/useReveal";
 import { useT } from "@/i18n";
 import { catLabel } from "@/i18n/categories";
 import { RadarCard } from "@/pages/Radar";
+import { AttachButton, PickerBlockedHint } from "@/components/AttachButton";
+import { compressImageToDataURL } from "@/lib/imageCompress";
 
 const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
 
@@ -25,7 +27,10 @@ export default function Home() {
 
   // 首页附件入口：图片压缩后接力给对话页；图纸/文档只带文件名（内容不入库，走 48h 人工核价通道）
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachBusy, setAttachBusy] = useState(false); // 大图压缩有耗时，必须立刻亮处理中遮罩——静默=「点了没反应」事故
+  const [pickerBlocked, setPickerBlocked] = useState(false); // 选择器被 WebView 系统层拦截时亮逃生门
   function onPickAttach(f: File) {
+    setPickerBlocked(false); // 文件到手=选择器没死，收掉逃生门
     // 超限必须显式告诉买家——静默 return 在演示场合就是"点了没反应"事故
     if (f.size > 20 * 1024 * 1024) { setAttachError(t("chat.imageTooLarge", { n: 20 })); return; }
     setAttachError(null);
@@ -35,26 +40,17 @@ export default function Home() {
       navigate("/buyer");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        sessionStorage.setItem("sb.attach", JSON.stringify({ kind: "image", data: canvas.toDataURL("image/jpeg", 0.82) }));
+    setAttachBusy(true);
+    compressImageToDataURL(f)
+      .then((data) => {
+        sessionStorage.setItem("sb.attach", JSON.stringify({ kind: "image", data }));
         navigate("/buyer");
-      };
-      img.onerror = () => {
-        // HEIC 等 <img> 解不了的格式：原样交给对话页的完整解码管线处理
-        sessionStorage.setItem("sb.attach", JSON.stringify({ kind: "doc", name: f.name }));
-        navigate("/buyer");
-      };
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(f);
+      })
+      .catch(() => {
+        // HEIC 等解不了的格式：显式报错，绝不静默
+        setAttachBusy(false);
+        setAttachError(t("chat.imageBadFormat"));
+      });
   }
 
   const tierCount = (t: string) =>
@@ -62,6 +58,15 @@ export default function Home() {
 
   return (
     <div ref={pageRef} className="space-y-14 md:space-y-20">
+      {/* 大图压缩处理中遮罩：选中照片即刻亮出，绝不静默（演示场合静默=「点了没反应」事故） */}
+      {attachBusy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/85 backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-2xl border border-[var(--sb-rule)] bg-white px-5 py-4 shadow-lg">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--sb-brand)] border-t-transparent" />
+            <span className="text-sm text-[var(--sb-ink)]">{t("home.processingPhoto")}</span>
+          </div>
+        </div>
+      )}
       {/* ===== Hero：事务所版式——细线框架 + 右侧挺括图栏 + 衬线大标题 ===== */}
       <section className="sb-reveal relative border-y border-[var(--sb-rule)]">
         {/* 背景：太空科技图 100vw 满屏平铺（突破内容容器），左实右虚蒙版保文字可读 */}
@@ -150,49 +155,33 @@ export default function Home() {
                   placeholder={t("home.placeholder")}
                   className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
                 />
-                <label
+                <AttachButton
                   title={t("home.attachBtn")}
-                  className="relative flex shrink-0 cursor-pointer items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
+                  accept="image/*,application/pdf"
+                  className="flex shrink-0 items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
+                  onFile={onPickAttach}
+                  onChooserBlocked={() => setPickerBlocked(true)}
                 >
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                     <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
                   </svg>
                   <span className="hidden sm:inline">{t("home.attachBtn")}</span>
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    aria-label={t("home.attachBtn")}
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) onPickAttach(f);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                </AttachButton>
                 {/* 拍照寻源：手机直唤后置相机，拍完经 sb.attach 接力进对话页走图片识别寻源 */}
-                <label
+                <AttachButton
                   title={t("home.cameraBtn")}
-                  className="relative flex shrink-0 cursor-pointer items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
+                  accept="image/*"
+                  capture="environment"
+                  className="flex shrink-0 items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
+                  onFile={onPickAttach}
+                  onChooserBlocked={() => setPickerBlocked(true)}
                 >
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2L9 4.8A1 1 0 0 1 9.9 4.3h4.2a1 1 0 0 1 .9.5l1.5 2.2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
                     <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.5" />
                   </svg>
                   <span className="hidden sm:inline">{t("home.cameraBtn")}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    aria-label={t("home.cameraBtn")}
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) onPickAttach(f);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                </AttachButton>
                 <button
                   type="submit"
                   className="flex shrink-0 items-center gap-2 bg-[var(--sb-brand)] px-5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)] sm:px-7"
@@ -205,6 +194,11 @@ export default function Home() {
               </div>
               {attachError && (
                 <p className="mt-2 text-xs text-[#92610a]">{attachError}</p>
+              )}
+              {pickerBlocked && (
+                <div className="mt-2">
+                  <PickerBlockedHint />
+                </div>
               )}
             </form>
 

@@ -28,6 +28,10 @@ const enChat: Messages["chat"] = {
   defaultImageMsg: "Find the source of the product in this photo",
   attachTitle: "Send a product photo or a drawing file (PDF/DWG etc.)",
   cameraTitle: "Snap a photo of the product — I'll find the source factories",
+  pickerBlocked: "No gallery or camera popped up? This preview window blocks the system picker — copy the link and open it in your phone browser instead.",
+  copyLink: "Copy link",
+  linkCopied: "Copied — paste it into your browser",
+  processingImage: "Processing image…",
   docReady: "Drawing ready: {name} — our sourcing team will price it manually, firm quote within 48 hours",
   defaultDocMsg: "Please price the product in this drawing",
   voiceStart: "Voice input",
@@ -679,6 +683,7 @@ export const en: Messages = {
     linkHint: "Or paste an Amazon / TikTok / DTC product link — I'll find the same item at source",
     attachBtn: "Attach file",
     cameraBtn: "Snap to source",
+    processingPhoto: "Processing your photo — taking you to sourcing…",
     examples: [
       "500 yoga leggings, ship to Hamburg",
       "3,000 custom tumblers with logo",

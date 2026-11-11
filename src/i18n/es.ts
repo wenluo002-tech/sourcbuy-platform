@@ -56,6 +56,7 @@ export const es = {
     linkHint: "También puedes pegar un enlace de Amazon / TikTok / tu tienda online y buscaré la misma fuente",
     attachBtn: "Subir imagen/plano",
     cameraBtn: "Fotografiar y buscar",
+    processingPhoto: "Procesando tu foto — te llevamos a la búsqueda…",
     examples: [
       "500 leggings de yoga, envío a Hamburgo, Alemania",
       "3,000 vasos térmicos personalizados con LOGO",
@@ -174,6 +175,10 @@ export const es = {
     defaultImageMsg: "Ayúdame a encontrar el proveedor del producto de la imagen",
     attachTitle: "Sube una imagen del producto o un archivo de planos (PDF/DWG, etc.)",
     cameraTitle: "Fotografía el producto y busco las fábricas de origen",
+    pickerBlocked: "¿No se abrió la galería o la cámara? Esta ventana de vista previa bloquea el selector del sistema: copia el enlace y ábrelo en el navegador de tu teléfono.",
+    copyLink: "Copiar enlace",
+    linkCopied: "Copiado — pégalo en tu navegador",
+    processingImage: "Procesando la imagen…",
     docReady: "Planos listos: {name} — el equipo de compras verificará el precio manualmente según los planos; cotización oficial en 48 horas",
     defaultDocMsg: "Cotiza el producto de estos planos",
     voiceStart: "Entrada de voz",

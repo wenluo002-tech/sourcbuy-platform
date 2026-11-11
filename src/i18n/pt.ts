@@ -56,6 +56,7 @@ export const pt = {
     linkHint: "Também pode colar o link do produto da Amazon / TikTok / loja própria — eu encontro a mesma fonte",
     attachBtn: "Enviar imagem/desenho",
     cameraBtn: "Fotografar e buscar",
+    processingPhoto: "Processando sua foto — levando você à busca…",
     examples: [
       "500 calças de ioga, envio para Hamburgo, Alemanha",
       "3.000 copos térmicos personalizados, com LOGO",
@@ -174,6 +175,10 @@ export const pt = {
     defaultImageMsg: "Ache a fonte do produto na imagem",
     attachTitle: "Envie imagem do produto ou arquivo de desenho (PDF/DWG etc.)",
     cameraTitle: "Fotografe o produto — eu encontro as fábricas de origem",
+    pickerBlocked: "A galeria ou a câmera não abriu? Esta janela de pré-visualização bloqueia o seletor do sistema — copie o link e abra no navegador do seu celular.",
+    copyLink: "Copiar link",
+    linkCopied: "Copiado — cole no navegador",
+    processingImage: "Processando a imagem…",
     docReady: "Desenho pronto: {name} — equipe de compras cota manualmente pelo desenho, proposta formal em 48h",
     defaultDocMsg: "Cote para mim o produto deste desenho",
     voiceStart: "Entrada de voz",

@@ -56,6 +56,7 @@ export const fr = {
     linkHint: "Vous pouvez aussi coller un lien Amazon / TikTok / boutique, je trouve la même source",
     attachBtn: "Envoyer une image/plan",
     cameraBtn: "Photographier et sourcer",
+    processingPhoto: "Traitement de votre photo — redirection vers le sourcing…",
     examples: [
       "500 leggings yoga, livraison Hambourg",
       "3,000 gourdes personnalisées, avec LOGO",
@@ -174,6 +175,10 @@ export const fr = {
     defaultImageMsg: "Trouve la source du produit sur cette image",
     attachTitle: "Envoyez une photo produit ou un plan (PDF/DWG, etc.)",
     cameraTitle: "Photographiez le produit — je trouve les usines sources",
+    pickerBlocked: "La galerie ou l'appareil photo ne s'est pas ouvert ? Cette fenêtre d'aperçu bloque le sélecteur système — copiez le lien et ouvrez-le dans le navigateur de votre téléphone.",
+    copyLink: "Copier le lien",
+    linkCopied: "Copié — collez-le dans votre navigateur",
+    processingImage: "Traitement de l'image…",
     docReady: "Plan prêt : {name} — l’équipe achat chiffre manuellement sur plan, devis officiel sous 48 h",
     defaultDocMsg: "Chiffrez le produit de ce plan pour moi",
     voiceStart: "Saisie vocale",

@@ -6,6 +6,8 @@ import { FX_SETTLEMENT } from "@contracts/fx";
 import { useT } from "@/i18n";
 import { unitLabel } from "@/lib/unit";
 import { getAnonId, useAuth } from "@/auth";
+import { AttachButton, PickerBlockedHint } from "@/components/AttachButton";
+import { compressImageToDataURL } from "@/lib/imageCompress";
 
 interface MatchedFactory {
   id: number;
@@ -648,7 +650,11 @@ export default function BuyerChat() {
   // 图片压缩：最长边 1024、JPEG 0.82——够视觉模型识别，流量友好
   // 两条解码路径：createImageBitmap 优先，失败回退 <img>+canvas（iPhone 拍照默认 HEIC，
   // iOS Safari 的 <img> 能解但 createImageBitmap 不稳）；两条都挂必须明确告诉买家，绝不静默
+  // 选中图片即刻亮"处理中"——大图解码有耗时，静默=「点了没反应」事故
+  const [imgProcessing, setImgProcessing] = useState(false);
+  const [pickerBlocked, setPickerBlocked] = useState(false); // 选择器被 WebView 系统层拦截时亮逃生门
   async function pickImage(file: File) {
+    setPickerBlocked(false); // 文件到手=选择器没死，收掉逃生门
     setImgError(null);
     if (file.size > 20 * 1024 * 1024) {
       setPendingImage(null);
@@ -660,37 +666,21 @@ export default function BuyerChat() {
       setImgError(t("chat.imageBadFormat"));
       return;
     }
+    setImgProcessing(true);
     try {
-      const bmp = await createImageBitmap(file);
-      paintToCanvas(bmp.width, bmp.height, (ctx, w, h) => ctx.drawImage(bmp, 0, 0, w, h));
+      setPendingImage(await compressImageToDataURL(file));
     } catch {
-      try {
-        const url = URL.createObjectURL(file);
-        await new Promise<void>((resolve, reject) => {
-          const im = new Image();
-          im.onload = () => {
-            URL.revokeObjectURL(url);
-            if (!im.naturalWidth) return reject(new Error("empty"));
-            paintToCanvas(im.naturalWidth, im.naturalHeight, (ctx, w, h) => ctx.drawImage(im, 0, 0, w, h));
-            resolve();
-          };
-          im.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error("decode failed"));
-          };
-          im.src = url;
-        });
-      } catch {
-        setPendingImage(null);
-        setImgError(t("chat.imageBadFormat"));
-      }
+      setPendingImage(null);
+      setImgError(t("chat.imageBadFormat"));
+    } finally {
+      setImgProcessing(false);
     }
   }
 
   // 附件/拍照共用入口：图片走视觉识别寻源管线；图纸/文档只记文件名（内容不入库不进模型），走 48h 人工核价通道
-  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (f) {
+  function onPickFile(f: File) {
+    {
+      setPickerBlocked(false);
       if (f.type.startsWith("image/") || /\.hei[cf]$/i.test(f.name)) {
         pickImage(f);
       } else {
@@ -703,17 +693,8 @@ export default function BuyerChat() {
         }
       }
     }
-    e.target.value = "";
   }
 
-  function paintToCanvas(srcW: number, srcH: number, draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void) {
-    const scale = Math.min(1, 1024 / Math.max(srcW, srcH));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(srcW * scale));
-    canvas.height = Math.max(1, Math.round(srcH * scale));
-    draw(canvas.getContext("2d")!, canvas.width, canvas.height);
-    setPendingImage(canvas.toDataURL("image/jpeg", 0.82));
-  }
 
   // 语音输入：浏览器原生 SpeechRecognition，不支持的浏览器直接不渲染按钮（不摆死按钮）
   const [listening, setListening] = useState(false);
@@ -1165,6 +1146,17 @@ export default function BuyerChat() {
       >
         {/* 附件/相机入口：真实 input 全尺寸覆盖在图标上（opacity-0），指尖直接点在文件控件本体——
             htmlFor 转发和 JS click 在部分 WebView 都会被吞，这是兼容性最强的形态（v81） */}
+        {imgProcessing && !pendingImage && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--sb-line)] bg-white px-2.5 py-2">
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--sb-brand)] border-t-transparent" />
+            <span className="text-xs text-[var(--sb-ink-60)]">{t("chat.processingImage")}</span>
+          </div>
+        )}
+        {pickerBlocked && (
+          <div className="mb-2">
+            <PickerBlockedHint />
+          </div>
+        )}
         {pendingImage && (
           <div className="mb-2 flex items-center gap-2 rounded-xl border border-[var(--sb-line)] bg-white px-2.5 py-2">
             <img src={pendingImage} alt={t("chat.imageAlt")} className="h-10 w-10 rounded-lg border border-[var(--sb-line)] object-cover" />
@@ -1209,39 +1201,31 @@ export default function BuyerChat() {
           </div>
         )}
         <div className="flex items-center gap-2 rounded-2xl border border-[var(--sb-line)] bg-white p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05)]">
-          <label
+          <AttachButton
             title={t("chat.attachTitle")}
-            className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+            accept="image/*,application/pdf"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+            onFile={onPickFile}
+            onChooserBlocked={() => setPickerBlocked(true)}
           >
             <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
             </svg>
-            <input
-              type="file"
-              accept="image/*,application/pdf"
-              aria-label={t("chat.attachTitle")}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              onChange={onPickFile}
-            />
-          </label>
+          </AttachButton>
           {/* 拍照寻源：capture=environment 直接唤起后置相机（桌面端回落为文件选择），拍完即走图片识别寻源管线 */}
-          <label
+          <AttachButton
             title={t("chat.cameraTitle")}
-            className="relative flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+            accept="image/*"
+            capture="environment"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+            onFile={onPickFile}
+            onChooserBlocked={() => setPickerBlocked(true)}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2L9 4.8A1 1 0 0 1 9.9 4.3h4.2a1 1 0 0 1 .9.5l1.5 2.2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
               <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.5" />
             </svg>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              aria-label={t("chat.cameraTitle")}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              onChange={onPickFile}
-            />
-          </label>
+          </AttachButton>
           {SpeechRec && (
             <button
               type="button"
@@ -1263,6 +1247,10 @@ export default function BuyerChat() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={(e) => {
+              const f = e.clipboardData?.files?.[0];
+              if (f) { e.preventDefault(); onPickFile(f); }
+            }}
             placeholder={t("chat.placeholder")}
             className="h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
           />
