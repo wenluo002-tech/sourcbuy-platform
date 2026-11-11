@@ -84,9 +84,9 @@ for (const lang of LANGS) {
       await visitAndSettle(page, spec);
       let hits = await collectZh(page);
       if (hits.length) {
-        // 首扫有残留：本次访问已触发后台翻译填缓存，等 45s（盖过单批 30s 超时窗口）重载重扫——缓存热后快路径应全命中
-        console.log(`… [${lang}] ${spec.name} 首扫 ${hits.length} 处，45s 后重扫判定`);
-        await page.waitForTimeout(45_000);
+        // 首扫有残留：本次访问已触发后台翻译填缓存，等 90s（盖过多批串行+单批 30s 超时窗口）重载重扫——缓存热后快路径应全命中
+        console.log(`… [${lang}] ${spec.name} 首扫 ${hits.length} 处，90s 后重扫判定`);
+        await page.waitForTimeout(90_000);
         await visitAndSettle(page, spec);
         hits = await collectZh(page);
       }

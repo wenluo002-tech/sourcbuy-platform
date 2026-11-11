@@ -252,6 +252,16 @@ function TempCheck({ sel }: { sel: string }) {
             </p>
           )}
 
+          {r.report.status === "ok" && r.report.vettedFactory && (
+            <Link
+              to={`/factories/${r.report.vettedFactory.id}`}
+              className="flex items-center justify-between gap-3 border-b border-black/[0.06] bg-[var(--sb-brand-soft)] px-4 py-3 text-sm transition-colors hover:bg-[var(--sb-brand-soft)]/70"
+            >
+              <span className="font-medium text-[var(--sb-brand)]">{t("factories.tempVetted")}</span>
+              <span className="shrink-0 text-xs font-semibold text-[var(--sb-brand)]">{t("factories.tempVettedCta")} →</span>
+            </Link>
+          )}
+
           {r.report.status === "ok" && (
             <div className="grid gap-5 px-4 py-4 sm:grid-cols-2">
               {/* 左：事实 */}

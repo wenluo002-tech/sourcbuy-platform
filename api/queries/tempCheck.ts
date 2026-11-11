@@ -77,6 +77,7 @@ export interface TempCheckReport {
   queryName: string;
   matchedTitle: string | null;
   sellerNick: string | null;
+  vettedFactory?: { id: number; tier: string | null; score: number | null } | null; // 撞库直通：该厂已在严选库时给出档案入口（2026-11-11 罗总拍板数据资产化）
   facts: {
     years: number | null; // 诚信通年限（seller_info.tpyear，缺则用搜索结果 tpservice_year 兜底）
     home: string | null; // 主营类目（搜索结果 cat_name）
@@ -100,6 +101,60 @@ export type TempCheckResult =
   | { ok: true; report: TempCheckReport }
   | { ok: false; reason: "invalid" | "daily_cap" | "fuse" | "upstream" };
 
+/** 撞库直通：核查到的 seller_nick 若已在严选库，直接给档案入口（零成本，库的复用率最大化） */
+async function findVettedByNick(db: any, nick: string | null): Promise<TempCheckReport["vettedFactory"]> {
+  if (!nick) return null;
+  try {
+    const [rows]: any = await db.execute(
+      dsql`SELECT id, tier, score FROM factories WHERE member_id = ${nick} AND is_trader = 0 AND dup_of IS NULL LIMIT 1`
+    );
+    const r = rows?.[0];
+    return r ? { id: Number(r.id), tier: r.tier ?? null, score: r.score != null ? Number(r.score) : null } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 买家提名的优质库外厂 → 培育档入严选库（罗总 2026-11-11 拍板：初核数据资产化，利益最大化）。
+ *  闸：初核分≥75、名称闸已过、经营模式必须是生产型（贸易商/经销/批发不收——铁律只收源头工厂）、
+ *  member_id 幂等判重；评分留 NULL（前台显示"核实中"），严选正式评分等回填管线补齐后出具——绝不拿初核分冒充。 */
+const PROMOTE_MIN_SCORE = 75;
+async function promoteNominated(db: any, report: TempCheckReport): Promise<void> {
+  try {
+    if (!report.sellerNick || !report.matchedTitle) return;
+    const prod = report.facts.productionType ?? "";
+    if (prod && !/生产|制造|加工/.test(prod)) return; // 贸易商/经销商不入严选库
+    const [ex]: any = await db.execute(dsql`SELECT id FROM factories WHERE member_id = ${report.sellerNick} LIMIT 1`);
+    if (ex?.[0]) return; // 已在库（含被标记贸易商/重复的），不重复插
+    const f = report.facts;
+    const review = `买家提名实时初核 ${report.score}/100（公开公式现算，缺项计 0）。档案补全中——严选正式评分待全量核验后出具。`;
+    await db.execute(
+      dsql`INSERT INTO factories
+        (member_id, name, location, years, score, tier, medal, production_type, employee_count, area_sqm, cert, review, tags, is_trader)
+        VALUES (${report.sellerNick}, ${report.matchedTitle}, ${f.region}, ${f.years}, ${null}, ${"培育"}, ${f.level}, ${f.productionType}, ${f.employeeCount}, ${f.areaSqm}, ${f.cert}, ${review}, ${JSON.stringify(["buyer_nominated"])}, 0)`
+    );
+    const [newRow]: any = await db.execute(dsql`SELECT id FROM factories WHERE member_id = ${report.sellerNick} LIMIT 1`);
+    const fid = newRow?.[0]?.id;
+    // 类目打标：主营类目拆词反查 LEXICON 产品词（≥2 字），命中才打——打不上的不打，不编
+    if (fid && f.home) {
+      const { LEXICON } = await import("../../contracts/lexicon");
+      const words = f.home.split(/[;；,，]/).map((w) => w.trim()).filter((w) => w.length >= 2);
+      const cats = new Set<string>();
+      for (const w of words) {
+        for (const [cat, def] of Object.entries(LEXICON)) {
+          if (def.products.some((p) => p.length >= 2 && w.includes(p))) cats.add(cat);
+        }
+      }
+      for (const cat of cats) {
+        await db.execute(dsql`INSERT IGNORE INTO factory_categories (factory_id, category, source) VALUES (${fid}, ${cat}, 'buyer_nominated')`);
+      }
+    }
+    log.info("买家提名厂入严选库（培育档）", { name: report.matchedTitle, nick: report.sellerNick, score: report.score });
+  } catch (e) {
+    log.warn("提名厂入库失败（不影响核查返回）", { error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
 export async function tempCheckFactory(rawName: string, userId: number): Promise<TempCheckResult> {
   const name = (rawName ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
   if (name.length < 4 || !KEY || !SECRET) return { ok: false, reason: "invalid" };
@@ -119,6 +174,7 @@ export async function tempCheckFactory(rawName: string, userId: number): Promise
       const r = typeof rawCache === "string" ? JSON.parse(rawCache) : rawCache;
       if (r && r.status === "ok") {
         r.cached = true;
+        r.vettedFactory = await findVettedByNick(db, r.sellerNick ?? null); // 缓存是旧报告，撞库入口每次现查
         return { ok: true, report: r };
       }
     } catch { /* 缓存损坏则重查 */ }
@@ -231,6 +287,7 @@ export async function tempCheckFactory(rawName: string, userId: number): Promise
           breakdown: b,
           cached: false,
           checkedAt: new Date().toISOString(),
+          vettedFactory: await findVettedByNick(db, nick),
         };
       } else {
         status = "mismatch";
@@ -249,11 +306,16 @@ export async function tempCheckFactory(rawName: string, userId: number): Promise
     return { ok: false, reason: "upstream" };
   }
 
-  // 台账 + 留档（绝不写 factories 严选库）
+  // 台账 + 留档（低分/不匹配的记录只留档 24h 缓存用；优质提名厂由下方钩子入严选库培育档——罗总 2026-11-11 拍板）
   await db.execute(
     dsql`INSERT INTO temp_factory_checks (user_id, query_name, matched_title, seller_nick, status, score, report_json, cost_cny)
          VALUES (${userId}, ${norm(name)}, ${report?.matchedTitle ?? null}, ${report?.sellerNick ?? null}, ${status}, ${report?.score ?? null}, ${report && status === "ok" ? JSON.stringify(report) : null}, ${cost})`,
   ).catch(() => {});
+
+  // 优质提名厂入库钩子：初核≥75、名称闸过、不在库 → 培育档（fire-and-forget，绝不阻塞核查返回）
+  if (status === "ok" && report && (report.score ?? 0) >= PROMOTE_MIN_SCORE && !report.vettedFactory) {
+    void promoteNominated(db, report).catch(() => {});
+  }
   await db.execute(
     dsql`INSERT INTO sourcing_api_logs (provider, endpoint, query, cost_cny, billed, ok, duration_ms, error) VALUES ('wanbang','tempCheck',${name},${cost},${cost > 0},1,0,${status === "ok" ? null : status})`,
   ).catch(() => {});

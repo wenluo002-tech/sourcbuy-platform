@@ -1,0 +1,14 @@
+import { sql } from "drizzle-orm";
+import { getDb } from "../api/queries/connection";
+const d = getDb();
+const stats: any = await d.execute(sql`SELECT COUNT(*) total, COUNT(DISTINCT query_name) uniq, MAX(created_at) latest, SUM(cost_cny) cost FROM temp_factory_checks`);
+console.log("总量:", JSON.stringify(stats[0]?.[0]));
+const dist: any = await d.execute(sql`SELECT status, COUNT(*) c, AVG(score) avg_score, MAX(score) max_score FROM temp_factory_checks GROUP BY status`);
+for (const r of dist[0]) console.log(JSON.stringify(r));
+const high: any = await d.execute(sql`SELECT query_name, matched_title, seller_nick, score, created_at FROM temp_factory_checks WHERE score >= 70 ORDER BY score DESC LIMIT 15`);
+console.log("--- 高分记录 ---");
+for (const r of high[0]) console.log(JSON.stringify(r));
+const inLib: any = await d.execute(sql`SELECT t.seller_nick, t.score, f.id AS factory_id FROM temp_factory_checks t LEFT JOIN factories f ON f.member_id = t.seller_nick WHERE t.score >= 70`);
+console.log("--- 高分厂 vs 严选库 ---");
+for (const r of inLib[0]) console.log(JSON.stringify(r));
+process.exit(0);
