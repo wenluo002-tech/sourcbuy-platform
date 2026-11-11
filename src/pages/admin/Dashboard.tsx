@@ -11,8 +11,8 @@ export default function AdminDashboard() {
   if (q.error) return <Empty text={`数据拉取失败：${q.error.message}`} />;
   const d = q.data!;
 
-  const uvSeries = d.series.map((s) => s.uv);
-  const gmvSeries = d.series.map((s) => s.gmv);
+  const uvSeries = d.series.map((s: any) => s.uv);
+  const gmvSeries = d.series.map((s: any) => s.gmv);
 
   return (
     <div>

@@ -160,7 +160,7 @@ export async function translateFields<T extends Record<string, any>>(
     for (const f of fields) {
       const v = r[f];
       if (typeof v === "string" && v.trim()) texts.push(v);
-      else if (Array.isArray(v)) for (const x of v) if (typeof x === "string" && x.trim()) texts.push(x);
+      else if (Array.isArray(v)) for (const x of v as unknown[]) if (typeof x === "string" && x.trim()) texts.push(x);
     }
   }
   if (!texts.length) return false;
@@ -173,8 +173,9 @@ export async function translateFields<T extends Record<string, any>>(
         r[f] = map[v] as any;
         replaced = true;
       } else if (Array.isArray(v)) {
-        const nv = v.map((x) => (typeof x === "string" && map[x] ? map[x] : x));
-        if (nv.some((x, i) => x !== v[i])) {
+        const arr = v as unknown[];
+        const nv = arr.map((x) => (typeof x === "string" && map[x] ? map[x] : x));
+        if (nv.some((x, i) => x !== arr[i])) {
           r[f] = nv as any;
           replaced = true;
         }

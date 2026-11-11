@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
-import { ADM, Eyebrow, Empty, fmtUsd, fmtInt, fmtDate, fmtTime } from "./ui";
+import { ADM, Eyebrow, Empty, fmtUsd, fmtInt, fmtDate } from "./ui";
 
 const TH = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
   <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: ADM.ink40, textAlign: right ? "right" : "left", paddingBottom: 8 }}>{children}</div>
@@ -40,7 +40,7 @@ export default function AdminBuyers() {
         </div>
         {list.isLoading ? <Empty text="载入中…" /> : list.error ? <Empty text={`数据拉取失败：${list.error.message}`} /> :
           list.data!.length === 0 ? <Empty text="没有匹配的买家。" /> : (
-            list.data!.map((b) => (
+            list.data!.map((b: any) => (
               <Link
                 key={b.id}
                 to={`/admin/buyers/${b.id}`}

@@ -9,6 +9,7 @@ import { wbGetOfferApp, wbSearchItems, WANBANG_COST } from "./wanbang";
 import { djGetOffer, DIANJIN_COST } from "./dianjin";
 import { fetchOffer } from "../queries/products";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
+import { looksLikeAccessory, prioritizeWholeMachines, queryWantsAccessory, synonymTerms } from "../../contracts/productForm";
 import type { OfferDetail, OfferSearchItem, OfferSearchResult } from "../../contracts/offer";
 
 const OFFER_TTL_MS = 24 * 3600 * 1000; // 详情缓存 24h
@@ -313,45 +314,73 @@ async function ingestPool(items: OfferSearchItem[]) {
 
 // 池内检索：query 本身 + query 里命中的词库产品词（"植绒防滑衣架50个装"→"衣架"）做标题子串匹配
 // 命中条件同时要求销量>0、价格正常——池里混不进运费链接
-// 搜索词抽取（poolSearch 与 legacySearch 共用）：查询本体 + 词库命中的产品词
-function extractTerms(query: string): string[] {
-  const terms = new Set<string>();
+// 搜索词分层抽取（poolSearch 与 legacySearch 共用）：
+// 层1=查询本体（相关性最高，永远先取足）；层2=词库命中的产品词；层3=整机同义词扩词
+// （"液晶电视"→"电视机/智能电视…"补召回）。教训：同义词必须单独成层限量补位——
+// 与原词一锅 OR + 无序 LIMIT 会让"电视机柜/电视机窝"这类子串洪水把真整机挤出候选集。
+function extractTermTiers(query: string): string[][] {
   const q = query.trim();
-  if (q.length >= 2 && q.length <= 30 && !/\s/.test(q)) terms.add(q);
+  const base: string[] = [];
+  if (q.length >= 2 && q.length <= 30 && !/\s/.test(q)) base.push(q);
+  const lex: string[] = [];
   const { category } = expandQuery(q);
   if (category && LEXICON[category]) {
     for (const p of LEXICON[category].products) {
-      if (p.length >= 2 && q.includes(p)) terms.add(p);
+      if (p.length >= 2 && q.includes(p) && !base.includes(p)) lex.push(p);
     }
   }
-  return [...terms];
+  const syns = synonymTerms(q).filter((s) => !base.includes(s) && !lex.includes(s));
+  return [base, lex, syns].filter((t) => t.length > 0);
 }
 
 // 池内检索（导出：aiSourcing 以货带厂也用它取候选——严选厂货排前）
 export async function poolSearch(query: string, limit = 8): Promise<OfferSearchItem[]> {
-  const terms = extractTerms(query);
-  if (!terms.length) return [];
-  const likeConds = [...terms].map((t) => sql`${offerPool.title} LIKE ${"%" + t + "%"}`);
-  // 阶段一：纯池查询（title 子串 + 质量过滤），按销量取候选
-  const rows = await getDb()
-    .select()
-    .from(offerPool)
-    .where(
-      and(
-        sql`(${sql.join(likeConds, sql` OR `)})`,
-        gt(offerPool.sales, 0),
-        sql`COALESCE(${offerPool.promotionPrice}, ${offerPool.price}) > 0.01`,
-        sql`COALESCE(${offerPool.promotionPrice}, ${offerPool.price}) < 50000`,
-      ),
-    )
-    .orderBy(desc(offerPool.sales), desc(offerPool.lastSeenAt))
-    .limit(Math.max(limit * 3, 24)); // 多取候选，给严选厂货留排前空间
+  const tiers = extractTermTiers(query);
+  if (!tiers.length) return [];
+  const budget = Math.max(limit * 3, 24); // 多取候选，给严选厂货留排前空间
+  // 阶段一：分层取候选——原词层取满再补同义词层，原词命中永远优先进入候选；tier 随行保留，排序要用
+  const rows: ((typeof offerPool.$inferSelect) & { _tier: number })[] = [];
+  const seenId = new Set<string>();
+  for (let ti = 0; ti < tiers.length; ti++) {
+    if (rows.length >= budget) break;
+    const likeConds = tiers[ti].map((t) => sql`${offerPool.title} LIKE ${"%" + t + "%"}`);
+    const part = await getDb()
+      .select()
+      .from(offerPool)
+      .where(
+        and(
+          sql`(${sql.join(likeConds, sql` OR `)})`,
+          gt(offerPool.sales, 0),
+          sql`COALESCE(${offerPool.promotionPrice}, ${offerPool.price}) > 0.01`,
+          sql`COALESCE(${offerPool.promotionPrice}, ${offerPool.price}) < 50000`,
+        ),
+      )
+      .orderBy(desc(offerPool.sales), desc(offerPool.lastSeenAt))
+      .limit(budget);
+    for (const r of part) {
+      if (rows.length >= budget) break;
+      if (!seenId.has(r.offerId)) {
+        seenId.add(r.offerId);
+        rows.push({ ...r, _tier: ti });
+      }
+    }
+  }
   if (!rows.length) return [];
   // 阶段二：批量三键匹配严选厂，命中的货排最前——商品墙前几位就是"严选库在册"的货
   const hits = await joinFactoriesBatch(
     rows.map((r) => ({ offerId: r.offerId, memberId: r.memberId, sellerLoginId: r.sellerLoginId, sellerUserId: r.sellerUserId })),
   );
-  const sorted = [...rows].sort((a, b) => Number(hits.has(b.offerId)) - Number(hits.has(a.offerId)));
+  // 排序：搜整机词时配件沉底（降级不删除）→ 原词命中优先于同义词命中 → 同组内严选厂货排前
+  const wantAcc = queryWantsAccessory(query);
+  const sorted = [...rows].sort((a, b) => {
+    if (!wantAcc) {
+      const d = Number(looksLikeAccessory(a.title)) - Number(looksLikeAccessory(b.title));
+      if (d) return d;
+    }
+    const t = a._tier - b._tier;
+    if (t) return t;
+    return Number(hits.has(b.offerId)) - Number(hits.has(a.offerId));
+  });
   return sorted.slice(0, limit).map((r) => ({
     offerId: r.offerId,
     title: r.title,
@@ -372,37 +401,59 @@ interface LegacyHit {
 }
 
 async function queryLegacy(query: string, limit: number): Promise<LegacyHit[]> {
-  const terms = extractTerms(query);
-  if (!terms.length) return [];
-  const likeConds = terms.map((t) => sql`${legacyProducts.title} LIKE ${"%" + t + "%"}`);
-  // 性能口径：SQL 不做 ORDER BY（39.6 万行全表扫+排序要十几秒）——无序 LIMIT 让 MySQL 找到即停，
-  // 取回候选后在 JS 侧按「严选厂命中 > 工厂快照分」排序，效果等价、耗时毫秒级。
-  const rows = await getDb()
-    .select({
-      productId: legacyProducts.productId,
-      title: legacyProducts.title,
-      image: legacyProducts.image,
-      priceCny: legacyProducts.priceCny,
-      memberId: legacyProducts.memberId,
-      factoryScore: legacyProducts.factoryScore,
-    })
-    .from(legacyProducts)
-    .where(
-      and(
-        sql`(${sql.join(likeConds, sql` OR `)})`,
-        eq(legacyProducts.priceSuspect, 0),
-        sql`${legacyProducts.priceCny} > 0.01 AND ${legacyProducts.priceCny} < 50000`,
-        sql`${legacyProducts.image} IS NOT NULL AND ${legacyProducts.image} != ''`,
-        sql`(${legacyProducts.tierLegacy} IS NULL OR ${legacyProducts.tierLegacy} != '死链')`,
-      ),
-    )
-    .limit(Math.max(limit * 8, 80));
+  const tiers = extractTermTiers(query);
+  if (!tiers.length) return [];
+  const budget = Math.max(limit * 8, 80);
+  // 性能口径：SQL 不做 ORDER BY（39.6 万行全表扫+排序要十几秒）——无序 LIMIT 让 MySQL 找到即停。
+  // 分层取候选：原词层先取满（"液晶电视"17 条全进），同义词层只在剩余名额补位——
+  // 防止"电视机"同义词的子串洪水（电视机柜/电视机窝…）把真整机挤出候选集。
+  type LegacyRow = { productId: string; title: string; image: string | null; priceCny: string | null; memberId: string | null; factoryScore: string | null; _tier: number };
+  const rows: LegacyRow[] = [];
+  const seenPid = new Set<string>();
+  for (let ti = 0; ti < tiers.length; ti++) {
+    if (rows.length >= budget) break;
+    const likeConds = tiers[ti].map((t) => sql`${legacyProducts.title} LIKE ${"%" + t + "%"}`);
+    const part = await getDb()
+      .select({
+        productId: legacyProducts.productId,
+        title: legacyProducts.title,
+        image: legacyProducts.image,
+        priceCny: legacyProducts.priceCny,
+        memberId: legacyProducts.memberId,
+        factoryScore: legacyProducts.factoryScore,
+      })
+      .from(legacyProducts)
+      .where(
+        and(
+          sql`(${sql.join(likeConds, sql` OR `)})`,
+          eq(legacyProducts.priceSuspect, 0),
+          sql`${legacyProducts.priceCny} > 0.01 AND ${legacyProducts.priceCny} < 50000`,
+          sql`${legacyProducts.image} IS NOT NULL AND ${legacyProducts.image} != ''`,
+          sql`(${legacyProducts.tierLegacy} IS NULL OR ${legacyProducts.tierLegacy} != '死链')`,
+        ),
+      )
+      .limit(budget);
+    for (const r of part) {
+      if (rows.length >= budget) break;
+      if (!seenPid.has(r.productId)) {
+        seenPid.add(r.productId);
+        rows.push({ ...r, _tier: ti });
+      }
+    }
+  }
   if (!rows.length) return [];
   const hits = await joinFactoriesBatch(
     rows.map((r) => ({ offerId: r.productId, memberId: r.memberId, sellerLoginId: null, sellerUserId: null })),
   );
-  // 严选厂在册的货排最前，其次工厂快照分（与 poolSearch 同口径）
+  // 排序：搜整机词时配件沉底 → 原词命中优先于同义词命中 → 严选厂在册的货排最前 → 其次工厂快照分
+  const wantAccLegacy = queryWantsAccessory(query);
   const sorted = [...rows].sort((a, b) => {
+    if (!wantAccLegacy) {
+      const da = Number(looksLikeAccessory(a.title)) - Number(looksLikeAccessory(b.title));
+      if (da) return da;
+    }
+    const t = a._tier - b._tier;
+    if (t) return t;
     const d = Number(hits.has(b.productId)) - Number(hits.has(a.productId));
     if (d) return d;
     return Number(b.factoryScore ?? 0) - Number(a.factoryScore ?? 0);
@@ -535,21 +586,21 @@ export async function searchOffers(query: string, page = 1): Promise<OfferSearch
     .orderBy(desc(offerSearchCache.createdAt))
     .limit(1);
   if (cached[0]?.items) {
-    return { items: cached[0].items, total: cached[0].total, page, source: "cache" };
+    return { items: prioritizeWholeMachines(q, cached[0].items), total: cached[0].total, page, source: "cache" };
   }
 
   // 产品池：长期资产，第一页命中 ≥6 条直接零成本秒回（跨查询复用，滚雪球）
   // 池子不足时 legacy 商品库（39.6 万条对方全量资产）补位——同为零成本，且过半商品能挂严选厂
+  // 整机口径（v79）：搜整机词时只数整机够不够 6 条——配件凑数不算数，不够就继续上万邦实时搜真整机
   if (page === 1) {
     try {
+      const wantAcc = queryWantsAccessory(q);
       const pooled = await poolSearch(q, 8);
-      if (pooled.length >= 6) {
-        return { items: pooled, total: null, page, source: "cache" };
-      }
-      const legacy = await legacySearchItems(q, 8 - pooled.length);
+      const legacy = pooled.length >= 8 ? [] : await legacySearchItems(q, 8 - pooled.length);
       const seen = new Set(pooled.map((i) => i.offerId));
       const merged = [...pooled, ...legacy.filter((i) => !seen.has(i.offerId))];
-      if (merged.length >= 6) {
+      const wholeCount = wantAcc ? merged.length : merged.filter((i) => !looksLikeAccessory(i.title)).length;
+      if (wholeCount >= 6) {
         return { items: merged.slice(0, 8), total: null, page, source: "cache" };
       }
     } catch {
@@ -561,9 +612,10 @@ export async function searchOffers(query: string, page = 1): Promise<OfferSearch
   try {
     const r = await wbSearchItems(q, page);
     await logApi({ provider: "wanbang", endpoint: "item_search", query: q, costCny: r.billed ? WANBANG_COST.item_search : 0, billed: r.billed, ok: true, durationMs: Date.now() - t0 });
-    await db.insert(offerSearchCache).values({ query: q, page, total: r.total, items: r.items, source: "wanbang" }).catch(() => {});
+    const ranked = prioritizeWholeMachines(q, r.items); // 整机词：配件沉底（万邦结果也混入配件/运费链接）
+    await db.insert(offerSearchCache).values({ query: q, page, total: r.total, items: ranked, source: "wanbang" }).catch(() => {});
     await ingestPool(r.items).catch(() => {}); // 每次真实搜索都沉淀进产品池
-    return { items: r.items, total: r.total, page, source: "wanbang" };
+    return { items: ranked, total: r.total, page, source: "wanbang" };
   } catch (e: any) {
     await logApi({ provider: "wanbang", endpoint: "item_search", query: q, costCny: 0, billed: false, ok: false, durationMs: Date.now() - t0, error: e?.message ?? "unknown" });
     // 万邦挂了：先给产品池+legacy（不足 6 条也比白屏强），再给旧缓存，不给买家看白屏
@@ -572,7 +624,7 @@ export async function searchOffers(query: string, page = 1): Promise<OfferSearch
       const legacy = pooled.length >= 8 ? [] : await legacySearchItems(q, 8 - pooled.length).catch(() => [] as OfferSearchItem[]);
       const seen = new Set(pooled.map((i) => i.offerId));
       const merged = [...pooled, ...legacy.filter((i) => !seen.has(i.offerId))];
-      if (merged.length) return { items: merged.slice(0, 8), total: null, page, source: "cache" };
+      if (merged.length) return { items: prioritizeWholeMachines(q, merged).slice(0, 8), total: null, page, source: "cache" };
     } catch {
       /* ignore */
     }
@@ -582,7 +634,7 @@ export async function searchOffers(query: string, page = 1): Promise<OfferSearch
       .where(and(eq(offerSearchCache.query, q), eq(offerSearchCache.page, page)))
       .orderBy(desc(offerSearchCache.createdAt))
       .limit(1);
-    if (stale[0]?.items) return { items: stale[0].items, total: stale[0].total, page, source: "cache" };
+    if (stale[0]?.items) return { items: prioritizeWholeMachines(q, stale[0].items), total: stale[0].total, page, source: "cache" };
     throw e;
   }
 }

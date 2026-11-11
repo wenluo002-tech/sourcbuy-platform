@@ -8,6 +8,7 @@
  */
 import { getDb } from "./connection";
 import { sql as dsql } from "drizzle-orm";
+import { log } from "../lib/logger";
 
 const KEY = process.env.WANBANG_KEY || "";
 const SECRET = process.env.WANBANG_SECRET || "";
