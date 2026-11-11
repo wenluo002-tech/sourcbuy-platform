@@ -27,7 +27,7 @@ if (!up) {
 // 2) 万邦今日额度
 const db = getDb();
 const [wb]: any = await db.execute(sql`SELECT COUNT(*) c, IFNULL(SUM(cost_cny),0) cost FROM sourcing_api_logs WHERE created_at >= CURDATE() AND provider='wanbang'`);
-lines.push(`- 万邦今日：${wb[0].c} 次 / ¥${Number(wb[0].cost).toFixed(2)}（测试 key 每日 200 次，2026-11-08 到期）`);
+lines.push(`- 万邦今日：${wb[0].c} 次 / ¥${Number(wb[0].cost).toFixed(2)}`);
 
 // 3) 昨日报错
 const [err]: any = await db.execute(sql`SELECT COUNT(*) c FROM sourcing_api_logs WHERE created_at >= CURDATE() - INTERVAL 1 DAY AND created_at < CURDATE() AND ok = 0`);
@@ -36,7 +36,7 @@ lines.push(`- 昨日 API 失败：${err[0].c} 次`);
 // 4) 数据对账
 const [pool]: any = await db.execute(sql`SELECT COUNT(*) c FROM offer_pool`);
 const [fac]: any = await db.execute(sql`SELECT COUNT(*) c FROM factories`);
-lines.push(`- 产品池 ${pool[0].c} 条 · 严选库 ${fac[0].c} 家（应为 4060）`);
+lines.push(`- 产品池 ${pool[0].c} 条 · 严选库 ${fac[0].c} 家`);
 
 // 5) 点金余额（灾备）
 try {

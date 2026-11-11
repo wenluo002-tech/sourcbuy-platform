@@ -40,6 +40,16 @@ async function ensureTable() {
 
 const hash = (s: string) => createHash("sha256").update(s, "utf8").digest("hex");
 
+// 译文残留中文检测与清洗：品牌词剥成空格后收拢多空格/悬空标点（"Uñas 喜事桃桃 con"→"Uñas con"）
+const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+const stripCjk = (s: string) =>
+  s
+    .replace(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:!?%)\]}»」』])/g, "$1")
+    .replace(/([(\[{«「『])\s+/g, "$1")
+    .trim();
+
 /** 从模型输出里抠 JSON 数组（结构化输出在网关上慢 3.5 倍，故用裸文本+手动解析；抠不到数组返回 null） */
 function parseJsonArray(text: string): string[] | null {
   const m = text.match(/\[[\s\S]*\]/);
@@ -110,7 +120,7 @@ export async function translateTexts(texts: string[], targetLang: string): Promi
           const r = await generateText({
             model: kimiGw("k2d8-preview"), // 翻译是轻量任务：快模型，thinking 版 10s 内出不来
             system: `You are a cross-border e-commerce localization translator. Translate Chinese product listing text into natural, buyer-facing ${LANG_NAME[targetLang]}.
-Rules: produce a natural product name/description a native buyer would write — do NOT translate word-by-word; Chinese listings stack SEO keywords, compress them into one clean name. Keep brand names, model numbers, units and spec values as-is. Output a JSON array of exactly N strings in the same order, one per input. No explanations, no markdown fences.`,
+Rules: produce a natural product name/description a native buyer would write — do NOT translate word-by-word; Chinese listings stack SEO keywords, compress them into one clean name. Keep model numbers, units and spec values as-is. Chinese brand names must be transliterated or omitted — the output must contain ZERO Chinese characters. Output a JSON array of exactly N strings in the same order, one per input. No explanations, no markdown fences.`,
             messages: [{ role: "user", content: JSON.stringify(chunk) }],
             abortSignal: AbortSignal.timeout(30_000),
           });
@@ -118,7 +128,9 @@ Rules: produce a natural product name/description a native buyer would write —
           // 3) 入库（条数对齐才入库，错位整批回落原文）
           if (translated.length === chunk.length) {
             for (let i = 0; i < chunk.length; i++) {
-              const t = chunk[i], tr = (translated[i] ?? "").trim();
+              const t = chunk[i], tr0 = (translated[i] ?? "").trim();
+              // 中文品牌词 LLM 会当专有名词保留——译文入库前过 CJK 清洗（剥离+收标点），绝不让中文残留进缓存
+              const tr = CJK_RE.test(tr0) ? stripCjk(tr0) : tr0;
               if (!tr) continue;
               out[t] = tr;
               await db.execute(

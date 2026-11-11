@@ -19,6 +19,18 @@ import { tagIntentSources } from "../../contracts/sourceNote";
 // 买家在打听某家具体工厂底细（人数/规模/成立年份/验厂/靠不靠谱）的识别词
 const FACTORY_QA_RE = /(多少人|员工|工人|规模|面积|厂房|成立|哪年|哪一年|验厂|实力|靠不靠谱|靠谱吗|怎么样|底细|可信|真实|employees|workers|staff|how big|factory size|established|founded|audit|audited|reliable|trust|legit)/i;
 
+// 工厂分层是枚举值，不走 LLM 翻译：喂外语话术前直接映射（与前端 i18n tierName 同口径）——
+// 否则 LLM 会把中文「优选/金标」原样引用进外语回复（v80 巡检实抓的中文残留根因之一）
+const TIER_I18N: Record<string, Record<string, string>> = {
+  金标: { en: "Gold", es: "Oro", fr: "Or", pt: "Selo ouro" },
+  银标: { en: "Silver", es: "Plata", fr: "Argent", pt: "Selo prata" },
+  铜标: { en: "Bronze", es: "Bronce", fr: "Bronze", pt: "Selo bronze" },
+  优选: { en: "Rising", es: "Selección preferente", fr: "Sélection", pt: "Preferida" },
+  培育: { en: "New", es: "En desarrollo", fr: "En développement", pt: "Em desenvolvimento" },
+};
+const tierLabel = (tier: string | null | undefined, locale: string): string | null =>
+  tier ? (locale === "zh" ? tier : (TIER_I18N[tier]?.[locale] ?? tier)) : null;
+
 // ============ 选品意图：买家问"什么好卖/爆款/趋势" → 直接给真实雷达榜，不走 LLM ============
 const SELECTION_RE = /(好卖|爆款|热卖|畅销|趋势|选品|卖什么|什么.*(卖|火)|海外.*(流行|热)|trending|best[\s-]*seller|hot[\s-]*sell)/i;
 
@@ -421,15 +433,20 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   if (radarId) {
     try {
       radarCtx = await getRadarItem(radarId);
-      // 外语版 CTA 话术内嵌的标题/信号出处文走翻译管线：缓存同步替换（雷达页/巡检器已预热必命中），缺失后台补
+      // 外语版 CTA 话术内嵌的标题/信号出处文走翻译管线：缓存同步替换；缺失必须当场补齐（await），
+      // 不能 fire-and-forget——否则外语买家首次点雷达 CTA 会看到中文信号原文（v79 巡检实抓）
       if (radarCtx && locale !== "zh") {
         const { lookupCached, translateTexts } = await import("../lib/translate");
-        const cached = await lookupCached([radarCtx.signalText, radarCtx.title], locale);
-        const sig = cached[radarCtx.signalText];
-        const ttl = cached[radarCtx.title];
-        if (sig || ttl) radarCtx = { ...radarCtx, signalText: sig ?? radarCtx.signalText, title: ttl ?? radarCtx.title };
-        const missing = [radarCtx.signalText, radarCtx.title].filter((x) => !cached[x]);
-        if (missing.length) void translateTexts(missing, locale).catch(() => {});
+        const origSig = radarCtx.signalText, origTitle = radarCtx.title;
+        const cached = await lookupCached([origSig, origTitle], locale);
+        let sig = cached[origSig], ttl = cached[origTitle];
+        const missing = [origSig, origTitle].filter((x) => !cached[x]);
+        if (missing.length) {
+          const fresh = await translateTexts(missing, locale).catch(() => ({}) as Record<string, string>);
+          sig = sig ?? fresh[origSig];
+          ttl = ttl ?? fresh[origTitle];
+        }
+        if (sig || ttl) radarCtx = { ...radarCtx, signalText: sig ?? origSig, title: ttl ?? origTitle };
       }
     } catch (e) {
       log.warn("雷达条目查询失败，按普通对话流程走", { error: e instanceof Error ? e.message : String(e) });
@@ -750,7 +767,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
         if (row) {
           factoryCard = {
             name: unlocked ? row.name : maskedFactoryName(qaTargetId),
-            tier: row.tier,
+            tier: tierLabel(row.tier, locale),
             score: row.score != null ? Number(row.score) : null,
             storeYears: row.years != null ? Number(row.years) : null, // 诚信通店铺年限
             location: row.location,
@@ -785,6 +802,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
         await translateFields(factories as any[], ["location", "reason", "tags", "evidence"], locale);
         for (const f of factories) {
           f.name = (f.name as string).replace(/^严选工厂 No\.(\d+)$/, "Vetted Factory No.$1");
+          if (f.tier) f.tier = tierLabel(f.tier, locale);
           const lo = (f as any).linkedOffer;
           if (lo?.title) {
             const tm = await lookupCached([lo.title], locale);
@@ -852,7 +870,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
           factoryInOurDb: productInfo.factory
             ? {
                 name: productInfo.factory.name,
-                tier: productInfo.factory.tier,
+                tier: tierLabel(productInfo.factory.tier, locale),
                 score: productInfo.factory.score,
               }
             : null,
