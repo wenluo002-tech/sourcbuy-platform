@@ -1,16 +1,14 @@
-// tempCheck 直连诊断：绕过 HTTP，直接调函数看真实报错
 process.loadEnvFile();
-import { tempCheckFactory } from "../api/queries/tempCheck";
-import { getDb } from "../api/queries/connection";
-import { sql } from "drizzle-orm";
-
-const db: any = getDb();
-const r = await tempCheckFactory("中山市三乡镇朗日电器厂", 420005);
-console.log("RESULT:", JSON.stringify(r, null, 1).slice(0, 2000));
-const [logs]: any = await db.execute(
-  sql`SELECT endpoint, cost_cny, ok, error, created_at FROM sourcing_api_logs WHERE endpoint='tempCheck' ORDER BY id DESC LIMIT 3`,
-);
-console.log("LOGS:", JSON.stringify(logs, null, 1));
-const [tc]: any = await db.execute(sql`SELECT id, status, score, cost_cny FROM temp_factory_checks ORDER BY id DESC LIMIT 3`);
-console.log("TC:", JSON.stringify(tc));
+const KEY = process.env.WANBANG_KEY || "";
+const SECRET = process.env.WANBANG_SECRET || "";
+const qs = new URLSearchParams({ key: KEY, secret: SECRET, lang: "zh-CN", cache: "no", keywords: "广州鸿讯电子有限公司" });
+try {
+  const res = await fetch(`https://api-gw.onebound.cn/1688/item_search_factory/?${qs}`, { signal: AbortSignal.timeout(15000) });
+  const j: any = await res.json();
+  console.log("HTTP", res.status, "| error_code:", j?.error_code, "| error:", j?.error);
+  console.log("items 数:", j?.items?.item?.length ?? j?.items?.length ?? "无");
+  console.log("reason:", j?.reason ?? "无");
+} catch (e) {
+  console.log("FETCH 异常:", e instanceof Error ? e.message : String(e));
+}
 process.exit(0);

@@ -23,11 +23,21 @@ const norm = (s: string) =>
 
 async function wb(ep: string, params: Record<string, string>): Promise<{ j: any; billed: boolean }> {
   const qs = new URLSearchParams({ key: KEY, secret: SECRET, lang: "zh-CN", cache: "no", ...params });
-  const res = await fetch(`${BASE}/${ep}/?${qs}`, { signal: AbortSignal.timeout(15000) });
-  const j: any = await res.json();
-  const billed = j?.error_code === "0000" || j?.error === "" || j?.error_code === undefined;
-  if (j?.error && j.error_code !== "0000") throw new Error(`wanbang ${ep}: ${j.error} (${j.error_code ?? "?"})`);
-  return { j, billed };
+  // 网络/超时异常自动重试一次（万邦偶发抖动不应让买家看到"上游不可用"）；业务错误码不重试（重试也不会变）
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${BASE}/${ep}/?${qs}`, { signal: AbortSignal.timeout(15000) });
+      const j: any = await res.json();
+      const billed = j?.error_code === "0000" || j?.error === "" || j?.error_code === undefined;
+      if (j?.error && j.error_code !== "0000") throw new Error(`wanbang ${ep}: ${j.error} (${j.error_code ?? "?"})`);
+      return { j, billed };
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith(`wanbang ${ep}:`)) throw e; // 业务错误码直接抛
+      lastErr = e; // 网络/超时：再试一次
+    }
+  }
+  throw lastErr;
 }
 
 // 5000 = data error，上游对"查无结果"的返回（实测确认，不扣费）；按接口语义由调用点消化
