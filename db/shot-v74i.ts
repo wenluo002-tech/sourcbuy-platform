@@ -8,7 +8,7 @@ await p1.goto("http://localhost:3200/products/840699102922", { waitUntil: "domco
 await p1.waitForFunction(() => !document.body.innerText.includes("Connecting to source factories"), { timeout: 60000 });
 await p1.waitForTimeout(2500);
 const behind = await p1.evaluate(() => {
-  const el = [...document.querySelectorAll("a")].find((a) => a.getAttribute("href")?.startsWith("/factories/"));
+  const el = Array.from(document.querySelectorAll("a")).find((a) => a.getAttribute("href")?.startsWith("/factories/"));
   return { name: el?.innerText?.trim() ?? "(not found)", href: el?.getAttribute("href") };
 });
 console.log("EN 工厂背书:", JSON.stringify(behind));

@@ -12,8 +12,8 @@ const hasScoreDims = (s: any) => !!s && SCORE_KEYS.some((k) => s[k] != null);
 
 export default function FactoryDetail() {
   const { id } = useParams<{ id: string }>();
-  const q = trpc.factories.detail.useQuery({ id: Number(id) });
-  const { t } = useT();
+  const { t, lang } = useT();
+  const q = trpc.factories.detail.useQuery({ id: Number(id), locale: lang });
 
   if (q.isLoading) return <p className="text-black/45">{t("factoryDetail.loading")}</p>;
   if (!q.data) return <p className="text-black/45">{t("factoryDetail.notFound")}</p>;
@@ -101,7 +101,7 @@ function FactoryDetailView({ f }: { f: any }) {
               {f.tier && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 font-medium text-[var(--sb-brand)]">{t(`home.tierName.${f.tier}`)}</span>}
               {f.isSuper && <span className="rounded bg-[var(--sb-brand-soft)] px-2 py-0.5 text-[var(--sb-brand)]">{t("factoryDetail.superFactory")}</span>}
               {f.medal && f.medal !== "无牌工厂" && (
-                <span className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{f.medal}{f.medalLevel ?? ""}</span>
+                <span className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{t(`home.medalName.${f.medal}${f.medalLevel ?? ""}`)}</span>
               )}
               {[...new Set<string>((f.tags ?? []).filter((t: string) => t !== f.tier && !(f.isSuper && t === "超级工厂")))].map((t) => (
                 <span key={t} className="rounded bg-black/[0.05] px-2 py-0.5 text-black/60">{t}</span>

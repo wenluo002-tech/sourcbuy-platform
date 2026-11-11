@@ -85,6 +85,12 @@ export const pt = {
       优选: "Preferida",
       培育: "Em desenvolvimento"
     },
+    medalName: {
+      一钻工厂: "Fábrica 1 diamante", 二钻工厂: "Fábrica 2 diamantes", 三钻工厂: "Fábrica 3 diamantes", 四钻工厂: "Fábrica 4 diamantes",
+      铜牌工厂: "Fábrica bronze", 银牌工厂: "Fábrica prata", 金牌工厂: "Fábrica ouro",
+      金牌制造: "Fabricante ouro", 金牌制造1钻: "Fabricante ouro · 1 diamante", 金牌制造2钻: "Fabricante ouro · 2 diamantes",
+      金牌制造3钻: "Fabricante ouro · 3 diamantes", 金牌制造4钻: "Fabricante ouro · 4 diamantes", 无牌工厂: "Fábrica sem classificação",
+    } as Record<string, string>,
     tierDesc: {
       金标: "Topo da pirâmide, grandes pedidos sem preocupação",
       银标: "Esquadrão principal de fornecimento, estável e confiável",

@@ -699,6 +699,12 @@ export const en: Messages = {
     catAsk: "Find me factories in this category",
     tierSuffix: "",
     tierName: { 金标: "Gold", 银标: "Silver", 铜标: "Bronze", 优选: "Rising", 培育: "New" },
+    medalName: {
+      一钻工厂: "1-Diamond Factory", 二钻工厂: "2-Diamond Factory", 三钻工厂: "3-Diamond Factory", 四钻工厂: "4-Diamond Factory",
+      铜牌工厂: "Bronze Factory", 银牌工厂: "Silver Factory", 金牌工厂: "Gold Factory",
+      金牌制造: "Gold Manufacturer", 金牌制造1钻: "Gold Manufacturer · 1 Diamond", 金牌制造2钻: "Gold Manufacturer · 2 Diamonds",
+      金牌制造3钻: "Gold Manufacturer · 3 Diamonds", 金牌制造4钻: "Gold Manufacturer · 4 Diamonds", 无牌工厂: "Unrated Factory",
+    } as Record<string, string>,
     tierDesc: {
       金标: "Top tier — safe for big orders",
       银标: "Core suppliers, stable & reliable",

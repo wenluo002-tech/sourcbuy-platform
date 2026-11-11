@@ -8,7 +8,7 @@ await p1.goto("http://localhost:3200/products/920369433114", { waitUntil: "domco
 await p1.waitForFunction(() => !document.body.innerText.includes("Connecting to source factories"), { timeout: 60000 });
 await p1.waitForTimeout(2500);
 const behind1 = await p1.evaluate(() => {
-  const el = [...document.querySelectorAll("a")].find((a) => a.getAttribute("href")?.startsWith("/factories/"));
+  const el = Array.from(document.querySelectorAll("a")).find((a) => a.getAttribute("href")?.startsWith("/factories/"));
   return el?.innerText?.trim() ?? "(not found)";
 });
 console.log("EN 工厂背书名:", behind1);
@@ -25,7 +25,7 @@ await p2.goto("http://localhost:3200/products/920369433114", { waitUntil: "domco
 await p2.waitForFunction(() => !document.body.innerText.includes("Conectando"), { timeout: 60000 });
 await p2.waitForTimeout(2000);
 const factHref = await p2.evaluate(() => {
-  const el = [...document.querySelectorAll("a")].find((a) => a.getAttribute("href")?.startsWith("/factories/"));
+  const el = Array.from(document.querySelectorAll("a")).find((a) => a.getAttribute("href")?.startsWith("/factories/"));
   return el?.getAttribute("href") ?? null;
 });
 console.log("工厂链接:", factHref);

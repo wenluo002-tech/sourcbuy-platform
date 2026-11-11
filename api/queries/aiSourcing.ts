@@ -374,11 +374,13 @@ function buildFallbackReplyEn(
     parts.push(`"${radarCtx.title}" — what you saw on the radar checks out: ${radarCtx.signalText} (signal date ${radarCtx.signalDate}; the source is linked on the board).`);
   }
   const what = intent.product ? `"${intent.product}"` : "this item";
+  // 厂名是 mask 后的中文代号「严选工厂 No.xxxx」：英文话术里必须英文化（与前端 chat.maskedName 同口径）
+  const enName = (n: string) => n.replace(/^严选工厂 No\.(\d+)$/, "Vetted Factory No.$1");
   const linkedCount = factories.filter((f) => f.matchBasis === "productLinked").length;
   const directCount = factories.filter((f) => f.matchBasis === "direct").length;
   if (linkedCount > 0) {
     const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
-    const sample = l0?.linkedOffer ? ` The top pick (${l0.name}) is selling this exact item — from ¥${l0.linkedOffer.price}${l0.linkedOffer.sales > 0 ? `, upstream sales ${l0.linkedOffer.sales.toLocaleString()}; I verified the listing just now.` : " — a vetted-archive listing."}` : "";
+    const sample = l0?.linkedOffer ? ` The top pick (${enName(l0.name)}) is selling this exact item — from ¥${l0.linkedOffer.price}${l0.linkedOffer.sales > 0 ? `, upstream sales ${l0.linkedOffer.sales.toLocaleString()}; I verified the listing just now.` : " — a vetted-archive listing."}` : "";
     parts.push(
       `${what} comes with hard evidence: ${linkedCount} vetted factories are selling this exact item — listing, EXW price and sales all checked live.${sample}${directCount > 0 ? ` Another ${directCount} explicitly make this kind of product.` : ""}${factories.length - linkedCount - directCount > 0 ? ` Plus ${factories.length - linkedCount - directCount} high scorers in the broader category for reference.` : ""} Cards are below, evidence laid out.`,
     );
@@ -419,6 +421,16 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   if (radarId) {
     try {
       radarCtx = await getRadarItem(radarId);
+      // 外语版 CTA 话术内嵌的标题/信号出处文走翻译管线：缓存同步替换（雷达页/巡检器已预热必命中），缺失后台补
+      if (radarCtx && locale !== "zh") {
+        const { lookupCached, translateTexts } = await import("../lib/translate");
+        const cached = await lookupCached([radarCtx.signalText, radarCtx.title], locale);
+        const sig = cached[radarCtx.signalText];
+        const ttl = cached[radarCtx.title];
+        if (sig || ttl) radarCtx = { ...radarCtx, signalText: sig ?? radarCtx.signalText, title: ttl ?? radarCtx.title };
+        const missing = [radarCtx.signalText, radarCtx.title].filter((x) => !cached[x]);
+        if (missing.length) void translateTexts(missing, locale).catch(() => {});
+      }
     } catch (e) {
       log.warn("雷达条目查询失败，按普通对话流程走", { error: e instanceof Error ? e.message : String(e) });
     }
@@ -763,6 +775,30 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   // 买家画像（买侧上下文资产 v1）：登录买家的历史行为推断，供话术个性化引用；画像条数太少/没有=null，绝不硬提
   const buyerProfile = userId ? await getBuyerProfile(userId).catch(() => null) : null;
   const prices = searchProducts.map((p) => p.promotionPrice ?? p.price).filter((n) => n > 0);
+
+  // 外语版根治中文残留：喂 LLM 的事实先把可显示中文字段换成译文/英文代号（缓存同步替换，缺失后台补）——
+  // 否则 LLM 会把中文代号「严选工厂 No.」/品类词/地名/证据原样引用进外语话术（概率性残留的根因）
+  if (locale !== "zh") {
+    try {
+      const { translateFields, lookupCached } = await import("../lib/translate");
+      if (factories.length) {
+        await translateFields(factories as any[], ["location", "reason", "tags", "evidence"], locale);
+        for (const f of factories) {
+          f.name = (f.name as string).replace(/^严选工厂 No\.(\d+)$/, "Vetted Factory No.$1");
+          const lo = (f as any).linkedOffer;
+          if (lo?.title) {
+            const tm = await lookupCached([lo.title], locale);
+            if (tm[lo.title]) lo.title = tm[lo.title];
+          }
+        }
+      }
+      if (intent.product) {
+        const pm = await lookupCached([intent.product], locale);
+        if (pm[intent.product]) intent = { ...intent, product: pm[intent.product] };
+      }
+    } catch { /* 预处理失败静默——缓存冷时由巡检预热补齐，下一轮即全译文 */ }
+  }
+
   const facts = JSON.stringify({
     intent,
     manualQuoteCategory: manualQuote,
@@ -856,8 +892,17 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     reply = r.text;
   } catch (e) {
     log.warn("reply 话术生成失败，走规则模板兜底", { error: e instanceof Error ? e.message : String(e) });
+    // 兜底模板直接把 intent.product 嵌进话术：外语版先查翻译缓存换成显示词（未命中=留原词，巡检预热后必命中）
+    let dispIntent = intent;
+    if (locale !== "zh" && intent.product) {
+      try {
+        const { lookupCached } = await import("../lib/translate");
+        const pm = await lookupCached([intent.product], locale);
+        if (pm[intent.product]) dispIntent = { ...intent, product: pm[intent.product] };
+      } catch { /* 查缓存失败静默回落原词 */ }
+    }
     reply = locale !== "zh"
-      ? buildFallbackReplyEn(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null)
+      ? buildFallbackReplyEn(dispIntent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null)
       : buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null);
     // 建材工业桶：兜底话术是模板，不经过 LLM 规则——人工核价口径在这里确定性补上
     if (manualQuote) {
@@ -877,9 +922,9 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     const texts: string[] = [];
     for (const p of searchProducts) texts.push(p.title);
     if (productInfo?.offer) texts.push(productInfo.offer.title, productInfo.offer.categoryName ?? "");
-    // 工厂卡可显示中文字段：地名/拿货理由/标签/在售同款标题/排名类目名（代号「严选工厂 No.」由前端 i18n 处理，不走 LLM）
+    // 工厂卡可显示中文字段：地名/拿货理由/标签/证据行/在售同款标题/排名类目名（代号「严选工厂 No.」由前端 i18n 处理，不走 LLM）
     for (const f of factories) {
-      texts.push(f.location ?? "", f.reason ?? "", ...(f.tags ?? []).slice(0, 4), f.categoryRank?.category ?? "");
+      texts.push(f.location ?? "", f.reason ?? "", ...(f.tags ?? []).slice(0, 4), ...(f.evidence ?? []), f.categoryRank?.category ?? "");
       const lo = (f as any).linkedOffer;
       if (lo?.title) texts.push(lo.title);
     }
@@ -895,6 +940,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       if (f.location && map[f.location]) f.location = map[f.location];
       if (f.reason && map[f.reason]) f.reason = map[f.reason];
       if (f.tags?.length) f.tags = f.tags.map((tg) => map[tg] ?? tg);
+      if (f.evidence?.length) f.evidence = f.evidence.map((ev) => map[ev] ?? ev);
       if (f.categoryRank && map[f.categoryRank.category]) f.categoryRank.category = map[f.categoryRank.category];
       const lo = (f as any).linkedOffer;
       if (lo?.title && map[lo.title]) lo.title = map[lo.title];

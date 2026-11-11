@@ -1,0 +1,10 @@
+import { sql } from "drizzle-orm";
+import { getDb } from "../api/queries/connection";
+const d = getDb();
+const medals = await d.execute(sql`SELECT DISTINCT medal FROM factories WHERE medal IS NOT NULL AND medal != ''`);
+console.log("medal 枚举:", JSON.stringify((medals as any)[0].map((r: any) => r.medal)));
+const locs = await d.execute(sql`SELECT DISTINCT location FROM factories WHERE location IS NOT NULL AND location != '' LIMIT 40`);
+console.log("location 前40:", (locs as any)[0].map((r: any) => r.location).join(" / "));
+const tags = await d.execute(sql`SELECT DISTINCT tags FROM factories WHERE tags IS NOT NULL AND tags != '' LIMIT 10`);
+console.log("tags 样本:", JSON.stringify((tags as any)[0].map((r: any) => r.tags)));
+process.exit(0);

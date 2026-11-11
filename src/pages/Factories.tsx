@@ -13,7 +13,7 @@ const CERTS = [
 ];
 
 export default function Factories() {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [params] = useSearchParams();
   const [keyword, setKeyword] = useState(params.get("keyword") ?? "");
   const [tier, setTier] = useState("");
@@ -28,6 +28,7 @@ export default function Factories() {
     location: location || undefined,
     page,
     pageSize: 20,
+    locale: lang,
   });
 
   const totalPages = q.data ? Math.ceil(q.data.total / 20) : 1;
@@ -112,7 +113,7 @@ export default function Factories() {
           >
             <div className="flex items-start justify-between gap-3">
               <h3 className="line-clamp-1 font-semibold tracking-tight group-hover:text-[var(--sb-brand)]">
-                {f.name}
+                {(f as any).masked ? t("chat.maskedName", { n: String(f.id).padStart(4, "0") }) : f.name}
               </h3>
               <span className="sb-num shrink-0 text-lg font-bold leading-none text-[var(--sb-brand)]">
                 {f.score}
@@ -133,8 +134,7 @@ export default function Factories() {
               )}
               {f.medal && f.medal !== "无牌工厂" && (
                 <span className="rounded bg-black/[0.05] px-1.5 py-0.5 text-black/60">
-                  {f.medal}
-                  {f.medalLevel ?? ""}
+                  {t(`home.medalName.${f.medal}${f.medalLevel ?? ""}`)}
                 </span>
               )}
             </div>

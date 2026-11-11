@@ -31,8 +31,13 @@ function gtUrl(titleEn: string | null, fallback: string): string {
 
 const SOURCE_DOT = { amazon: "#e07b39", tiktok: "#6d28d9" } as const;
 
-function fmtSales(n: number | null): string | null {
+function fmtSales(n: number | null, lang: string): string | null {
   if (n == null || n <= 0) return null;
+  if (lang !== "zh") {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M+`;
+    if (n >= 1000) return `${Math.floor(n / 1000)}K+`;
+    return `${n}`;
+  }
   if (n >= 100000) return "10万+";
   if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, "")}万+`;
   return `${n}`;
@@ -42,7 +47,7 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
   const { lang, t } = useT();
   const dot = SOURCE_DOT[it.signalSource];
   const srcLabel = it.signalSource === "amazon" ? t("radar.sourceAmazon") : t("radar.sourceTiktok");
-  const sales = fmtSales(it.topSales);
+  const sales = fmtSales(it.topSales, lang);
   return (
     <article
       className="sb-reveal flex flex-col border border-[var(--sb-rule)] bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--sb-brand)] hover:shadow-[0_14px_34px_-16px_rgba(21,37,49,0.35)]"
@@ -172,8 +177,8 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
 }
 
 export default function Radar() {
-  const { t } = useT();
-  const q = trpc.radar.list.useQuery(undefined, { staleTime: 60_000 });
+  const { t, lang } = useT();
+  const q = trpc.radar.list.useQuery({ locale: lang }, { staleTime: 60_000 });
   const [filter, setFilter] = useState<"all" | "amazon" | "tiktok">("all");
   const pageRef = useReveal<HTMLDivElement>();
 

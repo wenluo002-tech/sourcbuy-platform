@@ -9,12 +9,12 @@ import { RadarCard } from "@/pages/Radar";
 const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
 
 export default function Home() {
-  const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
-  const catStats = trpc.factories.categoryStats.useQuery(undefined, { staleTime: 60_000 });
-  const featured = trpc.factories.match.useQuery({ minScore: 90, limit: 6 });
-  const radar = trpc.radar.list.useQuery(undefined, { staleTime: 60_000 });
-  const [kw, setKw] = useState("");
   const { t, lang } = useT();
+  const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
+  const catStats = trpc.factories.categoryStats.useQuery({ locale: lang }, { staleTime: 60_000 });
+  const featured = trpc.factories.match.useQuery({ minScore: 90, limit: 6, locale: lang });
+  const radar = trpc.radar.list.useQuery({ locale: lang }, { staleTime: 60_000 });
+  const [kw, setKw] = useState("");
   const navigate = useNavigate();
   const pageRef = useReveal<HTMLDivElement>();
 
@@ -410,7 +410,7 @@ export default function Home() {
                 </span>
               </div>
               <h3 className="sb-display mt-1.5 line-clamp-1 text-[16px] leading-snug text-[var(--sb-ink)] [@media(hover:hover)]:group-hover:text-[var(--sb-brand)]">
-                {f.name}
+                {(f as any).masked ? t("chat.maskedName", { n: String(f.id).padStart(4, "0") }) : f.name}
               </h3>
               <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
                 {f.reason}

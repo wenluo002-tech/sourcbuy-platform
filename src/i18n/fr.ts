@@ -85,6 +85,12 @@ export const fr = {
       优选: "Sélection",
       培育: "En développement"
     },
+    medalName: {
+      一钻工厂: "Usine 1 diamant", 二钻工厂: "Usine 2 diamants", 三钻工厂: "Usine 3 diamants", 四钻工厂: "Usine 4 diamants",
+      铜牌工厂: "Usine bronze", 银牌工厂: "Usine argent", 金牌工厂: "Usine or",
+      金牌制造: "Fabricant or", 金牌制造1钻: "Fabricant or · 1 diamant", 金牌制造2钻: "Fabricant or · 2 diamants",
+      金牌制造3钻: "Fabricant or · 3 diamants", 金牌制造4钻: "Fabricant or · 4 diamants", 无牌工厂: "Usine non classée",
+    } as Record<string, string>,
     tierDesc: {
       金标: "Le sommet, confiez les grosses commandes en toute confiance",
       银标: "Échelon principal, fiable et stable",

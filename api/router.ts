@@ -46,21 +46,45 @@ export const appRouter = createRouter({
           keyword: z.string().optional(),
           page: z.number().optional(),
           pageSize: z.number().optional(),
+          locale: z.string().max(8).optional(),
         })
       )
-      .query(async ({ input, ctx }) =>
-        findFactories({ ...input, unlocked: await isUnlockedBuyer(ctx.user?.id) })
-      ),
+      .query(async ({ input, ctx }) => {
+        const { locale, ...q } = input;
+        const res = await findFactories({ ...q, unlocked: await isUnlockedBuyer(ctx.user?.id) });
+        // 开放集合中文字段走输出层翻译（缓存同步替换+后台补缺，绝不阻塞）；medal 是 13 枚举，前端映射
+        const { translateFields } = await import("./lib/translate");
+        await translateFields(res.rows as any[], ["location"], locale);
+        return res;
+      }),
 
     detail: publicQuery
-      .input(z.object({ id: z.number() }))
-      .query(async ({ input, ctx }) => findFactoryById(input.id, await isUnlockedBuyer(ctx.user?.id))),
+      .input(z.object({ id: z.number(), locale: z.string().max(8).optional() }))
+      .query(async ({ input, ctx }) => {
+        const f = await findFactoryById(input.id, await isUnlockedBuyer(ctx.user?.id));
+        if (f) {
+          const { translateFields } = await import("./lib/translate");
+          await translateFields(
+            [f as any],
+            ["location", "province", "city", "district", "review", "cert", "certNote", "oemMode", "productionType", "serviceCapability", "category", "tags"],
+            input.locale
+          );
+        }
+        return f;
+      }),
     // 供应商数字护照 v1：五段式结构化档案（身份/能力/证据/商业条件/状态），Agent 可读
     passport: publicQuery
       .input(z.object({ id: z.number() }))
       .query(async ({ input, ctx }) => getFactoryPassport(input.id, await isUnlockedBuyer(ctx.user?.id))),
     stats: publicQuery.query(() => factoryStats()),
-    categoryStats: publicQuery.query(() => factoryCategoryStats()),
+    categoryStats: publicQuery
+      .input(z.object({ locale: z.string().max(8).optional() }).optional())
+      .query(async ({ input }) => {
+        const res = await factoryCategoryStats();
+        const { translateFields } = await import("./lib/translate");
+        await translateFields(res.byCategory as any[], ["category"], input?.locale);
+        return res;
+      }),
     // 临时查厂：买家报名字实时核查库外工厂（结果只留档 temp_factory_checks，绝不写严选库）
     tempCheck: authedQuery
       .input(z.object({ name: z.string().min(4).max(60) }))
@@ -73,11 +97,17 @@ export const appRouter = createRouter({
           location: z.string().optional(),
           minScore: z.number().optional(),
           limit: z.number().optional(),
+          locale: z.string().max(8).optional(),
         })
       )
-      .query(async ({ input, ctx }) =>
-        matchFactories({ ...input, unlocked: await isUnlockedBuyer(ctx.user?.id) })
-      ),
+      .query(async ({ input, ctx }) => {
+        const { locale, ...q } = input;
+        const rows = await matchFactories({ ...q, unlocked: await isUnlockedBuyer(ctx.user?.id) });
+        // location/reason/tags/evidence 全走输出层翻译（缓存同步+后台补缺，不阻塞）
+        const { translateFields } = await import("./lib/translate");
+        await translateFields(rows as any[], ["location", "reason", "tags", "evidence"], locale);
+        return rows;
+      }),
   }),
 
   pricing: createRouter({
@@ -159,7 +189,13 @@ export const appRouter = createRouter({
             translateTexts(skuTexts, input.locale).catch(() => {}); // fire-and-forget 填缓存
           }
         }
-        return { offer: mOffer, factory: maskFactory(factory, unlocked) };
+        const mFactory = maskFactory(factory, unlocked);
+        if (mFactory && input.locale && input.locale !== "zh") {
+          // 背书区工厂地名走输出层翻译（tier 是 5 枚举，前端 i18n 已映射）
+          const { translateFields } = await import("./lib/translate");
+          await translateFields([mFactory as any], ["location"], input.locale);
+        }
+        return { offer: mOffer, factory: mFactory };
       }),
     // 关键词搜品：搜索缓存 30 分钟防刷
     search: publicQuery
@@ -168,7 +204,16 @@ export const appRouter = createRouter({
   }),
 
   radar: createRouter({
-    list: publicQuery.query(() => listRadar()),
+    list: publicQuery
+      .input(z.object({ locale: z.string().max(8).optional() }).optional())
+      .query(async ({ input }) => {
+        const data = await listRadar();
+        // 翻译纪律：绝不阻塞响应——lookupCached 同步替换已缓存译文，缺失 fire-and-forget 后台补；
+        // 缓存由版本发布前的 i18n 巡检器（db/i18n-scan.ts）铺满，线上用户永远命中快路径
+        const { translateFields } = await import("./lib/translate");
+        await translateFields(data.items as any[], ["signalText", "note"], input?.locale);
+        return data;
+      }),
   }),
 
   ai: createRouter({chat: publicQuery

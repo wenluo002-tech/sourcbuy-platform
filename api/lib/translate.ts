@@ -97,8 +97,8 @@ export async function translateTexts(texts: string[], targetLang: string): Promi
     }
     if (!missing.length) return out;
     // 2) 分批批量调 LLM（裸文本 JSON 数组进出——generateObject 结构化输出在网关上慢 3.5 倍，20 条要 18s 必超时）。
-    //    40 条/批、3 路并发（fire-and-forget 场景尽快铺满缓存；单批失败不拖垮整链）。
-    const BATCH = 40;
+    //    20 条/批、3 路并发（40 条大批次在 30s 内经常出不来/条数错位整批丢弃；小批次成功率显著高）。
+    const BATCH = 20;
     const chunks: string[][] = [];
     for (let b = 0; b < missing.length; b += BATCH) chunks.push(missing.slice(b, b + BATCH));
     let cursor = 0;
@@ -112,7 +112,7 @@ export async function translateTexts(texts: string[], targetLang: string): Promi
             system: `You are a cross-border e-commerce localization translator. Translate Chinese product listing text into natural, buyer-facing ${LANG_NAME[targetLang]}.
 Rules: produce a natural product name/description a native buyer would write — do NOT translate word-by-word; Chinese listings stack SEO keywords, compress them into one clean name. Keep brand names, model numbers, units and spec values as-is. Output a JSON array of exactly N strings in the same order, one per input. No explanations, no markdown fences.`,
             messages: [{ role: "user", content: JSON.stringify(chunk) }],
-            abortSignal: AbortSignal.timeout(20_000),
+            abortSignal: AbortSignal.timeout(30_000),
           });
           const translated = parseJsonArray(r.text) ?? [];
           // 3) 入库（条数对齐才入库，错位整批回落原文）
@@ -140,4 +140,51 @@ Rules: produce a natural product name/description a native buyer would write —
     log.warn("翻译失败回落原文", { lang: targetLang, error: e instanceof Error ? e.message : String(e) });
     return out; // 已命中的缓存照常返回
   }
+}
+
+/**
+ * 输出层翻译助手（数据层接口统一模式）：
+ *   lookupCached 同步替换已缓存译文（快路径，响应绝不被翻译阻塞）；
+ *   未缓存部分 fire-and-forget 调 translateTexts 后台补——下次请求/巡检预热后命中。
+ * rows: 数据行数组；fields: 要翻译的字段名（值可为 string 或 string[]，数组逐项映射）；
+ * locale: 目标语言（zh/空 = 原样返回）。返回是否已做替换（仅日志用）。
+ */
+export async function translateFields<T extends Record<string, any>>(
+  rows: T[],
+  fields: (keyof T & string)[],
+  locale?: string | null
+): Promise<boolean> {
+  if (!locale || locale === "zh" || !LANG_NAME[locale] || !rows.length) return false;
+  const texts: string[] = [];
+  for (const r of rows) {
+    for (const f of fields) {
+      const v = r[f];
+      if (typeof v === "string" && v.trim()) texts.push(v);
+      else if (Array.isArray(v)) for (const x of v) if (typeof x === "string" && x.trim()) texts.push(x);
+    }
+  }
+  if (!texts.length) return false;
+  const map = await lookupCached(texts, locale); // 只查缓存不调 LLM，快路径
+  let replaced = false;
+  for (const r of rows) {
+    for (const f of fields) {
+      const v = r[f];
+      if (typeof v === "string" && map[v]) {
+        r[f] = map[v] as any;
+        replaced = true;
+      } else if (Array.isArray(v)) {
+        const nv = v.map((x) => (typeof x === "string" && map[x] ? map[x] : x));
+        if (nv.some((x, i) => x !== v[i])) {
+          r[f] = nv as any;
+          replaced = true;
+        }
+      }
+    }
+  }
+  const missing = [...new Set(texts.filter((t) => !map[t]))];
+  if (missing.length) {
+    // fire-and-forget：后台补缺铺满终身缓存，绝不 await 阻塞响应
+    void translateTexts(missing, locale).catch(() => {});
+  }
+  return replaced;
 }

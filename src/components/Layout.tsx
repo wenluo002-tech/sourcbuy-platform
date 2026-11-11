@@ -101,8 +101,9 @@ export default function Layout() {
                 {t("nav.signIn")}
               </Link>
             )}
-            {/* 五语言切换：原生 select（移动端系统级滚轮选择器，可靠性高于自绘下拉） */}
+            {/* 五语言切换：原生 select（移动端系统级滚轮选择器，可靠性高于自绘下拉）。data-i18n-skip：语言名按国际惯例保留原名（"中文"等），巡检器跳过 */}
             <select
+              data-i18n-skip
               value={lang}
               onChange={(e) => setLang(e.target.value as Lang)}
               className="ml-1 shrink-0 cursor-pointer appearance-none border border-[var(--sb-rule)] bg-transparent px-2 py-1 text-center text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)] sm:ml-2"

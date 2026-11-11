@@ -344,6 +344,23 @@ console.log("\n[8] 质检双检（2026-11-09 PRD v1.1）：表结构 + 鉴权边
   check("无会话查买家报告被拒（UNAUTHORIZED）", noSessListJson?.error?.json?.data?.code === "UNAUTHORIZED");
 }
 
+// [收官] 多语言零残留巡检（罗总 2026-11-11 指令：专业机器巡检取代肉眼）：en/es/fr/pt × 6 核心页全量扫描，
+// 巡检器=预热器+判官一体（首扫触发缓存补缺，45s 后重扫判定），有残留即 FAIL——不存版本。
+{
+  console.log("\n[收官] 多语言零残留巡检（4 语言 × 6 页，含预热重扫，约 5-10 分钟）");
+  const { execFileSync } = await import("child_process");
+  try {
+    execFileSync("npx", ["tsx", "db/i18n-scan.ts"], {
+      stdio: "inherit",
+      timeout: 1_200_000,
+      env: { ...process.env, SCAN_BASE: BASE },
+    });
+    check("i18n 四语言六页零中文残留", true);
+  } catch {
+    check("i18n 四语言六页零中文残留", false, "巡检器退出码非 0（详见上方扫描输出）");
+  }
+}
+
 console.log(`\n═══ 验收结果：${pass} PASS / ${fail} FAIL ═══`);
 if (fail) { console.log("失败项：", fails.join(" | ")); process.exit(1); }
 console.log("检查单全过，允许存版本。");
