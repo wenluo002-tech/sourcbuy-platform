@@ -1,0 +1,33 @@
+// 手机端复测：详情返回 + 直开详情兜底 + 对话恢复
+import { chromium } from "playwright-core";
+const BASE = "http://localhost:3200";
+const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: "zh-CN" });
+await ctx.addInitScript(() => localStorage.setItem("sb-lang", "zh"));
+const page = await ctx.newPage();
+const errs: string[] = [];
+page.on("pageerror", (e) => errs.push(String(e).slice(0, 150)));
+await page.goto(`${BASE}/buyer`, { waitUntil: "domcontentloaded" });
+const box = page.locator("input:visible:not([type=hidden]):not([type=file])").last();
+await box.waitFor({ timeout: 30_000 });
+await box.fill("我想采购山地自行车");
+await box.press("Enter");
+await page.locator('a[href*="/products/"]').first().waitFor({ timeout: 90_000 });
+await page.locator('a[href*="/products/"]').first().click();
+await page.waitForSelector('button:has-text("返回")', { timeout: 20_000 });
+await page.waitForTimeout(4000);
+await page.screenshot({ path: "/tmp/m-detail.png" });
+await page.locator('button:has-text("返回")').first().click();
+await page.waitForTimeout(3500);
+const cards = await page.locator('a[href*="/products/"]').count();
+console.log("手机端返回后:", page.url(), "/ 商品卡", cards, "张");
+await page.screenshot({ path: "/tmp/m-back.png" });
+// 直开详情（模拟收藏夹/分享链接进入）：返回应兜底到对话页而不是跳出站点
+const page2 = await ctx.newPage();
+await page2.goto(`${BASE}/products/840699102922`, { waitUntil: "domcontentloaded" });
+await page2.waitForSelector('button:has-text("返回")', { timeout: 20_000 });
+await page2.locator('button:has-text("返回")').first().click();
+await page2.waitForTimeout(2500);
+console.log("直开详情点返回 → ", page2.url());
+console.log("前端错误:", errs.length ? errs.join(" | ") : "无");
+await browser.close(); process.exit(0);

@@ -192,7 +192,7 @@ export const zhFactories = {
 };
 
 export const zhFactoryDetail = {
-  back: "← 返回工厂库",
+  back: "← 返回",
   traderNotice: "贸易商提示：这家公司是贸易/供应链公司，不是源头工厂，本页仅作背景参考。我们给买家匹配推荐的只含源头工厂，贸易商已全部从推荐池剔除。",
   traderBadge: "贸易商",
   maskedBadge: "档案待解锁",

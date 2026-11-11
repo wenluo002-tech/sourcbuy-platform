@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router";
+import { useParams, Link, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
 import { useT } from "@/i18n";
@@ -24,6 +24,7 @@ export default function FactoryDetail() {
 
 function FactoryDetailView({ f }: { f: any }) {
   const { t } = useT();
+  const nav = useNavigate();
   // 灯箱：所有分组图片拍平成一条序列，点缩略图放大，支持左右切换
   const [viewer, setViewer] = useState<number | null>(null);
   const flatImages = useMemo(() => {
@@ -70,9 +71,18 @@ function FactoryDetailView({ f }: { f: any }) {
 
   return (
     <div className="space-y-6">
-      <Link to="/factories" className="text-sm text-[var(--sb-brand)] hover:underline">
+      {/* 智能返回：站内进来的回上一页（可能是对话页/撞库卡），直接打开的才回工厂库 */}
+      <button
+        type="button"
+        onClick={() => {
+          const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+          if (idx > 0) nav(-1);
+          else nav("/factories");
+        }}
+        className="text-sm text-[var(--sb-brand)] hover:underline"
+      >
         {t("factoryDetail.back")}
-      </Link>
+      </button>
 
       {f.isTrader && (
         <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-800">

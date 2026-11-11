@@ -36,6 +36,27 @@ function FulfillmentChain({ dispatchNote }: { dispatchNote: string | null }) {
   );
 }
 
+/* 智能返回：站内进来的回上一页（react-router 会给站内跳转标 history.state.idx，
+   idx>0 说明有站内历史，nav(-1) 安全）；直接打开/外链进来的回对话页兜底。
+   加载中/未找到/已加载三态都挂这个条——买家在任何时候都不该被"困"在详情页。 */
+function SmartBack() {
+  const { t } = useT();
+  const nav = useNavigate();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+        if (idx > 0) nav(-1);
+        else nav("/buyer");
+      }}
+      className="text-xs font-medium text-[var(--sb-ink-40)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
+    >
+      {t("product.back")}
+    </button>
+  );
+}
+
 /* 加载等待态：直连源头工厂核价核库存的过程话术（不提"翻译"，符合老采购人设）+ 转圈动画 + 副话术轮换。
    外语首次访问要实时翻译数据层文本，等待 5–15s——绝不能白屏干等。 */
 function ProductLoading() {
@@ -48,7 +69,8 @@ function ProductLoading() {
   const subs = [t("product.loadingSub1"), t("product.loadingSub2"), t("product.loadingSub3")];
   return (
     <div className="mx-auto max-w-5xl py-4">
-      <div className="flex items-center gap-3.5 rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] px-4 py-3.5">
+      <SmartBack />
+      <div className="mt-3 flex items-center gap-3.5 rounded-xl border border-[var(--sb-line)] bg-[var(--sb-paper)] px-4 py-3.5">
         <span className="sb-spinner shrink-0" aria-hidden="true" />
         <div className="min-w-0">
           <p className="text-sm font-medium">{t("product.loadingMain")}</p>
@@ -127,6 +149,7 @@ export default function ProductDetail() {
   if (!offer) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
+        <div className="text-left"><SmartBack /></div>
         <p className="text-lg font-semibold">{t("product.notFoundTitle")}</p>
         <p className="mt-2 text-sm text-[var(--sb-ink-60)]">{t("product.notFoundBody")}</p>
         <Link to="/buyer" className="sb-pill mt-6 inline-block px-6 py-2.5 text-sm">
@@ -158,9 +181,7 @@ export default function ProductDetail() {
 
   return (
     <div className="mx-auto max-w-5xl pb-16">
-      <Link to="/buyer" className="text-xs font-medium text-[var(--sb-ink-40)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline">
-        {t("product.back")}
-      </Link>
+      <SmartBack />
 
       <div className="mt-4 grid gap-8 md:grid-cols-2">
         {/* 图廊：主图支持左右滑动切换（移动端），指示点显示当前位置 */}

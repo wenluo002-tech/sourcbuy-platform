@@ -764,7 +764,12 @@ export default function BuyerChat() {
       {
         onSuccess: (res) => {
           const tid = (res as any).threadId;
-          if (typeof tid === "number") setThreadId(tid);
+          if (typeof tid === "number") {
+            setThreadId(tid);
+            // 会话 ID 落 sessionStorage：点进商品/工厂详情再返回时，对话原样恢复
+            // （sessionStorage 跨页内跳转存活，关标签页即清，正好符合"本次逛店"语义）
+            try { sessionStorage.setItem("sb.thread", String(tid)); } catch { /* 隐私模式写不进就算了 */ }
+          }
           setTurns((ts) => [
             ...ts,
             {
@@ -825,6 +830,7 @@ export default function BuyerChat() {
         }),
       );
       setThreadId(id);
+      try { sessionStorage.setItem("sb.thread", String(id)); } catch { /* 同上 */ }
       setShowHistory(false);
     } catch { /* 载入失败就停在当前会话 */ }
   }
@@ -832,6 +838,7 @@ export default function BuyerChat() {
   function newChat() {
     setTurns([{ role: "assistant", content: t("chat.greeting") }]);
     setThreadId(null);
+    try { sessionStorage.removeItem("sb.thread"); } catch { /* 同上 */ }
     setShowHistory(false);
   }
 
@@ -852,6 +859,17 @@ export default function BuyerChat() {
       prefilled.current = true;
       setParams({}, { replace: true });
       loadThread(Number(tid));
+      return;
+    }
+    // 逛店回程恢复：从商品/工厂详情返回对话页时，按 sessionStorage 里的会话 ID 原样回放，
+    // 对话不丢（罗总实测痛点：详情页回来对话没了，像被踢回首页）
+    if (!prefilled.current) {
+      let saved: string | null = null;
+      try { saved = sessionStorage.getItem("sb.thread"); } catch { /* 隐私模式 */ }
+      if (saved && /^\d+$/.test(saved)) {
+        prefilled.current = true;
+        loadThread(Number(saved));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

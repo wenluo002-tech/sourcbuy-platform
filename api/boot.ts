@@ -186,6 +186,22 @@ app.onError((err, c) => {
 
 export default app;
 
+// 进程级崩溃兜底：任何漏网的未捕获异常/未处理 Promise 拒绝，记日志但不杀进程。
+// 没有这两行，Node 的默认行为是直接退出——前台表现就是"用着用着闪退/白屏"，
+// 而且 stderr 只进 server.log，事故后连现场都没有。记到统一日志后才可复盘。
+process.on("uncaughtException", (err) => {
+  log.error("uncaughtException（进程已保住，需复盘）", {
+    error: err.message,
+    stack: err.stack,
+  });
+});
+process.on("unhandledRejection", (reason) => {
+  log.error("unhandledRejection（进程保留）", {
+    error: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
+
 if (env.isProduction) {
   const { serve } = await import("@hono/node-server");
   const { serveStaticFiles } = await import("./lib/vite");

@@ -528,7 +528,7 @@ export const pt = {
     next: "Próxima"
   },
   factoryDetail: {
-    back: "← Voltar à base de fábricas",
+    back: "← Voltar",
     traderNotice: "Aviso sobre comerciantes: esta empresa é comercial/de supply chain, não fábrica de origem; esta página é só referência. Nossas recomendações a compradores incluem somente fábricas de origem; comerciantes foram removidos do pool de recomendação.",
     traderBadge: "Comerciante",
     maskedBadge: "Perfil a desbloquear",

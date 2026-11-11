@@ -528,7 +528,7 @@ export const fr = {
     next: "Suivant"
   },
   factoryDetail: {
-    back: "← Retour à la base usines",
+    back: "← Retour",
     traderNotice: "Alerte : société commerciale/logistique, pas une usine source ; page pour contexte seulement. Nos recommandations n'incluent que des usines sources ; commerçants exclus du pool.",
     traderBadge: "Commerçant",
     maskedBadge: "Dossier à débloquer",

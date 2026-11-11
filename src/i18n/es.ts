@@ -528,7 +528,7 @@ export const es = {
     next: "Siguiente"
   },
   factoryDetail: {
-    back: "← Volver a la base de fábricas",
+    back: "← Volver",
     traderNotice: "Aviso para comerciantes: esta empresa es una empresa comercial/de cadena de suministro, no una fábrica de origen; esta página sirve solo como referencia. Las recomendaciones a compradores solo incluyen fábricas de origen; los comerciantes quedan excluidos del grupo de recomendación.",
     traderBadge: "Comerciante",
     maskedBadge: "Perfil bloqueado",

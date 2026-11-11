@@ -195,7 +195,7 @@ const enFactories: Messages["factories"] = {
 };
 
 const enFactoryDetail: Messages["factoryDetail"] = {
-  back: "← Back to factory library",
+  back: "← Back",
   traderNotice: "Trading company notice: this is a trading/sourcing company, not a source factory. This page is for background reference only — our matching pool contains source factories only, and all trading companies have been removed from it.",
   traderBadge: "Trading company",
   maskedBadge: "Profile locked",
