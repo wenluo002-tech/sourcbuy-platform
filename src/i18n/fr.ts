@@ -55,6 +55,7 @@ export const fr = {
     tryAsking: "Essayez ainsi",
     linkHint: "Vous pouvez aussi coller un lien Amazon / TikTok / boutique, je trouve la même source",
     attachBtn: "Envoyer une image/plan",
+    cameraBtn: "Photographier et sourcer",
     examples: [
       "500 leggings yoga, livraison Hambourg",
       "3,000 gourdes personnalisées, avec LOGO",

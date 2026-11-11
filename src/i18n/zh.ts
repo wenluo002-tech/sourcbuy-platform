@@ -673,6 +673,7 @@ export const zh = {
     tryAsking: "试试这样问",
     linkHint: "也可以直接贴亚马逊 / TikTok / 独立站商品链接，我帮你找同款货源",
     attachBtn: "传图片/图纸",
+    cameraBtn: "拍照寻源",
     examples: [
       "瑜伽裤 500 条，发德国汉堡",
       "定制保温杯 3,000 个，要 LOGO",

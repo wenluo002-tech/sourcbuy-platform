@@ -678,6 +678,7 @@ export const en: Messages = {
     tryAsking: "Try asking",
     linkHint: "Or paste an Amazon / TikTok / DTC product link — I'll find the same item at source",
     attachBtn: "Attach file",
+    cameraBtn: "Snap to source",
     examples: [
       "500 yoga leggings, ship to Hamburg",
       "3,000 custom tumblers with logo",

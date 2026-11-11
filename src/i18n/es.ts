@@ -55,6 +55,7 @@ export const es = {
     tryAsking: "Prueba a preguntar así",
     linkHint: "También puedes pegar un enlace de Amazon / TikTok / tu tienda online y buscaré la misma fuente",
     attachBtn: "Subir imagen/plano",
+    cameraBtn: "Fotografiar y buscar",
     examples: [
       "500 leggings de yoga, envío a Hamburgo, Alemania",
       "3,000 vasos térmicos personalizados con LOGO",

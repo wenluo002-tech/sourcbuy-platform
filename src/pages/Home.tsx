@@ -170,6 +170,29 @@ export default function Home() {
                     }}
                   />
                 </label>
+                {/* 拍照寻源：手机直唤后置相机，拍完经 sb.attach 接力进对话页走图片识别寻源 */}
+                <label
+                  title={t("home.cameraBtn")}
+                  className="relative flex shrink-0 cursor-pointer items-center gap-1.5 border-l border-[var(--sb-rule)] px-3.5 text-xs font-medium text-[var(--sb-ink-60)] transition-colors hover:text-[var(--sb-brand)] sm:px-4"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2L9 4.8A1 1 0 0 1 9.9 4.3h4.2a1 1 0 0 1 .9.5l1.5 2.2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                    <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                  <span className="hidden sm:inline">{t("home.cameraBtn")}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    aria-label={t("home.cameraBtn")}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) onPickAttach(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
                 <button
                   type="submit"
                   className="flex shrink-0 items-center gap-2 bg-[var(--sb-brand)] px-5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[var(--sb-brand-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sb-brand)] sm:px-7"
