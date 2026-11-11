@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
-import { useAuth, withAuthToken } from "@/auth";
+import { useAuth, withAuthToken, getAnonId } from "@/auth";
 import { useT } from "@/i18n";
 import { GROUP_FLOW, STATUS_GROUP, type OrderStatus, type OrderQuote } from "@contracts/orderFlow";
 
@@ -27,6 +27,7 @@ export default function OrderDetail() {
     actMut.mutate({
       orderId: Number(id),
       action: "confirmQuote",
+      anonId: getAnonId(), // M5：接受报价时点做末次接触归因
       ...(withWhy && (whyTags.length || whyNote.trim())
         ? { decisionTags: whyTags, decisionNote: whyNote.trim() || undefined }
         : {}),

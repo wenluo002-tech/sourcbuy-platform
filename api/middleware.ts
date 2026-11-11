@@ -35,15 +35,19 @@ export const authedQuery = t.procedure.use(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-// 质检双检 P0：运营闸——登录 + 邮箱在 OPS_ADMIN_EMAILS 环境变量白名单内（逗号分隔，大小写不敏感）
-// 白名单为空时拒绝一切 ops 调用（宁可误拒不可误放）；买家侧接口不受影响
-export const opsQuery = authedQuery.use(({ ctx, next }) => {
+// 质检双检 P0 / M5 管理后台共用：运营身份判定——邮箱在 OPS_ADMIN_EMAILS 白名单内（逗号分隔，大小写不敏感）
+export function isOpsEmail(email?: string | null): boolean {
   const allow = (process.env.OPS_ADMIN_EMAILS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  const email = (ctx.user?.email ?? "").toLowerCase();
-  if (!allow.length || !email || !allow.includes(email)) {
+  const e = (email ?? "").toLowerCase();
+  return !!allow.length && !!e && allow.includes(e);
+}
+
+// 运营闸——登录 + 白名单；白名单为空时拒绝一切 ops 调用（宁可误拒不可误放）；买家侧接口不受影响
+export const opsQuery = authedQuery.use(({ ctx, next }) => {
+  if (!isOpsEmail(ctx.user?.email)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "ops only" });
   }
   return next({ ctx });

@@ -3,6 +3,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { getDb } from "./connection";
 import { orders, orderEvents } from "../../db/schema";
 import { NEXT_ALLOWED, type OrderStatus, type OrderQuote } from "../../contracts/orderFlow";
+import { snapshotOrderAccept } from "./analytics";
 
 function genOrderNo(): string {
   const d = new Date();
@@ -93,6 +94,7 @@ export async function transitionOrder(input: {
   userId?: number; // 买家侧必传，用于归属校验
   decisionTags?: string[]; // 确认报价时的选择理由（价格/交期/样品/验厂/沟通/其他）
   decisionNote?: string; // 选择理由可选补充
+  anonId?: string; // 买家匿名设备 ID（M5：接受报价时做末次接触归因快照）
 }) {
   const db = await getDb();
   const rows = await db.select().from(orders).where(eq(orders.id, input.orderId)).limit(1);
@@ -122,5 +124,10 @@ export async function transitionOrder(input: {
     })
     .where(eq(orders.id, input.orderId));
   await addEvent(input.orderId, from, input.to, input.actor, input.note);
+  // M5：买家接受报价（quoted→pending_payment）= GMV 口径"接受报价"的入账点
+  // 快照 accepted_at / gmv_usd / 末次接触归因；失败不阻断主流程
+  if (from === "quoted" && input.to === "pending_payment") {
+    await snapshotOrderAccept(input.orderId, o.userId, input.anonId).catch(() => {});
+  }
   return { ok: true as const, from, to: input.to };
 }

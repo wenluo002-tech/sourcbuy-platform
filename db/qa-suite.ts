@@ -361,6 +361,32 @@ console.log("\n[8] 质检双检（2026-11-09 PRD v1.1）：表结构 + 鉴权边
   }
 }
 
+// [自清场] 判卷产生的 qa- 测试账号全链路删除（2026-11-11 M5 起：经营台账与驾驶舱只装真实数据，
+// 测试数据跑完即清——40 张假订单 $105k 假 GMV 的教训，不可再犯）。
+{
+  const { getDb } = await import("../api/queries/connection");
+  const db2 = getDb();
+  const [ids]: any = await db2.execute(sql`SELECT id FROM users WHERE email LIKE 'qa-%@sourcbuy.test'`);
+  const uidList = ids.map((r: any) => Number(r.id));
+  if (uidList.length) {
+    const idList = uidList.join(",");
+    const rm = (s: string) => db2.execute(sql.raw(s));
+    await rm(`DELETE FROM chat_messages WHERE thread_id IN (SELECT id FROM (SELECT id FROM chat_threads WHERE user_id IN (${idList})) t)`);
+    await rm(`DELETE FROM chat_threads WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM order_events WHERE order_id IN (SELECT id FROM (SELECT id FROM orders WHERE user_id IN (${idList})) o)`);
+    await rm(`DELETE FROM orders WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM addresses WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM notifications WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM recommendation_logs WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM buyer_profiles WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM sourcing_sessions WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM auth_sessions WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM analytics_events WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM users WHERE id IN (${idList})`);
+    console.log(`[自清场] 已删除 qa- 测试账号 ${uidList.length} 个及其关联数据`);
+  }
+}
+
 console.log(`\n═══ 验收结果：${pass} PASS / ${fail} FAIL ═══`);
 if (fail) { console.log("失败项：", fails.join(" | ")); process.exit(1); }
 console.log("检查单全过，允许存版本。");

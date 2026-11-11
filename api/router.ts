@@ -1,4 +1,6 @@
-import { createRouter, publicQuery, authedQuery, opsQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, opsQuery, isOpsEmail } from "./middleware";
+import { bindUserAttr } from "./queries/analytics";
+import { adminOverview, adminChannels, adminBuyers, adminBuyerDetail, adminOrders, adminHealth } from "./queries/admin";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -288,7 +290,7 @@ export const appRouter = createRouter({
 
   // ---- M3a 账号体系（邮箱+密码；会话 cookie httpOnly，库内只存 sha256）----
   auth: createRouter({
-    me: publicQuery.query(({ ctx }) => ctx.user),
+    me: publicQuery.query(({ ctx }) => (ctx.user ? { ...ctx.user, isAdmin: isOpsEmail(ctx.user.email) } : ctx.user)),
     register: publicQuery
       .input(z.object({
         email: z.string().max(191),
@@ -307,6 +309,7 @@ export const appRouter = createRouter({
         }
         const { user, token, expiresAt } = r;
         await claimAnonThreads(input.anonId, user.id);
+        await bindUserAttr(user.id, input.anonId).catch(() => {}); // M5：绑首次接触归因（不挡注册主流程）
         ctx.resHeaders.append("Set-Cookie", sessionCookieHeader(token, expiresAt, ctx.req.url.startsWith("https:")));
         // token 同时回响应体：跨站 iframe 预览里 cookie 会被浏览器拦截，前端存 localStorage 走 Bearer
         return { user, token };
@@ -323,6 +326,7 @@ export const appRouter = createRouter({
         }
         const { user, token, expiresAt } = r;
         await claimAnonThreads(input.anonId, user.id);
+        await bindUserAttr(user.id, input.anonId).catch(() => {}); // M5：老买家登录也补绑（attr 只填空不覆盖）
         ctx.resHeaders.append("Set-Cookie", sessionCookieHeader(token, expiresAt, ctx.req.url.startsWith("https:")));
         return { user, token };
       }),
@@ -366,16 +370,44 @@ export const appRouter = createRouter({
         note: z.string().max(500).optional(),
         decisionTags: z.array(z.string().max(32)).max(6).optional(), // 选择理由埋点（决策上下文资产）
         decisionNote: z.string().max(255).optional(),
+        anonId: z.string().max(36).optional(), // M5：成交时末次接触归因用
       }))
       .mutation(async ({ input, ctx }) => {
         const to = input.action === "confirmQuote" ? "pending_payment" : input.action === "confirmReceive" ? "received" : "cancelled";
         const r = await transitionOrder({
-          orderId: input.orderId, to, actor: "buyer", note: input.note, userId: ctx.user.id,
+          orderId: input.orderId, to, actor: "buyer", note: input.note, userId: ctx.user.id, anonId: input.anonId,
           ...(input.action === "confirmQuote" ? { decisionTags: input.decisionTags, decisionNote: input.decisionNote } : {}),
         });
         if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
         return r;
       }),
+  }),
+
+  // ---- M5 经营驾驶舱（ops 白名单闸；口径见 contracts/metrics.ts）----
+  admin: createRouter({
+    overview: opsQuery
+      .input(z.object({ range: z.enum(["today", "7d", "30d"]).optional() }))
+      .query(({ input }) => adminOverview(input.range)),
+    channels: opsQuery
+      .input(z.object({ range: z.enum(["today", "7d", "30d"]).optional() }))
+      .query(({ input }) => adminChannels(input.range)),
+    buyers: opsQuery
+      .input(z.object({ q: z.string().max(64).optional() }))
+      .query(({ input }) => adminBuyers(input.q)),
+    buyerDetail: opsQuery
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(({ input }) => adminBuyerDetail(input.id)),
+    orders: opsQuery
+      .input(z.object({ status: z.string().max(32).optional() }))
+      .query(({ input }) => adminOrders(input.status)),
+    orderAct: opsQuery
+      .input(z.object({ orderId: z.number().int().positive(), to: z.string().max(32), note: z.string().max(500).optional() }))
+      .mutation(async ({ input }) => {
+        const r = await transitionOrder({ orderId: input.orderId, to: input.to as any, actor: "ops", note: input.note });
+        if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
+        return r;
+      }),
+    health: opsQuery.query(() => adminHealth()),
   }),
 
   // ---- M4a 买家后台：地址簿 / 消息中心 / 工作台汇总（全部 authed，userId 隔离）----

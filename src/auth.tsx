@@ -5,7 +5,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { trpc } from "./providers/trpc";
 
-export type Me = { id: number; email: string; displayName: string | null; locale: string | null } | null;
+export type Me = { id: number; email: string; displayName: string | null; locale: string | null; isAdmin?: boolean } | null;
 
 const TOKEN_KEY = "sb-token";
 

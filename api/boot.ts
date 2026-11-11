@@ -12,6 +12,7 @@ import { handleClientLog } from "./lib/clientlog";
 import { REQUEST_ID_HEADER, runWithRequestId } from "./lib/requestcontext";
 import { getSessionUser, readSessionToken } from "./lib/auth";
 import { validateUpload, registerEvidence, evidenceCounts, canAccessReport, getEvidenceWithReport, getOpsDetail } from "./queries/inspection";
+import { recordEvent } from "./queries/analytics";
 import { generateReportPdf } from "./lib/qcPdf";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
@@ -167,6 +168,43 @@ app.get("/api/qc/:reportId/pdf", async (c) => {
   c.header("Content-Disposition", `inline; filename="${rep.reportNo}.pdf"`);
   return c.body(fs.readFileSync(abs));
 });
+
+// ═══ M5 经营埋点采集（2026-11-11）═══
+// 公开端点，永不报错：埋点失败绝不能影响买家体验，一律 204。
+// 防护：8KB body 上限 + 每 IP 每分钟 60 次简单限流 + 字段白名单截断（在 recordEvent 内）。
+const trackHits = new Map<string, { n: number; reset: number }>();
+app.post(
+  "/api/track",
+  bodyLimit({ maxSize: 8 * 1024, onError: (c) => c.body(null, 204) }),
+  async (c) => {
+    try {
+      const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+      const now = Date.now();
+      const h = trackHits.get(ip);
+      if (h && now < h.reset && h.n >= 60) return c.body(null, 204); // 限流：静默丢弃
+      trackHits.set(ip, { n: (h && now < h.reset ? h.n : 0) + 1, reset: h && now < h.reset ? h.reset : now + 60_000 });
+      if (trackHits.size > 10_000) trackHits.clear(); // 防内存膨胀，清零重来即可
+      const body = await c.req.json().catch(() => null);
+      if (!body || typeof body.event !== "string") return c.body(null, 204);
+      const user = await getSessionUser(readSessionToken(c.req.raw)).catch(() => null);
+      await recordEvent({
+        event: body.event,
+        anonId: body.anonId,
+        userId: user?.id ?? null,
+        path: body.path,
+        referrer: body.referrer,
+        utmSource: body.utmSource,
+        utmMedium: body.utmMedium,
+        utmCampaign: body.utmCampaign,
+        lang: body.lang,
+        ua: c.req.header("user-agent"),
+      });
+    } catch (err) {
+      log.error("track event failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+    return c.body(null, 204);
+  },
+);
 
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 

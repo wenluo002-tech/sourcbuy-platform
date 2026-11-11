@@ -1,9 +1,11 @@
+import { sql as dsql } from "drizzle-orm";
 import {
   mysqlTable,
   serial,
   varchar,
   text,
   timestamp,
+  datetime,
   int,
   decimal,
   boolean,
@@ -298,6 +300,8 @@ export const users = mysqlTable(
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     displayName: varchar("display_name", { length: 64 }),
     locale: varchar("locale", { length: 8 }), // 显式选择的语言，登录后跨设备跟随
+    role: varchar("role", { length: 16 }).default("buyer"), // M5：buyer/ops，ops 白名单见 middleware.isOpsEmail
+    attr: json("attr"), // M5 首次接触归因快照 {source,medium,campaign,referrer,landing,at}，注册时只写一次
     createdAt: timestamp("created_at").notNull().defaultNow(),
     lastLoginAt: timestamp("last_login_at"),
   },
@@ -365,6 +369,9 @@ export const orders = mysqlTable(
     demand: text("demand"), // 买家原话需求
     status: mysqlEnum("status", ["inquiry", "quoted", "pending_payment", "sourcing", "producing", "goods_ready", "insp1_uploading", "insp1_review", "insp1_passed", "shipped", "in_warehouse", "insp2_review", "insp2_passed", "awaiting_phase2_pay", "phase2_paid", "dispatched", "received", "cancelled"]).notNull().default("inquiry"), // 完整 17+1 态见 contracts/orderFlow.ts（2026-11-09 双检扩展）
     quote: json("quote"), // 报价单快照：出厂价/运费/关税/佣金/总额/汇率/渠道/时效/报价时间——报价一旦给出就是快照，不随后台数据漂移
+    acceptedAt: datetime("accepted_at", { fsp: 3 }), // M5：接受报价时点（GMV 口径 on_accept 的入账点，只写一次）
+    gmvUsd: decimal("gmv_usd", { precision: 12, scale: 2 }), // M5：接受报价时的 totalUsd 快照，口径切换可重算
+    attr: json("attr"), // M5 末次接触归因快照（落空回落注册首次归因）
     decisionTags: json("decision_tags").$type<string[]>(), // 买家确认报价时的选择理由（价格/交期/样品/验厂/沟通/其他）——决策上下文核心资产
     decisionNote: varchar("decision_note", { length: 255 }), // 选择理由可选补充（买家原话）
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -536,4 +543,30 @@ export const legacyProducts = mysqlTable(
     importedAt: timestamp("imported_at").notNull().defaultNow(),
   },
   (t) => [index("ix_lp_member").on(t.memberId), index("ix_lp_cat").on(t.fineCategory), index("ix_lp_score").on(t.factoryScore)]
+);
+
+// ============ M5 经营埋点（2026-11-11）============
+// 站内自建埋点（不接 GA）：只收 page_view，口径见 contracts/metrics.ts
+export const analyticsEvents = mysqlTable(
+  "analytics_events",
+  {
+    id: serial("id").primaryKey(),
+    ts: datetime("ts", { fsp: 3, mode: "date" }).notNull().default(dsql`CURRENT_TIMESTAMP(3)`),
+    event: varchar("event", { length: 32 }).notNull(),
+    anonId: varchar("anon_id", { length: 64 }), // 匿名设备 ID（注册前追踪）
+    userId: int("user_id"), // 注册后补挂（库内实际为 INT，够用；后续量大再升 bigint）
+    path: varchar("path", { length: 255 }),
+    referrer: varchar("referrer", { length: 512 }),
+    utmSource: varchar("utm_source", { length: 64 }),
+    utmMedium: varchar("utm_medium", { length: 64 }),
+    utmCampaign: varchar("utm_campaign", { length: 128 }),
+    lang: varchar("lang", { length: 8 }),
+    ua: varchar("ua", { length: 255 }),
+  },
+  (t) => [
+    index("idx_ev_ts").on(t.event, t.ts),
+    index("idx_anon").on(t.anonId),
+    index("idx_src_ts").on(t.utmSource, t.ts),
+    index("idx_ts").on(t.ts),
+  ]
 );
