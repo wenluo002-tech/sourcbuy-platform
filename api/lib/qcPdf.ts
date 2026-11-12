@@ -1,11 +1,9 @@
 // 质检报告 PDF 生成（买家向，英文为主；内嵌 JPEG/PNG 证据图；视频证据列条目不内嵌）
 // 字体：NotoSansCJK-Regular.ttc（named family）——productTitle/批注可能含中文，标准 PDF 字体渲染不了 CJK
-// pdfkit 必须运行时 require（不进 esbuild bundle）：打 server bundle 时的 createRequire banner 会与
-// pdfkit.node.mjs 自带的 `import { createRequire }` 撞名（重复声明直接 SyntaxError）；
-// createRequire 调用 esbuild 不静态跟进，运行时从 node_modules 解析 exports 的 require 分支（纯 CJS）。
-import { createRequire as mkRequire } from "node:module"; // 别名防与 esbuild banner 的 createRequire 撞名
-import type PDFKit from "pdfkit";
-const PDFDocument = (mkRequire(import.meta.url)("pdfkit")) as typeof PDFKit;
+// v85：pdfkit 直接静态 import 进 bundle——新版 pdfkit 标准字体已内嵌为 JS 数据模块，不再运行时读包内文件；
+// 之前被迫运行时 require 是 banner 的 createRequire 撞名，v85 起 banner 变量改名 __sbReq 系解决。
+// 部署环境只带 dist/ 不带 node_modules，任何运行时 require 外部包都会让整个进程崩（ERR_MODULE_NOT_FOUND）。
+import PDFDocument from "pdfkit";
 import fs from "node:fs";
 import path from "node:path";
 import { getOpsDetail, setPdfPath } from "../queries/inspection";
