@@ -35,6 +35,10 @@ const CATEGORY_MAP: Record<string, string> = {
   滑雪面罩: "服装服饰",
   无热卷发棒: "美妆个护",
   露营灯: "户外运动",
+  // 2026-11-12 期新品
+  抱枕芯: "家居日用",
+  暖风机: "电子数码",
+  户外净水吸管: "户外运动",
 };
 
 function median(nums: number[]): number {
