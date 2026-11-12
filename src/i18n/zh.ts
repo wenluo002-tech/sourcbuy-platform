@@ -55,6 +55,7 @@ export const zhChat = {
   onSale: "在售",
   details: "详情",
   calcLink: "算到手价 →",
+  viewProduct: "这款产品 →",
   unitPc: "件",
   // 数据层中文单位的外语映射目标词（unitLabel 用；中文界面原样显示不经过这里）
   u_pcs: "件", u_pairs: "双", u_sets: "套", u_boxes: "箱", u_units: "台", u_rolls: "卷", u_bottles: "瓶", u_packs: "包", u_bags: "袋", u_dozen: "打",
@@ -91,13 +92,12 @@ export const zhChat = {
   whyRecommend: "为什么推荐它？（{n} 条证据）",
   factoryProfile: "工厂档案 →",
   scoreDim: {
-    qualityCert: "质量认证",
-    factoryPower: "工厂实力",
-    trustYears: "诚信年限",
-    repurchase: "复购率",
-    production: "生产产能",
-    service: "服务响应",
-    sales: "销售表现",
+    cert: "资质认证",
+    audit: "实地核验",
+    rep: "复购率",
+    year: "经营年限",
+    sales: "出货活跃",
+    prod: "生产能力",
   } as Record<string, string>,
 };
 

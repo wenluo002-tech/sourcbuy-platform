@@ -58,6 +58,7 @@ const enChat: Messages["chat"] = {
   onSale: "On sale",
   details: "Details",
   calcLink: "Landed cost →",
+  viewProduct: "This product →",
   unitPc: "pc",
   // Data-layer Chinese units mapped for foreign-language UI (unitLabel)
   u_pcs: "pcs", u_pairs: "pairs", u_sets: "sets", u_boxes: "boxes", u_units: "units", u_rolls: "rolls", u_bottles: "bottles", u_packs: "packs", u_bags: "bags", u_dozen: "dozen",
@@ -94,13 +95,12 @@ const enChat: Messages["chat"] = {
   whyRecommend: "Why this one? ({n} pieces of evidence)",
   factoryProfile: "Factory profile →",
   scoreDim: {
-    qualityCert: "Quality certs",
-    factoryPower: "Capacity",
-    trustYears: "Trust years",
-    repurchase: "Repurchase",
-    production: "Production",
-    service: "Service",
-    sales: "Sales",
+    cert: "Certification",
+    audit: "On-site check",
+    rep: "Repurchase",
+    year: "Years active",
+    sales: "Shipping",
+    prod: "Production",
   },
 };
 

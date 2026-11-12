@@ -208,6 +208,7 @@ export const fr = {
     onSale: "En vente",
     details: "Détails",
     calcLink: "Calc. prix rendu →",
+    viewProduct: "Voir ce produit →",
     unitPc: "pc",
     u_pcs: "pcs", u_pairs: "paires", u_sets: "ensembles", u_boxes: "boîtes", u_units: "unités", u_rolls: "rouleaux", u_bottles: "bouteilles", u_packs: "packs", u_bags: "sacs", u_dozen: "douzaines",
     perUnitExw: "/ {unit} · prix usine",
@@ -241,13 +242,12 @@ export const fr = {
     whyRecommend: "Pourquoi cette recommandation ? ({n} preuves)",
     factoryProfile: "Dossier usine →",
     scoreDim: {
-      qualityCert: "Certifications qualité",
-      factoryPower: "Force de l'usine",
-      trustYears: "Années de fiabilité",
-      repurchase: "Taux de réachat",
-      production: "Capacité de production",
-      service: "Réactivité service",
-      sales: "Performance commerciale"
+      cert: "Certifications",
+      audit: "Vérification terrain",
+      rep: "Réachat",
+      year: "Ancienneté",
+      sales: "Expéditions",
+      prod: "Production"
     }
   },
   orders: {

@@ -1033,13 +1033,19 @@ export default function BuyerChat() {
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
-                      <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
-                        {f.matchBasis === "productLinked" && f.linkedOffer
-                          ? t("chat.sellingItem", { title: f.linkedOffer.title.slice(0, 30) })
-                          : f.reason === "严选库在册 · 有这款在售货"
-                            ? t("chat.shopVettedShort") || f.reason
-                            : f.reason}
-                      </p>
+                      {f.matchBasis === "productLinked" && f.linkedOffer ? (
+                        /* 有这款在售货：标题直达商品页（罗总 11-12 反馈：推荐厂没产品链接，买家看不到货下不了单） */
+                        <Link
+                          to={`/products/${f.linkedOffer.offerId}`}
+                          className="mt-1.5 line-clamp-2 block text-xs leading-relaxed text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
+                        >
+                          {t("chat.sellingItem", { title: f.linkedOffer.title.slice(0, 30) })}
+                        </Link>
+                      ) : (
+                        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
+                          {f.reason === "严选库在册 · 有这款在售货" ? t("chat.shopVettedShort") || f.reason : f.reason}
+                        </p>
+                      )}
                       {f.tags && f.tags.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {f.tags.slice(0, 4).map((tg) => (
@@ -1058,11 +1064,15 @@ export default function BuyerChat() {
                         </p>
                       )}
                       {f.matchBasis === "productLinked" && f.linkedOffer && (
-                        <p className="mt-2 rounded-md bg-[#fdf6e3] px-2 py-1.5 text-xs font-medium leading-relaxed text-[#92610a] ring-1 ring-[#e9d5a1]">
+                        <Link
+                          to={`/products/${f.linkedOffer.offerId}`}
+                          className="mt-2 block rounded-md bg-[#fdf6e3] px-2 py-1.5 text-xs font-medium leading-relaxed text-[#92610a] ring-1 ring-[#e9d5a1] transition-shadow hover:shadow-[0_2px_6px_rgba(146,97,10,0.18)]"
+                        >
                           {f.linkedOffer.sales > 0
                             ? t("chat.goldBadge", { price: f.linkedOffer.price, sales: f.linkedOffer.sales.toLocaleString() })
                             : t("chat.goldBadgeArchive", { price: f.linkedOffer.price })}
-                        </p>
+                          <span aria-hidden="true" className="ml-1">→</span>
+                        </Link>
                       )}
                       {f.matchBasis === "bucket" && (
                         <p className="mt-2 text-xs font-medium text-[#b45309]">
@@ -1106,6 +1116,14 @@ export default function BuyerChat() {
                         </details>
                       )}
                       <div className="mt-3 flex items-center gap-3 border-t border-[var(--sb-line)] pt-2.5">
+                        {f.matchBasis === "productLinked" && f.linkedOffer && (
+                          <Link
+                            to={`/products/${f.linkedOffer.offerId}`}
+                            className="text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
+                          >
+                            {t("chat.viewProduct")}
+                          </Link>
+                        )}
                         <Link
                           to={`/factories/${f.id}`}
                           className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"

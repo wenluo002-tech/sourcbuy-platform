@@ -208,6 +208,7 @@ export const pt = {
     onSale: "À venda",
     details: "Detalhes",
     calcLink: "Calcular custo final →",
+    viewProduct: "Este produto →",
     unitPc: "peça",
     u_pcs: "un.", u_pairs: "pares", u_sets: "conjuntos", u_boxes: "caixas", u_units: "unidades", u_rolls: "rolos", u_bottles: "garrafas", u_packs: "pacotes", u_bags: "sacos", u_dozen: "dúzias",
     perUnitExw: "/ {unit} · preço de fábrica",
@@ -241,13 +242,12 @@ export const pt = {
     whyRecommend: "Porque recomendamos? ({n} provas)",
     factoryProfile: "Perfil da fábrica →",
     scoreDim: {
-      qualityCert: "Certificações de qualidade",
-      factoryPower: "Dimensão da fábrica",
-      trustYears: "Anos de integridade",
-      repurchase: "Taxa de recompra",
-      production: "Capacidade produtiva",
-      service: "Resposta ao cliente",
-      sales: "Desempenho de vendas"
+      cert: "Certificações",
+      audit: "Verificação no local",
+      rep: "Recompra",
+      year: "Anos ativos",
+      sales: "Embarques",
+      prod: "Produção"
     }
   },
   orders: {
