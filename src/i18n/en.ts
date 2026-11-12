@@ -28,7 +28,7 @@ const enChat: Messages["chat"] = {
   defaultImageMsg: "Find the source of the product in this photo",
   attachTitle: "Send a product photo or a drawing file (PDF/DWG etc.)",
   cameraTitle: "Snap a photo of the product — I'll find the source factories",
-  pickerBlocked: "No gallery or camera popped up? This preview window blocks the system picker — copy the link and open it in your phone browser instead.",
+  pickerBlocked: "No gallery or camera popped up? This preview window blocks the system picker. Tap 「Publish」 at the top of the preview panel to get a public link (ok.kimi.link), then open it in a real browser — uploads and camera will work there.",
   copyLink: "Copy link",
   linkCopied: "Copied — paste it into your browser",
   processingImage: "Processing image…",

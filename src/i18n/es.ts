@@ -175,7 +175,7 @@ export const es = {
     defaultImageMsg: "Ayúdame a encontrar el proveedor del producto de la imagen",
     attachTitle: "Sube una imagen del producto o un archivo de planos (PDF/DWG, etc.)",
     cameraTitle: "Fotografía el producto y busco las fábricas de origen",
-    pickerBlocked: "¿No se abrió la galería o la cámara? Esta ventana de vista previa bloquea el selector del sistema: copia el enlace y ábrelo en el navegador de tu teléfono.",
+    pickerBlocked: "¿No se abrió la galería o la cámara? Esta vista previa bloquea el selector del sistema. Toca «Publicar» en la parte superior del panel para obtener un enlace público (ok.kimi.link) y ábrelo en un navegador real: ahí sí funcionan las fotos.",
     copyLink: "Copiar enlace",
     linkCopied: "Copiado — pégalo en tu navegador",
     processingImage: "Procesando la imagen…",

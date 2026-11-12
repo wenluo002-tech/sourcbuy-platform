@@ -643,6 +643,7 @@ export default function BuyerChat() {
   const utils = trpc.useUtils();
   const chat = trpc.ai.chat.useMutation();
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [params, setParams] = useSearchParams();
   const prefilled = useRef(false);
@@ -735,6 +736,14 @@ export default function BuyerChat() {
       else if (a?.kind === "doc" && typeof a.name === "string") setPendingFile(a.name);
     } catch { /* 载荷损坏直接忽略，绝不阻塞对话页 */ }
   }, []);
+
+  // 输入卡自适应高度：内容换行自动撑高，封顶 160px（max-h-40）
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  }, [input]);
 
   // 只滚动聊天容器本身；scrollIntoView 会带着整页滚动，导致吸顶导航压住内容
   useEffect(() => {
@@ -1200,68 +1209,91 @@ export default function BuyerChat() {
             </button>
           </div>
         )}
-        <div className="flex items-center gap-2 rounded-2xl border border-[var(--sb-line)] bg-white p-2 shadow-[0_1px_2px_rgba(11,11,11,0.05)]">
-          <AttachButton
-            title={t("chat.attachTitle")}
-            accept="image/*,application/pdf"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
-            onFile={onPickFile}
-            onChooserBlocked={() => setPickerBlocked(true)}
-          >
-            <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
-            </svg>
-          </AttachButton>
-          {/* 拍照寻源：capture=environment 直接唤起后置相机（桌面端回落为文件选择），拍完即走图片识别寻源管线 */}
-          <AttachButton
-            title={t("chat.cameraTitle")}
-            accept="image/*"
-            capture="environment"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--sb-line)] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
-            onFile={onPickFile}
-            onChooserBlocked={() => setPickerBlocked(true)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2L9 4.8A1 1 0 0 1 9.9 4.3h4.2a1 1 0 0 1 .9.5l1.5 2.2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-              <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          </AttachButton>
-          {SpeechRec && (
-            <button
-              type="button"
-              onClick={toggleVoice}
-              title={t(listening ? "chat.voiceStop" : "chat.voiceStart")}
-              aria-pressed={listening}
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-colors ${
-                listening
-                  ? "border-[var(--sb-brand)] bg-[var(--sb-brand-soft)] text-[var(--sb-brand)]"
-                  : "border-[var(--sb-line)] text-[var(--sb-ink-60)] hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
-              }`}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </button>
-          )}
-          <input
+        {/* Kimi 风格输入卡：大圆角白卡+柔和投影；上=自适应文本域（Enter 发送/Shift+Enter 换行），
+            下一行圆形功能钮（附件/相机/语音）+ 右侧圆形发送钮。看门狗/压缩/粘贴逻辑不变，只换皮 */}
+        <div className="rounded-[26px] border border-[var(--sb-line)] bg-white px-2.5 pb-2.5 pt-1 shadow-[0_10px_32px_rgba(11,30,50,0.10)]">
+          <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onPaste={(e) => {
               const f = e.clipboardData?.files?.[0];
               if (f) { e.preventDefault(); onPickFile(f); }
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+            enterKeyHint="send"
+            rows={1}
             placeholder={t("chat.placeholder")}
-            className="h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
+            className="max-h-40 w-full resize-none bg-transparent px-1.5 py-2.5 text-[15px] leading-relaxed placeholder:text-[var(--sb-ink-40)] focus-visible:outline-none"
           />
-          <button
-            type="submit"
-            disabled={chat.isPending || (!input.trim() && !pendingImage && !pendingFile)}
-            className="h-11 shrink-0 rounded-xl bg-[var(--sb-brand)] px-5 text-sm font-semibold text-[#eef4f5] transition-colors hover:bg-[var(--sb-brand-hover)] disabled:opacity-40"
-          >
-            {t("chat.send")}
-          </button>
+          <div className="flex items-center gap-2">
+            <AttachButton
+              title={t("chat.attachTitle")}
+              accept="image/*,application/pdf"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f2f5f8] text-[var(--sb-ink-60)] transition-colors hover:bg-[#e7edf3] hover:text-[var(--sb-brand)]"
+              onFile={onPickFile}
+              onChooserBlocked={() => setPickerBlocked(true)}
+            >
+              <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="m10.5 4.5-4.95 4.95a2 2 0 1 0 2.83 2.83l5.3-5.3a3.5 3.5 0 1 0-4.95-4.95L4.4 6.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(-1 2) scale(0.92)" />
+              </svg>
+            </AttachButton>
+            {/* 拍照寻源：capture=environment 直唤后置相机（桌面回落文件选择） */}
+            <AttachButton
+              title={t("chat.cameraTitle")}
+              accept="image/*"
+              capture="environment"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f2f5f8] text-[var(--sb-ink-60)] transition-colors hover:bg-[#e7edf3] hover:text-[var(--sb-brand)]"
+              onFile={onPickFile}
+              onChooserBlocked={() => setPickerBlocked(true)}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2L9 4.8A1 1 0 0 1 9.9 4.3h4.2a1 1 0 0 1 .9.5l1.5 2.2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+                <circle cx="12" cy="13" r="3.2" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </AttachButton>
+            {SpeechRec && (
+              <button
+                type="button"
+                onClick={toggleVoice}
+                title={t(listening ? "chat.voiceStop" : "chat.voiceStart")}
+                aria-pressed={listening}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+                  listening
+                    ? "bg-[var(--sb-brand)] text-white"
+                    : "bg-[#f2f5f8] text-[var(--sb-ink-60)] hover:bg-[#e7edf3] hover:text-[var(--sb-brand)]"
+                }`}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+            <div className="flex-1" />
+            <button
+              type="submit"
+              title={t("chat.send")}
+              aria-label={t("chat.send")}
+              disabled={chat.isPending || (!input.trim() && !pendingImage && !pendingFile)}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors ${
+                chat.isPending || (!input.trim() && !pendingImage && !pendingFile)
+                  ? "bg-[#eef1f4] text-[#aab4bd]"
+                  : "bg-[var(--sb-brand)] text-white hover:bg-[var(--sb-brand-hover)]"
+              }`}
+            >
+              <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 12.5v-9M3.5 7 8 2.5 12.5 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
+
       </form>
     </div>
   );

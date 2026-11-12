@@ -25,7 +25,7 @@ export const zhChat = {
   defaultImageMsg: "帮我找图里这个产品的货源",
   attachTitle: "上传商品图或图纸文件（PDF/DWG 等）",
   cameraTitle: "拍照寻源：对着商品拍一张，我来找源头工厂",
-  pickerBlocked: "没弹出相册/相机？当前预览窗口把系统组件拦住了——复制链接，改用手机浏览器打开就能正常传图拍照。",
+  pickerBlocked: "没弹出相册/相机？当前预览窗口拦住了系统组件。请点预览面板顶部的「发布」拿到公网链接（ok.kimi.link），再用手机浏览器打开——传图拍照就都正常了。",
   copyLink: "复制链接",
   linkCopied: "已复制——去浏览器地址栏粘贴打开",
   processingImage: "正在处理图片…",
