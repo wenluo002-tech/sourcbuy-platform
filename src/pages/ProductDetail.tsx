@@ -133,7 +133,9 @@ export default function ProductDetail() {
   // 计价优先级：单 SKU 价（若该 listing 支持）→ 按数量命中阶梯档 → 最低价
   const tierPriceForQty = qtyN > 0 ? [...tiers].reverse().find((t) => qtyN >= t.minQty)?.price : undefined;
   const unitPrice = sku?.price ?? tierPriceForQty ?? tiers[0]?.price ?? offer?.priceMin ?? null;
-  const weightKg = sku?.weightKg ?? offer?.unitWeightKg ?? null;
+  // 重量 0 与 null 同等对待（上游常回传 0 占位）——0 走"有重量态"会出现"试算按钮在但永远算不出"的假死（v86 修）
+  const weightRaw = sku?.weightKg ?? offer?.unitWeightKg ?? null;
+  const weightKg = weightRaw != null && weightRaw > 0 ? weightRaw : null;
 
   const calcInput = useMemo(() => {
     if (!calcKey || !unitPrice || !weightKg || qtyN <= 0) return null;
@@ -319,78 +321,86 @@ export default function ProductDetail() {
             </div>
           )}
 
-          {/* 到手价快算 */}
+          {/* 到手价快算：数量/目的地/风险档是买家表达，永远显示（与重量数据解耦）；
+              仅"计算"动作依赖重量——缺重量时换成「完整试算」引导（带上数量和单价过去手动输重量），
+              绝不把整个表单藏掉（v86 修复：重量缺失态下买家连数量都选不了） */}
           <div className="mt-4 rounded-xl border border-[var(--sb-line)] bg-white p-4">
             <p className={label}>{t("product.quickCalc")}{weightKg != null ? t("product.quickCalcWeight", { w: weightKg }) : ""}</p>
-            {weightKg == null ? (
-              <p className="text-xs leading-relaxed text-[var(--sb-ink-60)]">
+            <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+              <label>
+                <span className={label}>{t("product.qtyLabel")}</span>
+                <input
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value.replace(/[^\d]/g, ""))}
+                  placeholder={offer.moq ? `≥${offer.moq}` : t("product.qtyPh")}
+                  className={`${input} sb-num`}
+                />
+              </label>
+              <label className="col-span-2 md:col-span-1">
+                <span className={label}>{t("product.destLabel")}</span>
+                <select value={dest} onChange={(e) => setDest(e.target.value)} className={input}>
+                  <option value="">{t("product.destGeneric")}</option>
+                  {DESTINATIONS.map((d) => (
+                    <option key={d.code} value={d.code}>
+                      {lang !== "zh" ? d.en : d.zh}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="col-span-2 md:col-span-1">
+                <span className={label}>{t("product.riskLabel")}</span>
+                <select value={riskTier} onChange={(e) => setRiskTier(e.target.value as any)} className={input}>
+                  <option value="A">{t("product.riskA")}</option>
+                  <option value="B">{t("product.riskB")}</option>
+                  <option value="C">{t("product.riskC")}</option>
+                </select>
+              </label>
+              <div className="col-span-2 flex items-end md:col-span-1">
+                {weightKg != null ? (
+                  <button
+                    onClick={() => qtyN > 0 && setCalcKey((k) => k + 1)}
+                    disabled={qtyN <= 0 || landed.isFetching}
+                    className="sb-pill w-full px-4 py-2 text-sm disabled:opacity-40"
+                  >
+                    {landed.isFetching ? t("product.calculating") : t("product.calcBtn")}
+                  </button>
+                ) : (
+                  <Link
+                    to={`/calculator?price=${unitPrice ?? ""}${qtyN ? `&qty=${qtyN}` : ""}`}
+                    className="sb-pill w-full px-4 py-2 text-center text-sm"
+                  >
+                    {t("product.calcBtnFull")}
+                  </Link>
+                )}
+              </div>
+            </div>
+            {weightKg == null && (
+              <p className="mt-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
                 {t("product.noWeight")}
               </p>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-                  <label>
-                    <span className={label}>{t("product.qtyLabel")}</span>
-                    <input
-                      value={qty}
-                      onChange={(e) => setQty(e.target.value.replace(/[^\d]/g, ""))}
-                      placeholder={offer.moq ? `≥${offer.moq}` : t("product.qtyPh")}
-                      className={`${input} sb-num`}
-                    />
-                  </label>
-                  <label className="col-span-2 md:col-span-1">
-                    <span className={label}>{t("product.destLabel")}</span>
-                    <select value={dest} onChange={(e) => setDest(e.target.value)} className={input}>
-                      <option value="">{t("product.destGeneric")}</option>
-                      {DESTINATIONS.map((d) => (
-                        <option key={d.code} value={d.code}>
-                          {lang !== "zh" ? d.en : d.zh}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="col-span-2 md:col-span-1">
-                    <span className={label}>{t("product.riskLabel")}</span>
-                    <select value={riskTier} onChange={(e) => setRiskTier(e.target.value as any)} className={input}>
-                      <option value="A">{t("product.riskA")}</option>
-                      <option value="B">{t("product.riskB")}</option>
-                      <option value="C">{t("product.riskC")}</option>
-                    </select>
-                  </label>
-                  <div className="col-span-2 flex items-end md:col-span-1">
-                    <button
-                      onClick={() => qtyN > 0 && setCalcKey((k) => k + 1)}
-                      disabled={qtyN <= 0 || landed.isFetching}
-                      className="sb-pill w-full px-4 py-2 text-sm disabled:opacity-40"
-                    >
-                      {landed.isFetching ? t("product.calculating") : t("product.calcBtn")}
-                    </button>
+            )}
+            {landed.data && (
+              <div className="mt-3 rounded-lg bg-[var(--sb-navy)] px-4 py-3 text-[#eef4f5]">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">{t("product.perUnitLanded")}{dest ? "" : t("product.genericSuffix")}</p>
+                    <p className="sb-num text-2xl font-bold">US${landed.data.perUnit}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">{t("product.totalLot", { n: qtyN })}</p>
+                    <p className="sb-num text-lg font-semibold">US${landed.data.total.toLocaleString()}</p>
                   </div>
                 </div>
-                {landed.data && (
-                  <div className="mt-3 rounded-lg bg-[var(--sb-navy)] px-4 py-3 text-[#eef4f5]">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <div>
-                        <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">{t("product.perUnitLanded")}{dest ? "" : t("product.genericSuffix")}</p>
-                        <p className="sb-num text-2xl font-bold">US${landed.data.perUnit}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] uppercase tracking-[0.16em] opacity-60">{t("product.totalLot", { n: qtyN })}</p>
-                        <p className="sb-num text-lg font-semibold">US${landed.data.total.toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <p className="mt-1.5 text-[11px] opacity-70">
-                      {landed.data.realChannel
-                        ? `${landed.data.realChannel.name} · ${landed.data.realChannel.transitNote}`
-                        : t("product.genericChannel")}
-                      {" · "}{landed.data.commissionMeta ? t("product.commissionLabel", { rate: `${(landed.data.commissionMeta.rate * 100).toFixed(1)}%` }) : ""}
-                    </p>
-                  </div>
-                )}
-                {landed.error && (
-                  <p className="mt-2 text-xs text-[var(--sb-ink-60)]">{t("product.calcErrorPrefix")}{landed.error.message}{t("product.calcErrorSuffix")}</p>
-                )}
-              </>
+                <p className="mt-1.5 text-[11px] opacity-70">
+                  {landed.data.realChannel
+                    ? `${landed.data.realChannel.name} · ${landed.data.realChannel.transitNote}`
+                    : t("product.genericChannel")}
+                  {" · "}{landed.data.commissionMeta ? t("product.commissionLabel", { rate: `${(landed.data.commissionMeta.rate * 100).toFixed(1)}%` }) : ""}
+                </p>
+              </div>
+            )}
+            {landed.error && (
+              <p className="mt-2 text-xs text-[var(--sb-ink-60)]">{t("product.calcErrorPrefix")}{landed.error.message}{t("product.calcErrorSuffix")}</p>
             )}
           </div>
 
