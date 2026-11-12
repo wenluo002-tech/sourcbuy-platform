@@ -3,7 +3,16 @@ import type { HttpBindings } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import fs from "fs";
 import path from "path";
-import geoip from "geoip-lite";
+
+// geoip-lite 为可选依赖：Kimi 部署环境只带 dist/ 不带 node_modules，
+// 静态 import 会让整个进程起不来（ERR_MODULE_NOT_FOUND）。动态加载，失败则 IP 兜底失效，
+// 语言检测仍走 Accept-Language + 前端 navigator.language，业务无损。
+let geoipLookup: ((ip: string) => { country?: string } | null) | null = null;
+try {
+  const mod: any = await import("geoip-lite");
+  const g = mod.default ?? mod;
+  if (typeof g?.lookup === "function") geoipLookup = (ip: string) => g.lookup(ip);
+} catch { /* 部署环境无此包，降级即可 */ }
 
 type App = Hono<{ Bindings: HttpBindings }>;
 
@@ -23,10 +32,10 @@ function detectLangHint(acceptLanguage: string | undefined, ip: string | null): 
   for (const code of ["zh", "es", "fr", "pt"]) {
     if (new RegExp(`(?:^|,|;)\\s*${code}(?:[-_;,]|$)`).test(al)) return code;
   }
-  // 2) IP 归属地兜底
-  if (ip && ip !== "127.0.0.1" && ip !== "::1") {
+  // 2) IP 归属地兜底（geoip 不可用时跳过）
+  if (geoipLookup && ip && ip !== "127.0.0.1" && ip !== "::1") {
     try {
-      const country = geoip.lookup(ip)?.country;
+      const country = geoipLookup(ip)?.country;
       if (country && GEO_LANG[country]) return GEO_LANG[country];
     } catch { /* geoip 失败不阻塞 */ }
   }
