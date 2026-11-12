@@ -93,16 +93,31 @@ function eq2(col: any, val: any) {
   return eq(col, val);
 }
 
-const SCORE_DIMS = [
-  "qualityCert",
-  "factoryPower",
-  "trustYears",
-  "repurchase",
-  "production",
-  "service",
-  "sales",
-] as const;
+// 评分体系 v2（2026-11-12 推翻重建）：六维逻辑键 → factory_scores 物理列
+// factory_power / service 是旧 7 维遗留列，不再读取
+const SCORE_DIMS = ["cert", "audit", "rep", "year", "sales", "prod"] as const;
 type ScoreDim = (typeof SCORE_DIMS)[number];
+
+const DIM_SELECT = {
+  cert: factoryScores.qualityCert,
+  audit: factoryScores.audit,
+  rep: factoryScores.repurchase,
+  year: factoryScores.trustYears,
+  sales: factoryScores.sales,
+  prod: factoryScores.production,
+} as const;
+
+function toScoreDims(r: Record<string, unknown>): Record<ScoreDim, number | null> {
+  const num = (v: unknown) => (v != null ? Number(v) : null);
+  return {
+    cert: num(r.qualityCert),
+    audit: num(r.audit),
+    rep: num(r.repurchase),
+    year: num(r.trustYears),
+    sales: num(r.sales),
+    prod: num(r.production),
+  };
+}
 
 function median(nums: number[]): number | null {
   if (!nums.length) return null;
@@ -132,15 +147,7 @@ export async function findFactoryById(id: number, unlocked = false) {
   let categoryScoredCount = 0;
   if (category) {
     const peers = await db
-      .select({
-        qualityCert: factoryScores.qualityCert,
-        factoryPower: factoryScores.factoryPower,
-        trustYears: factoryScores.trustYears,
-        repurchase: factoryScores.repurchase,
-        production: factoryScores.production,
-        service: factoryScores.service,
-        sales: factoryScores.sales,
-      })
+      .select(DIM_SELECT)
       .from(factoryScores)
       .innerJoin(
         factoryCategories,
@@ -164,7 +171,14 @@ export async function findFactoryById(id: number, unlocked = false) {
   }
   return {
     ...maskFactory(rows[0], unlocked)!,
-    scores: scores[0] ?? null,
+    // 只暴露 v2 六维 + 综合分/置信度；旧 7 维遗留列不下发
+    scores: scores[0]
+      ? {
+          ...toScoreDims(scores[0]),
+          composite: scores[0].composite != null ? Number(scores[0].composite) : null,
+          confidence: scores[0].confidence ?? null,
+        }
+      : null,
     category,
     categoryMedians,
     categoryScoredCount,
@@ -589,7 +603,7 @@ export async function matchFactories(intent: {
   const ids = res.rows.map((f) => f.id);
   const db = getDb();
 
-  // 子分明细（7 维）
+  // 子分明细（v2 六维）
   const scoreRows = ids.length
     ? await db
         .select()
@@ -597,18 +611,7 @@ export async function matchFactories(intent: {
         .where(sql`${factoryScores.factoryId} IN (${sql.join(ids.map((i) => sql`${i}`), sql`,`)})`)
     : [];
   const scoreMap = new Map<number, Record<string, number | null>>(
-    scoreRows.map((r) => [
-      r.factoryId,
-      {
-        qualityCert: r.qualityCert != null ? Number(r.qualityCert) : null,
-        factoryPower: r.factoryPower != null ? Number(r.factoryPower) : null,
-        trustYears: r.trustYears != null ? Number(r.trustYears) : null,
-        repurchase: r.repurchase != null ? Number(r.repurchase) : null,
-        production: r.production != null ? Number(r.production) : null,
-        service: r.service != null ? Number(r.service) : null,
-        sales: r.sales != null ? Number(r.sales) : null,
-      },
-    ])
+    scoreRows.map((r) => [r.factoryId, toScoreDims(r)])
   );
 
   // 类目内排名：一次窗口函数算全类目，再在内存里取这 6 家
@@ -701,8 +704,9 @@ function buildEvidence(
   if (f.cert) ev.push(`持第三方认证：${f.cert}`);
   if (f.medal) ev.push(`平台勋章「${f.medal}${f.medalLevel ? ` ${f.medalLevel}` : ""}」`);
   if (f.isSuper) ev.push(`平台超级工厂（实地验厂）`);
-  if (sub?.repurchase != null && sub.repurchase >= 90) ev.push(`复购维度子分 ${sub.repurchase}/100，客户粘性极强`);
-  if (sub?.qualityCert != null && sub.qualityCert >= 30) ev.push(`质量认证子分满分档`);
+  if (sub?.rep != null && sub.rep >= 85) ev.push(`复购维度 ${sub.rep}/100，老买家持续回头`);
+  if (sub?.cert != null && sub.cert >= 90) ev.push(`资质认证维度 ${sub.cert}/100，持知名第三方认证`);
+  if (sub?.audit != null && sub.audit >= 90) ev.push(`已完成深度验厂，实地核验维度满分档`);
   return ev;
 }
 

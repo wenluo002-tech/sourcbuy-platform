@@ -74,7 +74,10 @@ export const factoryScores = mysqlTable(
     factoryId: bigint("factory_id", { mode: "number", unsigned: true })
       .notNull()
       .references(() => factories.id),
+    // v2 六维：cert→quality_cert 列、audit→audit 列（2026-11-12 新增）、rep→repurchase、year→trust_years、sales→sales、prod→production
+    // factory_power / service 为旧 7 维体系遗留列，v2 不再写入也不再读取，仅保留历史数据
     qualityCert: decimal("quality_cert", { precision: 5, scale: 1 }),
+    audit: decimal("audit", { precision: 5, scale: 1 }),
     factoryPower: decimal("factory_power", { precision: 5, scale: 1 }),
     trustYears: decimal("trust_years", { precision: 5, scale: 1 }),
     repurchase: decimal("repurchase", { precision: 5, scale: 1 }),

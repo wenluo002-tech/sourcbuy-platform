@@ -6,8 +6,8 @@ import { useT } from "@/i18n";
 
 const IMAGE_GROUP_KEYS = ["product", "workshop", "equipment", "warehouse", "gate", "catalog"] as const;
 
-const SCORE_KEYS = ["qualityCert", "factoryPower", "trustYears", "repurchase", "production", "service", "sales"] as const;
-/** scores 行存在但 7 维全空 = 子分尚未核实（等同无子分），走占位卡而不是渲染一张全空的图 */
+const SCORE_KEYS = ["cert", "audit", "rep", "year", "sales", "prod"] as const;
+/** scores 行存在但 6 维全空 = 子分尚未核实（等同无子分），走占位卡而不是渲染一张全空的图 */
 const hasScoreDims = (s: any) => !!s && SCORE_KEYS.some((k) => s[k] != null);
 
 export default function FactoryDetail() {
@@ -276,8 +276,9 @@ function FactoryDetailView({ f }: { f: any }) {
                 </li>
               ))}
             </ul>
-            <p className="mt-2">
-              {t("factoryDetail.verifiedNote", { n: SCORING_FORMULA.verifiedOn, e: SCORING_FORMULA.maxError })}
+            <p className="mt-2">{t("factoryDetail.verifiedNote")}</p>
+            <p className="mt-1 text-black/35">
+              {t("factoryDetail.scoreVersion", { v: SCORING_FORMULA.version, d: SCORING_FORMULA.effectiveDate })}
             </p>
           </details>
         </div>
