@@ -3,6 +3,7 @@ import { factories, factoryScores, factoryCategories, commissionRules } from "..
 import { eq, and, desc, like, gte, lte, sql, type SQL } from "drizzle-orm";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import { maskFactory, maskedFactoryName } from "../lib/mask";
+import { proxyImageUrl, proxyImageList } from "../lib/imgProxy";
 import {
   volumetricRule,
   findDestination,
@@ -171,6 +172,11 @@ export async function findFactoryById(id: number, unlocked = false) {
   }
   return {
     ...maskFactory(rows[0], unlocked)!,
+    // 权益锁图片旁路修复（2026-11-15）：实拍图 URL 含上游卖家身份段，一律走代理改写，原始地址不下发
+    mainImage: proxyImageUrl(rows[0].mainImage),
+    images: Object.fromEntries(
+      Object.entries(((rows[0].images as Record<string, unknown> | null) ?? {})).map(([k, v]) => [k, proxyImageList(v)])
+    ),
     // 只暴露 v2 六维 + 综合分/置信度；旧 7 维遗留列不下发
     scores: scores[0]
       ? {
@@ -666,8 +672,8 @@ export async function matchFactories(intent: {
       location: f.location,
       cert: f.cert,
       repurchaseRate: f.repurchaseRate ? Number(f.repurchaseRate) : null,
-      mainImage: f.mainImage,
-      productImages: fallback,
+      mainImage: proxyImageUrl(f.mainImage),
+      productImages: fallback.map((u) => proxyImageUrl(u)), // 代理改写：URL 不再含上游卖家身份段
       tags: (f.tags as string[] | null) ?? [],
       reason: buildReason(f),
       subScores: sub,

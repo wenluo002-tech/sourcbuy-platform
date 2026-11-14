@@ -1,6 +1,7 @@
 import { getDb } from "./connection";
 import { radarItems } from "../../db/schema";
 import { asc, eq } from "drizzle-orm";
+import { proxyImageUrl } from "../lib/imgProxy";
 
 // 单条雷达品（对话链路用：雷达卡 CTA 带 radarId 直达）
 export async function getRadarItem(id: number) {
@@ -44,7 +45,7 @@ export async function listRadar() {
       signalText: r.signalText,
       signalUrl: r.signalUrl,
       signalDate: r.signalDate,
-      imageUrl: r.imageUrl ?? null,
+      imageUrl: proxyImageUrl(r.imageUrl ?? null),
       retailPriceUsd: r.retailPriceUsd != null ? Number(r.retailPriceUsd) : null,
       factoryPriceMin: r.factoryPriceMin != null ? Number(r.factoryPriceMin) : null,
       factoryPriceMax: r.factoryPriceMax != null ? Number(r.factoryPriceMax) : null,

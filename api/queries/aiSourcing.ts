@@ -10,6 +10,7 @@ import { log } from "../lib/logger";
 import { listRadar, getRadarItem } from "./radar";
 import { extractExternalUrl, resolveExternalLink, type LinkContext } from "./linkResolve";
 import { maskFactory, maskOffer, maskedFactoryName } from "../lib/mask";
+import { proxyImageUrl } from "../lib/imgProxy";
 import { enrichFactoryLive } from "./shopEnrich";
 import { getDb } from "./connection";
 import { sql as dsql } from "drizzle-orm";
@@ -638,7 +639,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       log.warn("工厂匹配失败，本轮不带厂卡", { error: fRes.reason instanceof Error ? fRes.reason.message : String(fRes.reason) });
     }
     if (sRes.status === "fulfilled" && sRes.value) {
-      searchProducts = sRes.value.items.slice(0, 8);
+      searchProducts = sRes.value.items.slice(0, 8).map((p) => ({ ...p, image: proxyImageUrl(p.image) }));
     }
   }
 
@@ -698,7 +699,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
             cert: l.factory.cert,
             repurchaseRate: null,
             mainImage: null,
-            productImages: l.image && /^https?:\/\//i.test(l.image) ? [l.image] : [], // 卡片先让买家看到这款货
+            productImages: l.image && /^https?:\/\//i.test(l.image) ? [proxyImageUrl(l.image)] : [], // 卡片先让买家看到这款货（URL 走代理，藏源头身份）
             tags: [],
             reason: "严选库在册 · 有这款在售货",
             subScores: null,
@@ -977,7 +978,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     factories,
     products: searchProducts,
     linkContext: linkCtx
-      ? { platform: linkCtx.platform, title: linkCtx.title, image: linkCtx.image, priceText: linkCtx.priceText, url: linkCtx.url, source: linkCtx.source, fetchFailed: linkCtx.fetchFailed ?? false }
+      ? { platform: linkCtx.platform, title: linkCtx.title, image: proxyImageUrl(linkCtx.image), priceText: linkCtx.priceText, url: linkCtx.url, source: linkCtx.source, fetchFailed: linkCtx.fetchFailed ?? false }
       : null,
     product: productInfo
       ? { offer: productInfo.offer, factory: productInfo.factory }

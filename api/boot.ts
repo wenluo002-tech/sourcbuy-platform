@@ -14,6 +14,7 @@ import { getSessionUser, readSessionToken } from "./lib/auth";
 import { validateUpload, registerEvidence, evidenceCounts, canAccessReport, getEvidenceWithReport, getOpsDetail } from "./queries/inspection";
 import { recordEvent } from "./queries/analytics";
 import { generateReportPdf } from "./lib/qcPdf";
+import { decodeImgToken } from "./lib/imgProxy";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -131,6 +132,35 @@ app.post(
     return c.json({ ok: true, evidenceId, counts });
   },
 );
+
+// ═══ 图片代理（2026-11-15 权益锁图片旁路修复，见 api/lib/imgProxy.ts）═══
+// 公开只读：token 是 AES-GCM 加密的原始 URL（不可伪造），白名单域名双向校验，非图床内容一律 404。
+// 原图 URL 不出现在任何前端响应里——买家复制图片地址也拿不到上游卖家身份。
+app.get("/api/img/:token", async (c) => {
+  const url = decodeImgToken(c.req.param("token"));
+  if (!url) return c.json({ error: "Not Found" }, 404);
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 12_000);
+  try {
+    const r = await fetch(url, {
+      signal: ctl.signal,
+      redirect: "follow",
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; SourcBuy-ImgProxy/1.0)", Accept: "image/*,*/*;q=0.8" },
+    });
+    const mime = (r.headers.get("content-type") ?? "").toLowerCase();
+    if (!r.ok || !mime.startsWith("image/")) return c.json({ error: "Not Found" }, 404);
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length === 0 || buf.length > 15 * 1024 * 1024) return c.json({ error: "Not Found" }, 404);
+    c.header("Content-Type", mime);
+    c.header("Cache-Control", "public, max-age=604800, immutable"); // token 确定性，可长缓存
+    c.header("X-Content-Type-Options", "nosniff");
+    return c.body(buf);
+  } catch {
+    return c.json({ error: "Bad Gateway" }, 502);
+  } finally {
+    clearTimeout(timer);
+  }
+});
 
 app.get("/api/qc/file/:id", async (c) => {
   const id = Number(c.req.param("id"));

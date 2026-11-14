@@ -30,6 +30,7 @@ import {
 } from "./queries/account";
 import { destroySession, sessionCookieHeader, clearSessionCookieHeader } from "./lib/auth";
 import { isUnlockedBuyer, maskFactory, maskOffer } from "./lib/mask";
+import { proxyImageUrl } from "./lib/imgProxy";
 import { log } from "./lib/logger";
 
 export const appRouter = createRouter({
@@ -163,6 +164,7 @@ export const appRouter = createRouter({
         const { offer, factory } = await offerWithFactory(input.offerId);
         if (!offer) throw new Error("未能获取该商品，请确认货号或链接有效");
         const unlocked = await isUnlockedBuyer(ctx.user?.id);
+        if (offer.images) (offer as any).images = (offer.images as string[]).map((u) => proxyImageUrl(u)); // 图片走代理藏源头身份
         return { offer: maskOffer(offer, unlocked), factory: maskFactory(factory, unlocked) };
       }),
     // V2：缓存→万邦→点金→legacy 四级链路（同一商品 24h 内零成本）；locale≠zh 时数据层按需翻译（终身缓存，失败回落原文）
@@ -173,6 +175,9 @@ export const appRouter = createRouter({
         if (!offer) throw new Error("未能获取该商品，请确认货号或链接有效");
         const unlocked = await isUnlockedBuyer(ctx.user?.id);
         const mOffer = maskOffer(offer, unlocked)!; // offer 已非空（上面 404 拦截），maskOffer 只可能因 null 输入返 null
+        // 图片走代理（2026-11-15 权益锁图片旁路修复）：主图与规格图的原始 URL 不下发
+        mOffer.images = (mOffer.images ?? []).map((u) => proxyImageUrl(u));
+        if (mOffer.specImages) for (const k of Object.keys(mOffer.specImages)) mOffer.specImages[k] = proxyImageUrl(mOffer.specImages[k]);
         if (input.locale && input.locale !== "zh") {
           const { translateTexts } = await import("./lib/translate");
           const skuTexts = mOffer.skus.map((s) => s.specText).filter(Boolean);
