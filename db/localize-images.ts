@@ -14,7 +14,7 @@ import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
 const OUT_DIR = path.resolve(process.cwd(), "uploads", "img");
-const CONCURRENCY = 20;
+const CONCURRENCY = Number(process.env.CONCUR || 4); // 默认 4 并发，避免挤占前台代理带宽
 const TIMEOUT_MS = 8_000;
 const FUSE_MAX = 60_000; // 总量熔断
 const FAIL_RATIO_FUSE = 0.3; // 失败率熔断
@@ -150,8 +150,10 @@ async function worker() {
   }
 }
 await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-console.log(`下载完成：ok=${ok} fail=${fail}，开始改写 DB`);
-await rewriteDb();
+console.log(`下载完成：ok=${ok} fail=${fail}`);
+// DB 改写默认关闭（REWRITE=1 才执行）：代理层已做磁盘读穿，本地文件先生效于代理缓存；
+// 待确认发布环境能服务 /api/img/local/* 后再开改写，避免发布站 404
+if (process.env.REWRITE === "1") { await rewriteDb(); } else { console.log("跳过 DB 改写（REWRITE=1 开启）"); }
 const disk = fs.readdirSync(OUT_DIR).length;
 console.log(`[完成] 本地图片文件 ${disk} 个`);
 process.exit(0);

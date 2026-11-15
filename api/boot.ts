@@ -4,6 +4,7 @@ import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
@@ -136,9 +137,59 @@ app.post(
 // ═══ 图片代理（2026-11-15 权益锁图片旁路修复，见 api/lib/imgProxy.ts）═══
 // 公开只读：token 是 AES-GCM 加密的原始 URL（不可伪造），白名单域名双向校验，非图床内容一律 404。
 // 原图 URL 不出现在任何前端响应里——买家复制图片地址也拿不到上游卖家身份。
+const IMG_LOCAL_ROOT = path.join(QC_UPLOAD_ROOT, "img");
+const IMG_EXT_MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif" };
+
+// 本地化图片静态出口（公开只读，文件名是 sha1 无穿越面）
+app.get("/api/img/local/:name", (c) => {
+  const name = c.req.param("name");
+  if (!/^[0-9a-f]{40}\.[a-z0-9]{2,5}$/.test(name)) return c.json({ error: "Not Found" }, 404);
+  const abs = path.join(IMG_LOCAL_ROOT, name);
+  if (!abs.startsWith(IMG_LOCAL_ROOT) || !fs.existsSync(abs)) return c.json({ error: "Not Found" }, 404);
+  const ext = path.extname(name).slice(1).toLowerCase();
+  c.header("Content-Type", IMG_EXT_MIME[ext] ?? "application/octet-stream");
+  c.header("Cache-Control", "public, max-age=31536000, immutable"); // 内容寻址文件名，永久缓存
+  c.header("X-Content-Type-Options", "nosniff");
+  return c.body(fs.readFileSync(abs));
+});
+
+// 大图压缩：>400KB 的 jpeg/png 缩到最长边 1280、jpeg q82；一次压缩永久受益（jimp 纯 JS 静态导入进 bundle，不破坏部署形态）
+import Jimp from "jimp";
+async function shrinkImage(buf: Buffer, mime: string): Promise<{ buf: Buffer; mime: string }> {
+  if (buf.length < 400_000 || !/image\/(jpeg|jpg|png)/.test(mime)) return { buf, mime };
+  try {
+    const img = await Jimp.read(buf);
+    if (img.bitmap.width > 1280) img.resize(1280, Jimp.AUTO);
+    const out: Buffer = await img.quality(82).getBufferAsync("image/jpeg");
+    if (out.length > 0 && out.length < buf.length) return { buf: out, mime: "image/jpeg" };
+  } catch { /* 压缩失败用原图 */ }
+  return { buf, mime };
+}
+
 app.get("/api/img/:token", async (c) => {
   const url = decodeImgToken(c.req.param("token"));
   if (!url) return c.json({ error: "Not Found" }, 404);
+  // 磁盘缓存读穿：优先压缩版（{sha1}.c.jpg），其次本地化原图（{sha1}.{ext}），命中即出图不触达上游
+  const em = url.match(/\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i);
+  const ext = (em ? em[1].toLowerCase() : "jpg").replace("jpeg", "jpg");
+  const base = crypto.createHash("sha1").update(url).digest("hex");
+  const absC = path.join(IMG_LOCAL_ROOT, base + ".c.jpg");
+  const abs = path.join(IMG_LOCAL_ROOT, base + "." + ext);
+  try {
+    for (const p of [absC, abs]) {
+      if (fs.existsSync(p) && fs.statSync(p).size > 100) {
+        const raw = fs.readFileSync(p);
+        // 读穿路径上的大图也顺手压缩并沉淀（一次性成本），之后都走 {sha1}.c.jpg 快路径
+        const isJpg = p.endsWith(".jpg");
+        const s = await shrinkImage(raw, isJpg ? "image/jpeg" : "image/" + ext);
+        if (s.buf !== raw) { try { const part = absC + ".part"; fs.writeFileSync(part, s.buf); fs.renameSync(part, absC); } catch {} }
+        c.header("Content-Type", s.mime);
+        c.header("Cache-Control", "public, max-age=31536000, immutable");
+        c.header("X-Content-Type-Options", "nosniff");
+        return c.body(new Uint8Array(s.buf)); // 拷贝为独立 ArrayBuffer 视图满足 Hono 类型
+      }
+    }
+  } catch { /* 缓存读失败回落代理 */ }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 12_000);
   try {
@@ -151,10 +202,14 @@ app.get("/api/img/:token", async (c) => {
     if (!r.ok || !mime.startsWith("image/")) return c.json({ error: "Not Found" }, 404);
     const buf = Buffer.from(await r.arrayBuffer());
     if (buf.length === 0 || buf.length > 15 * 1024 * 1024) return c.json({ error: "Not Found" }, 404);
-    c.header("Content-Type", mime);
+    // 写-behind：压缩后回写本地库（.part+rename 防半截；任何失败静默，不影响出图）——浏览过的图自动沉淀为压缩本地资产
+    const s = await shrinkImage(buf, mime);
+    const savePath = s.buf !== buf ? absC : abs;
+    try { fs.mkdirSync(IMG_LOCAL_ROOT, { recursive: true }); const part = savePath + ".part"; fs.writeFileSync(part, s.buf); fs.renameSync(part, savePath); } catch { /* 只读环境跳过 */ }
+    c.header("Content-Type", s.mime);
     c.header("Cache-Control", "public, max-age=604800, immutable"); // token 确定性，可长缓存
     c.header("X-Content-Type-Options", "nosniff");
-    return c.body(buf);
+    return c.body(new Uint8Array(s.buf));
   } catch {
     return c.json({ error: "Bad Gateway" }, 502);
   } finally {
