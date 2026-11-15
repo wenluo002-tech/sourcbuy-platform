@@ -87,7 +87,8 @@ export async function findFactories(f: FactoryFilter) {
       .from(factories)
       .where(where),
   ]);
-  return { rows: rows.map((r) => maskFactory(r, !!f.unlocked)), total: cnt[0]?.c ?? 0, page, pageSize, category: categoryMatched };
+  // v90 补漏：列表出口同样过图片代理（v89 只覆盖了 match/detail 等六处，此处漏网）
+  return { rows: rows.map((r) => { const m = maskFactory(r, !!f.unlocked); if (m.mainImage) m.mainImage = proxyImageUrl(m.mainImage); return m; }), total: cnt[0]?.c ?? 0, page, pageSize, category: categoryMatched };
 }
 
 function eq2(col: any, val: any) {

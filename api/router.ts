@@ -207,7 +207,12 @@ export const appRouter = createRouter({
     // 关键词搜品：搜索缓存 30 分钟防刷
     search: publicQuery
       .input(z.object({ q: z.string().min(1).max(80), page: z.number().int().min(1).max(20).default(1) }))
-      .query(({ input }) => searchOffers(input.q, input.page)),
+      .query(async ({ input }) => {
+        // v90 补漏：搜索结果图同样走代理藏源头身份（v89 只覆盖了 detail 等六处）
+        const r = await searchOffers(input.q, input.page);
+        for (const it of r.items) if (it.image) it.image = proxyImageUrl(it.image);
+        return r;
+      }),
   }),
 
   radar: createRouter({
