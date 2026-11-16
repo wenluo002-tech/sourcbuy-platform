@@ -237,7 +237,7 @@ export const appRouter = createRouter({
             .max(20),
           radarId: z.number().int().positive().optional(), // 雷达卡 CTA 直达：钉死品类与信号上下文
           imageData: z.string().max(6_000_000).optional(), // 商品图（base64 data URL，前端已压到 1024px JPEG）
-          locale: z.enum(["zh", "en", "es", "fr", "pt"]).optional(), // 界面语言：非中文走英文话术体系+语言指令（LLM 按买家语言回复）
+          locale: z.enum(["zh", "en", "es", "fr", "pt", "ka"]).optional(), // 界面语言：非中文走英文话术体系+语言指令（LLM 按买家语言回复）
           threadId: z.number().int().positive().optional(), // M3a：续写已有会话
           anonId: z.string().max(36).optional(), // M3a：匿名设备 ID，登录后归并
         })
@@ -306,7 +306,7 @@ export const appRouter = createRouter({
         email: z.string().max(191),
         password: z.string().min(8).max(72),
         displayName: z.string().max(64).optional(),
-        locale: z.enum(["zh", "en", "es", "fr", "pt"]).optional(),
+        locale: z.enum(["zh", "en", "es", "fr", "pt", "ka"]).optional(),
         anonId: z.string().max(36).optional(),
       }))
       .mutation(async ({ input, ctx }) => {

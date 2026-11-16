@@ -155,14 +155,23 @@ app.get("/api/img/local/:name", (c) => {
 
 // 大图压缩：>400KB 的 jpeg/png 缩到最长边 1280、jpeg q82；一次压缩永久受益（jimp 纯 JS 静态导入进 bundle，不破坏部署形态）
 import Jimp from "jimp";
+// 压缩并发闸：jimp 纯 JS 大图解码+压缩是内存尖峰（单张 4MB 图解码后位图近百 MB），
+// 扫描/首访多图并发曾把服务打崩（OOM 无日志整进程死亡）——最多 2 路，多余排队
+let shrinkRunning = 0;
+const shrinkQueue: Array<() => void> = [];
 async function shrinkImage(buf: Buffer, mime: string): Promise<{ buf: Buffer; mime: string }> {
   if (buf.length < 400_000 || !/image\/(jpeg|jpg|png)/.test(mime)) return { buf, mime };
+  if (shrinkRunning >= 2) await new Promise<void>((r) => shrinkQueue.push(r));
+  shrinkRunning++;
   try {
     const img = await Jimp.read(buf);
     if (img.bitmap.width > 1280) img.resize(1280, Jimp.AUTO);
     const out: Buffer = await img.quality(82).getBufferAsync("image/jpeg");
     if (out.length > 0 && out.length < buf.length) return { buf: out, mime: "image/jpeg" };
-  } catch { /* 压缩失败用原图 */ }
+  } catch { /* 压缩失败用原图 */ } finally {
+    shrinkRunning--;
+    shrinkQueue.shift()?.();
+  }
   return { buf, mime };
 }
 

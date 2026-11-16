@@ -15,11 +15,11 @@ const kimiGw = createOpenAICompatible({
   supportsStructuredOutputs: true,
 });
 
-export const DATA_LANGS = ["en", "es", "fr", "pt", "de", "ja", "ar"] as const; // 数据层支持的目标语言（界面语言是其子集）
+export const DATA_LANGS = ["en", "es", "fr", "pt", "de", "ja", "ar", "ka"] as const; // 数据层支持的目标语言（界面语言是其子集）
 export type DataLang = (typeof DATA_LANGS)[number];
 
 const LANG_NAME: Record<string, string> = {
-  en: "English", es: "Spanish", fr: "French", pt: "Portuguese", de: "German", ja: "Japanese", ar: "Arabic",
+  en: "English", es: "Spanish", fr: "French", pt: "Portuguese", de: "German", ja: "Japanese", ar: "Arabic", ka: "Georgian",
 };
 
 let tableReady = false;

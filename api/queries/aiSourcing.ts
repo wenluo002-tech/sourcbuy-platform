@@ -23,11 +23,11 @@ const FACTORY_QA_RE = /(多少人|员工|工人|规模|面积|厂房|成立|哪�
 // 工厂分层是枚举值，不走 LLM 翻译：喂外语话术前直接映射（与前端 i18n tierName 同口径）——
 // 否则 LLM 会把中文「优选/金标」原样引用进外语回复（v80 巡检实抓的中文残留根因之一）
 const TIER_I18N: Record<string, Record<string, string>> = {
-  金标: { en: "Gold", es: "Oro", fr: "Or", pt: "Selo ouro" },
-  银标: { en: "Silver", es: "Plata", fr: "Argent", pt: "Selo prata" },
-  铜标: { en: "Bronze", es: "Bronce", fr: "Bronze", pt: "Selo bronze" },
-  优选: { en: "Rising", es: "Selección preferente", fr: "Sélection", pt: "Preferida" },
-  培育: { en: "New", es: "En desarrollo", fr: "En développement", pt: "Em desenvolvimento" },
+  金标: { en: "Gold", es: "Oro", fr: "Or", pt: "Selo ouro", ka: "ოქროს" },
+  银标: { en: "Silver", es: "Plata", fr: "Argent", pt: "Selo prata", ka: "ვერცხლის" },
+  铜标: { en: "Bronze", es: "Bronce", fr: "Bronze", pt: "Selo bronze", ka: "ბრინჯაოს" },
+  优选: { en: "Rising", es: "Selección preferente", fr: "Sélection", pt: "Preferida", ka: "რჩეული" },
+  培育: { en: "New", es: "En desarrollo", fr: "En développement", pt: "Em desenvolvimento", ka: "ახალი" },
 };
 const tierLabel = (tier: string | null | undefined, locale: string): string | null =>
   tier ? (locale === "zh" ? tier : (TIER_I18N[tier]?.[locale] ?? tier)) : null;
@@ -798,17 +798,26 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   // 否则 LLM 会把中文代号「严选工厂 No.」/品类词/地名/证据原样引用进外语话术（概率性残留的根因）
   if (locale !== "zh") {
     try {
-      const { translateFields, lookupCached } = await import("../lib/translate");
+      const { translateFields, lookupCached, translateTexts } = await import("../lib/translate");
       if (factories.length) {
         await translateFields(factories as any[], ["location", "reason", "tags", "evidence"], locale);
+        // linkedOffer 在售货标题：缓存同步替换，缺失必须当场补齐（await）——同 radarCtx 模式。
+        // fire-and-forget 会让外语买家（尤其新语言缓存冷启动时）在答卡里看到 LLM 引用的中文标题原文（ka 巡检实抓）
+        const loTitles = factories.map((f) => (f as any).linkedOffer?.title).filter(Boolean) as string[];
+        let loMap: Record<string, string> = {};
+        if (loTitles.length) {
+          loMap = await lookupCached(loTitles, locale);
+          const missing = loTitles.filter((t) => !loMap[t]);
+          if (missing.length) {
+            const fresh = await translateTexts(missing, locale).catch(() => ({}) as Record<string, string>);
+            loMap = { ...loMap, ...fresh };
+          }
+        }
         for (const f of factories) {
           f.name = (f.name as string).replace(/^严选工厂 No\.(\d+)$/, "Vetted Factory No.$1");
           if (f.tier) f.tier = tierLabel(f.tier, locale);
           const lo = (f as any).linkedOffer;
-          if (lo?.title) {
-            const tm = await lookupCached([lo.title], locale);
-            if (tm[lo.title]) lo.title = tm[lo.title];
-          }
+          if (lo?.title && loMap[lo.title]) lo.title = loMap[lo.title];
         }
       }
       if (intent.product) {

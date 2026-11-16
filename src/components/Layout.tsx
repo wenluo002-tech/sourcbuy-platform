@@ -101,7 +101,7 @@ export default function Layout() {
                 {t("nav.signIn")}
               </Link>
             )}
-            {/* 五语言切换：原生 select（移动端系统级滚轮选择器，可靠性高于自绘下拉）。data-i18n-skip：语言名按国际惯例保留原名（"中文"等），巡检器跳过 */}
+            {/* 六语言切换：原生 select（移动端系统级滚轮选择器，可靠性高于自绘下拉）。data-i18n-skip：语言名按国际惯例保留原名（"中文"等），巡检器跳过 */}
             <select
               data-i18n-skip
               value={lang}

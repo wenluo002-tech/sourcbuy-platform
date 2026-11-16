@@ -7,8 +7,9 @@ import { en } from "./en";
 import { es } from "./es";
 import { fr } from "./fr";
 import { pt } from "./pt";
+import { ka } from "./ka";
 
-export const LANGS = ["zh", "en", "es", "fr", "pt"] as const;
+export const LANGS = ["zh", "en", "es", "fr", "pt", "ka"] as const;
 export type Lang = (typeof LANGS)[number];
 export const LANG_LABEL: Record<Lang, string> = {
   zh: "中文",
@@ -16,9 +17,10 @@ export const LANG_LABEL: Record<Lang, string> = {
   es: "ES",
   fr: "FR",
   pt: "PT",
+  ka: "KA",
 };
 
-const DICTS: Record<Lang, any> = { zh, en, es, fr, pt };
+const DICTS: Record<Lang, any> = { zh, en, es, fr, pt, ka };
 
 function isLang(x: unknown): x is Lang {
   return typeof x === "string" && (LANGS as readonly string[]).includes(x);
@@ -44,7 +46,7 @@ const I18nCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void }>({
   setLang: () => {},
 });
 
-const HTML_LANG: Record<Lang, string> = { zh: "zh-CN", en: "en", es: "es", fr: "fr", pt: "pt" };
+const HTML_LANG: Record<Lang, string> = { zh: "zh-CN", en: "en", es: "es", fr: "fr", pt: "pt", ka: "ka" };
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(detect);

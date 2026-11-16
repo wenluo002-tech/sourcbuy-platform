@@ -710,7 +710,7 @@ export default function BuyerChat() {
       return;
     }
     const rec = new SpeechRec();
-    rec.lang = ({ zh: "zh-CN", en: "en-US", es: "es-ES", fr: "fr-FR", pt: "pt-BR" } as Record<string, string>)[lang] ?? "en-US";
+    rec.lang = ({ zh: "zh-CN", en: "en-US", es: "es-ES", fr: "fr-FR", pt: "pt-BR", ka: "ka-GE" } as Record<string, string>)[lang] ?? "en-US";
     rec.interimResults = true;
     rec.onresult = (e: any) => {
       let txt = "";

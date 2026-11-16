@@ -1,5 +1,5 @@
 // 多语言零残留巡检（罗总 2026-11-11 指令：不能再靠老板肉眼找漏翻——机器逐页逐语言扫，有残留就 FAIL）
-// 用法：npx tsx db/i18n-scan.ts  —— en/es/fr/pt × 核心页面，扫直接文本节点 + placeholder 里的中文字符
+// 用法：npx tsx db/i18n-scan.ts  —— en/es/fr/pt/ka × 核心页面，扫直接文本节点 + placeholder 里的中文字符
 // 退出码：0=全部干净；1=有残留（打印页面×语言×残留片段清单）
 // 巡检器 = 预热器 + 判官一体：首扫触发接口 fire-and-forget 翻译铺满终身缓存；
 // 有残留的页 20s 后重载重扫一次（此时缓存已热、命中快路径），重扫仍有残留才判 FAIL。
@@ -7,7 +7,7 @@
 import { chromium, type Page } from "playwright-core";
 
 const BASE = process.env.SCAN_BASE ?? "http://localhost:3200";
-const LANGS = ["en", "es", "fr", "pt"] as const;
+const LANGS = ["ka", "en", "es", "fr", "pt"] as const;
 
 const PREFILL = encodeURIComponent(
   'I saw "Handmade Press-on Nails" on the best-seller radar — find me matching factories and the landed cost'
@@ -72,7 +72,7 @@ async function visitAndSettle(page: Page, spec: PageSpec) {
   }
 }
 
-const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox"] });
+const browser = await chromium.launch({ executablePath: "/usr/bin/chromium", args: ["--no-sandbox", "--disable-dev-shm-usage", "--js-flags=--max-old-space-size=512"] });
 let fail = 0;
 
 for (const lang of LANGS) {
