@@ -38,17 +38,17 @@ export const pt = {
     tagline: "Só defendemos o comprador — sem comissões de fábricas · sem taxas escondidas · taxa de comissão pública · reembolso antecipado de perdas"
   },
   home: {
-    eyebrow: "SourcBuy · Escritório de agentes de compra com IA",
+    eyebrow: "Seu agente de compras com IA",
     h1Line1: "Diga o que comprar.",
     h1Line2Pre: "Fábricas verificadas. ",
     h1Line2Accent: "Preço de fábrica",
     h1Line2Post: ".",
-    slogan: "Compre com IA. Nós cobrimos o resto.",
+    slogan: "Compras com IA — da busca à entrega, cuidamos de tudo.",
     trustMain: "IA selecionada, direto da fábrica de origem",
     trustPoints: [
-      "Milhares de fábricas selecionadas",
-      "Notas públicas e verificáveis",
-      "Do seu lado do início ao fim"
+      "Busca com IA — comparamos por você, preço real direto da fábrica",
+      "Fábricas verificadas, inspeção dupla — na fábrica e no nosso armazém",
+      "Proteção total da entrega — se algo der errado, indenizamos você primeiro"
     ],
     placeholder: "Ex.: 500 rolos de fita LED, branco quente, plugue padrão europeu, envio para a Alemanha…",
     cta: "Iniciar compra",

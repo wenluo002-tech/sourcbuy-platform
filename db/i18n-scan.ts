@@ -51,6 +51,20 @@ async function collectZh(page: Page): Promise<string[]> {
   });
 }
 
+// 服务被 OOM 杀掉后 guard 约 20s 拉起——扫描遇连接类错误时等服务恢复并重试，不把整页判死
+async function waitServiceUp(maxMs = 120_000) {
+  const t0 = Date.now();
+  for (;;) {
+    try {
+      const r = await fetch(BASE + "/favicon.png", { signal: AbortSignal.timeout(5_000) });
+      if (r.ok) return true;
+    } catch { /* 还没起来 */ }
+    if (Date.now() - t0 > maxMs) return false;
+    await new Promise((r) => setTimeout(r, 5_000));
+  }
+}
+const TRANSIENT = /ERR_CONNECTION|ERR_ABORTED|ERR_EMPTY_RESPONSE|ERR_TIMED_OUT|Timeout/i;
+
 // 访问一页并等到内容就绪（含 SKU 渐进翻译清零等待）
 async function visitAndSettle(page: Page, spec: PageSpec) {
   await page.goto(BASE + spec.path, { waitUntil: "domcontentloaded" });
@@ -80,8 +94,26 @@ for (const lang of LANGS) {
   await ctx.addInitScript((l) => localStorage.setItem("sb-lang", l), lang);
   const page = await ctx.newPage();
   for (const spec of PAGES) {
+    let settled = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await visitAndSettle(page, spec);
+        settled = true;
+        break;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message.split("\n")[0] : String(e);
+        if (TRANSIENT.test(msg) && attempt < 3) {
+          console.log(`… [${lang}] ${spec.name} 加载失败（${msg}），等服务恢复后重试（第 ${attempt} 次）`);
+          await waitServiceUp();
+          continue;
+        }
+        fail++;
+        console.log(`✗ [${lang}] ${spec.name}（${spec.path}）加载失败：${msg}`);
+        break;
+      }
+    }
+    if (!settled) continue;
     try {
-      await visitAndSettle(page, spec);
       let hits = await collectZh(page);
       if (hits.length) {
         // 首扫有残留：本次访问已触发后台翻译填缓存，等 90s（盖过多批串行+单批 30s 超时窗口）重载重扫——缓存热后快路径应全命中
@@ -99,7 +131,7 @@ for (const lang of LANGS) {
       }
     } catch (e) {
       fail++;
-      console.log(`✗ [${lang}] ${spec.name}（${spec.path}）加载失败：${e instanceof Error ? e.message.split("\n")[0] : e}`);
+      console.log(`✗ [${lang}] ${spec.name}（${spec.path}）扫描异常：${e instanceof Error ? e.message.split("\n")[0] : e}`);
     }
   }
   await ctx.close();

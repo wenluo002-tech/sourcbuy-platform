@@ -38,17 +38,17 @@ export const fr = {
     tagline: "Uniquement du côté acheteur — pas de commissions d'usines · pas de marge cachée · commissions transparentes · remboursement prioritaire des pertes"
   },
   home: {
-    eyebrow: "SourcBuy · Cabinet d'achat IA",
+    eyebrow: "Votre agent d'achat IA",
     h1Line1: "Dites-nous quoi acheter.",
     h1Line2Pre: "Usines vérifiées. ",
     h1Line2Accent: "Prix plancher",
     h1Line2Post: ".",
-    slogan: "Achetez avec l'IA. Nous couvrons le reste.",
+    slogan: "Achats par IA — de la recherche à la livraison, on s'occupe de tout.",
     trustMain: "IA sélectionnée, en direct des usines sources",
     trustPoints: [
-      "Des milliers d'usines sélectionnées",
-      "Notes publiques et vérifiables",
-      "De votre côté du début à la fin"
+      "Sourcing IA — on compare pour vous, prix réels direct usine",
+      "Usines vérifiées, double contrôle — à l'usine et dans notre entrepôt",
+      "Protection totale de la livraison — en cas de problème, on vous indemnise d'abord"
     ],
     placeholder: "Ex : 500 rouleaux de ruban LED, blanc chaud, prise EU, livraison Allemagne…",
     cta: "Lancer l'achat",

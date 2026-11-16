@@ -161,7 +161,7 @@ let shrinkRunning = 0;
 const shrinkQueue: Array<() => void> = [];
 async function shrinkImage(buf: Buffer, mime: string): Promise<{ buf: Buffer; mime: string }> {
   if (buf.length < 400_000 || !/image\/(jpeg|jpg|png)/.test(mime)) return { buf, mime };
-  if (shrinkRunning >= 2) await new Promise<void>((r) => shrinkQueue.push(r));
+  if (shrinkRunning >= 1) await new Promise<void>((r) => shrinkQueue.push(r));
   shrinkRunning++;
   try {
     const img = await Jimp.read(buf);

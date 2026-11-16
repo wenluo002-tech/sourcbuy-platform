@@ -114,7 +114,7 @@ export default function Home() {
               <span className="sb-line-mask"><span className={lang !== "zh" ? undefined : "whitespace-nowrap"} style={{ ["--sb-delay" as string]: "100ms" }}>{t("home.h1Line2Pre")}<span className="text-[var(--sb-brand)]">{t("home.h1Line2Accent")}</span>{t("home.h1Line2Post")}</span></span>
             </h1>
 
-            {/* 品牌 Slogan：定稿 2026-11-10（AI 采购，全程兜底 / Source with AI. We cover the rest.） */}
+            {/* 副标：定稿 2026-11-16 罗总拍板（AI 采购，从寻源到交付全程代办）；三条信任点同日定稿，赔付口径=先行赔付（政策原话） */}
             <p className="sb-display mt-5 text-[17px] italic leading-snug tracking-wide text-[var(--sb-brand)] sm:text-[19px]">
               {t("home.slogan")}
             </p>
