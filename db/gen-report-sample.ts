@@ -1,6 +1,6 @@
-// ═══ P4 供应商核查报告·样张 v2（结论先行版，吸收 workBuddy 诊断）═══
-// v2 变更：首屏决策卡（结论先行但永不评级）/ 矩阵风险项前置+来源角标 / 未覆盖改中性灰 /
-//          数据口径冲突显式标注 / 证书三列表格分组 / 历史客户降权 / 边界前置 / 可触达性降权 / 附录可信度分级
+// ═══ P4 供应商核查报告·样张 v3.1（罗总两轮亲测反馈后）═══
+// v3.1 变更：封面右侧核查印章（填深蓝区空白）/ 决策卡三指标与风险条重叠修复（卡高 168→184、风险条下移）/
+//            CTA 页重设计（推荐卡深蓝实心+投影+头部对勾圆标+流程箭头+联系条行动话术）
 // 数据：全部取自 2026-11-17 跑步机试点真实返回（江苏宝翔体育器材）
 // 纪律：只讲事实与缺口、永不评级打分；渠道只放数量；全文脱敏——不出现任何上游平台品牌名/链接
 import PDFDocument from "pdfkit";
@@ -36,7 +36,7 @@ const GRAY = "#6b7688", GRAY_BG = "#eef1f5"; // 未覆盖=中性灰，红色只�
 type SrcTag = "官方公示" | "司法公示" | "公开报道" | "企业自述";
 const SRC_COLOR: Record<SrcTag, string> = { 官方公示: "#1f6fb2", 司法公示: "#5b3fa8", 公开报道: "#92610a", 企业自述: "#6b7688" };
 
-const doc = new PDFDocument({ size: "A4", margins: { top: 64, bottom: 64, left: 48, right: 48 }, bufferPages: true, info: { Title: "SourcBuy 供应商核查报告 v2（样张）", Author: "SourcBuy" } });
+const doc = new PDFDocument({ size: "A4", margins: { top: 64, bottom: 64, left: 48, right: 48 }, bufferPages: true, info: { Title: "SourcBuy 供应商核查报告 v3.1（样张）", Author: "SourcBuy" } });
 doc.registerFont("r", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "NotoSansCJKsc-Regular");
 doc.registerFont("b", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", "NotoSansCJKsc-Bold");
 
@@ -111,10 +111,29 @@ doc.font("r").fontSize(9).fillColor("rgba(255,255,255,0.65)").text(`统一社会
 // 边界前置一句话（封面声明区）
 doc.font("r").fontSize(8).fillColor("rgba(255,255,255,0.6)").text("本报告为远程初步核查：现场产能与司法记录不在覆盖范围，批量下单前可升级实地验厂。", 48, 226);
 doc.font("r").fontSize(8).fillColor("rgba(255,255,255,0.6)").text(`报告编号 ${RID} · 出具日期 2026-11-17 · 委托方专用，可凭编号验真`, 48, 242);
+// 右侧核查印章（填补深蓝区右侧空白，强化"可验真"心智）
+{
+  const cx = 462, cy = 128;
+  doc.circle(cx, cy, 62).lineWidth(1).strokeColor("rgba(255,255,255,0.35)").stroke();
+  const label = "SOURCBUY VERIFICATION · REMOTE SCREENING · ";
+  doc.font("b").fontSize(6.5);
+  for (let i = 0; i < label.length; i++) {
+    const a = (i / label.length) * 360 - 90;
+    const rad = (a * Math.PI) / 180;
+    const x = cx + 52 * Math.cos(rad), y = cy + 52 * Math.sin(rad);
+    doc.save();
+    doc.rotate(a + 90, { origin: [x, y] });
+    doc.fillColor("rgba(255,255,255,0.55)").text(label[i], x - doc.widthOfString(label[i]) / 2, y - 4.5, { lineBreak: false });
+    doc.restore();
+  }
+  doc.circle(cx, cy, 38).lineWidth(1.5).strokeColor(BRAND).stroke();
+  doc.path(`M ${cx - 13} ${cy + 1} L ${cx - 3} ${cy + 11} L ${cx + 15} ${cy - 11}`).lineWidth(4).lineCap("round").strokeColor("#ffffff").stroke();
+  doc.font("b").fontSize(8).fillColor("rgba(255,255,255,0.85)").text("远程核查 · 可验真", cx - 60, cy + 74, { width: 120, align: "center" });
+}
 
 // 决策卡（白卡压封底边缘）
 const CY = 276;
-doc.roundedRect(48, CY, PW, 168, 10).fill("#ffffff").lineWidth(1).strokeColor(LINE).stroke();
+doc.roundedRect(48, CY, PW, 184, 10).fill("#ffffff").lineWidth(1).strokeColor(LINE).stroke();
 doc.font("r").fontSize(8.5).fillColor(INK40).text("核查结论（不评级，只讲事实与缺口）", 66, CY + 16);
 doc.font("b").fontSize(13.5).fillColor(INK).text("公开核查未发现异常项 · 2 项待人工核实 · 2 项远程无法覆盖", 66, CY + 32, { width: PW - 32 });
 doc.font("r").fontSize(9.5).fillColor(INK60).text("这家厂资质完整、工商记录干净，可作为候选供应商；产能与司法两项在批量下单前补齐核验即可。", 66, CY + 56, { width: PW - 32, lineGap: 3 });
@@ -129,11 +148,11 @@ doc.moveTo(66, my).lineTo(48 + PW - 18, my).lineWidth(0.75).strokeColor(LINE).st
     x += 160;
   }
 }
-// 最大风险提示条
-const ry = CY + 132;
+// 最大风险提示条（与指标值底部拉开 6pt，修复 v3 重叠）
+const ry = CY + 140;
 doc.roundedRect(58, ry, PW - 20, 26, 5).fill(AMBER_BG);
 doc.font("r").fontSize(8.5).fillColor(AMBER).text("最大风险：产能数据含企业自述成分、司法核查远程未覆盖——建议批量下单前升级实地验厂。", 68, ry + 7.5, { width: PW - 40 });
-doc.y = CY + 184;
+doc.y = CY + 200;
 
 // 四事实卡（决策依据向）
 {
@@ -479,12 +498,18 @@ para(`说明：共引用公开来源 ${[...srcCount.values()].reduce((a, b) => a
   doc.y = y + 54;
 }
 
-// ═══ 收口页：三出口 ═══
+// ═══ 收口页：三出口（v3.1 重设计：深蓝头部对勾圆标 + 推荐卡实心深蓝 + 全卡投影 + 流程箭头 + 行动型联系条）═══
 doc.addPage();
-doc.rect(0, 0, 595.28, 120).fill(NAVY);
-doc.font("b").fontSize(18).fillColor("#ffffff").text("下一步怎么走", 48, 42);
-doc.font("r").fontSize(9.5).fillColor("rgba(255,255,255,0.7)").text("核查到此为止，成交交给 SourcBuy —— 我们只代表买方", 48, 70);
-doc.y = 152;
+doc.rect(0, 0, 595.28, 150).fill(NAVY);
+doc.font("b").fontSize(8).fillColor("rgba(255,255,255,0.55)").text("N E X T   S T E P", 48, 40, { lineBreak: false, characterSpacing: 1 });
+doc.font("b").fontSize(20).fillColor("#ffffff").text("核查完成，下一步交给 SourcBuy", 48, 58);
+doc.font("r").fontSize(9.5).fillColor("rgba(255,255,255,0.72)").text("三个出口任选，都由本报告的同一份事实支撑 —— 我们只代表买方", 48, 94);
+{ // 头部右侧对勾圆标（呼应封面印章）
+  const cx = 502, cy = 76;
+  doc.circle(cx, cy, 30).lineWidth(1.2).strokeColor("rgba(255,255,255,0.45)").stroke();
+  doc.path(`M ${cx - 10} ${cy + 1} L ${cx - 2} ${cy + 9} L ${cx + 12} ${cy - 9}`).lineWidth(3).lineCap("round").strokeColor(BRAND).stroke();
+}
+doc.y = 176;
 const cta: [string, string, string, boolean][] = [
   ["A", "委托 SourcBuy 向该厂采购", "由我们代谈价、代验货、代跟单：双检出货 + 分段付款 + 先行赔付（单笔最高 $50,000）。您只需确认报价与收货。", true],
   ["B", "对比同品类已验厂供应商", "我们的严选库里有同品类已完成核验的工厂，可比价、比产能、比交期，不必从零开始。", false],
@@ -493,19 +518,28 @@ const cta: [string, string, string, boolean][] = [
 for (const [tag, title, body, hot] of cta) {
   needSpace(122);
   const y = doc.y;
-  doc.roundedRect(48, y, PW, 108, 8).lineWidth(hot ? 1.5 : 1).strokeColor(hot ? BRAND : LINE).stroke();
+  // 投影（先画偏移底影再画主卡）
+  doc.roundedRect(50.5, y + 3, PW, 108, 8).fill(hot ? "rgba(18,35,60,0.28)" : "rgba(26,35,50,0.08)");
   if (hot) {
-    doc.roundedRect(48 + PW - 52, y + 12, 40, 16, 8).fill(BRAND);
-    doc.font("b").fontSize(8).fillColor("#ffffff").text("推荐", 48 + PW - 52, y + 16, { width: 40, align: "center" });
+    doc.roundedRect(48, y, PW, 108, 8).fill(NAVY);
+    doc.roundedRect(48 + PW - 60, y + 14, 48, 19, 9.5).fill("#f0b429");
+    doc.font("b").fontSize(8.5).fillColor(NAVY).text("推 荐", 48 + PW - 60, y + 19, { width: 48, align: "center" });
+    doc.circle(76, y + 42, 16).fill("#ffffff");
+    doc.font("b").fontSize(14).fillColor(NAVY).text(tag, 70, y + 32.5, { width: 12, align: "center", lineBreak: false });
+    doc.font("b").fontSize(12.5).fillColor("#ffffff").text(title, 106, y + 26, { width: PW - 200 });
+    doc.font("r").fontSize(9).fillColor("rgba(255,255,255,0.85)").text(body, 106, y + 50, { width: PW - 146, lineGap: 3.5 });
+  } else {
+    doc.roundedRect(48, y, PW, 108, 8).fill("#ffffff").lineWidth(1).strokeColor(LINE).stroke();
+    doc.rect(48, y + 12, 3.5, 84).fill(tag === "B" ? BRAND : INK40);
+    doc.circle(76, y + 42, 16).fill(tag === "B" ? BRAND : GRAY);
+    doc.font("b").fontSize(14).fillColor("#ffffff").text(tag, 70, y + 32.5, { width: 12, align: "center", lineBreak: false });
+    doc.font("b").fontSize(12.5).fillColor(INK).text(title, 106, y + 26, { width: PW - 166 });
+    doc.font("r").fontSize(9).fillColor(INK60).text(body, 106, y + 50, { width: PW - 146, lineGap: 3.5 });
   }
-  doc.circle(72, y + 38, 13).fill(BRAND);
-  doc.font("b").fontSize(13).fillColor("#ffffff").text(tag, 66.5, y + 29, { lineBreak: false });
-  doc.font("b").fontSize(12).fillColor(INK).text(title, 96, y + 26, { width: PW - 180 });
-  doc.font("r").fontSize(9).fillColor(INK60).text(body, 96, y + 50, { width: PW - 130, lineGap: 3.5 });
   doc.y = y + 122;
 }
 doc.moveDown(0.5);
-// 委托流程四步
+// 委托流程四步（卡间加引导箭头）
 doc.font("b").fontSize(11).fillColor(INK).text("委托 SourcBuy 的完整流程", 48, doc.y, { width: PW });
 doc.moveDown(0.35);
 {
@@ -524,16 +558,20 @@ doc.moveDown(0.35);
     doc.font("b").fontSize(9).fillColor("#ffffff").text(String(i + 1), x + 14.5, y0 + 11.5, { lineBreak: false });
     doc.font("b").fontSize(8.5).fillColor(INK).text(t, x + 10, y0 + 32, { width: CW - 20 });
     doc.font("r").fontSize(7).fillColor(INK60).text(d, x + 10, y0 + 47, { width: CW - 20, lineGap: 2 });
+    if (i < 3) doc.font("b").fontSize(11).fillColor(INK40).text("›", x + CW + 3, y0 + 30, { lineBreak: false });
   });
   doc.y = y0 + 88;
 }
-// 底部联系条
+// 底部行动联系条
 {
   const y = doc.y + 6;
-  doc.roundedRect(48, y, PW, 44, 8).fill(NAVY);
-  doc.font("b").fontSize(10).fillColor("#ffffff").text("SourcBuy · 您的 AI 采购代理", 66, y + 10, { lineBreak: false });
-  doc.font("r").fontSize(8).fillColor("rgba(255,255,255,0.75)").text(`验真入口 sourcbuyai.com · 报告编号 ${RID} · 随时回复本报告对话即可发起委托`, 66, y + 26, { width: PW - 36 });
-  doc.y = y + 54;
+  doc.roundedRect(50.5, y + 3, PW, 48, 8).fill("rgba(18,35,60,0.18)");
+  doc.roundedRect(48, y, PW, 48, 8).fill(NAVY);
+  doc.circle(72, y + 24, 10).fill(BRAND);
+  doc.path(`M ${72 - 4.5} ${y + 24.5} L ${72 - 1} ${y + 28} L ${72 + 5.5} ${y + 20.5}`).lineWidth(2).lineCap("round").strokeColor("#ffffff").stroke();
+  doc.font("b").fontSize(10.5).fillColor("#ffffff").text("回复本报告对话，即刻发起委托", 94, y + 9, { lineBreak: false });
+  doc.font("r").fontSize(8).fillColor("rgba(255,255,255,0.75)").text(`SourcBuy · 您的 AI 采购代理 · 只代表买方 ｜ 验真入口 sourcbuyai.com · 报告编号 ${RID}`, 94, y + 28, { width: PW - 62 });
+  doc.y = y + 58;
 }
 
 // ═══ 页眉页脚（补绘；临时放开 margin 防自动分页）═══
