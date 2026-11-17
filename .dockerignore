@@ -6,3 +6,7 @@ shot
 ops
 数据抢救备份
 严选工厂数据库备份
+# uploads/img 是 /api/img/{token} 代理路由的磁盘缓存（DB 里零行引用 /api/img/local/，全部走 token 回源），
+# 2.1G 烤进镜像会把发布服务拖超时（"更新发布"服务错误的根因）；qc/reports 是运行时生成数据，同样不该进构建上下文。
+# 容器冷启动后图片按需回源重建缓存；缓存原件已备份至持久卷 /mnt/agents/backup/。
+uploads/
