@@ -25,7 +25,7 @@ const ORDER_STATUS_ZH: Record<string, string> = {
 
 export default function OpsOrders() {
   const { me, loading } = useAuth();
-  const [tab, setTab] = useState<"review" | "orders">("review");
+  const [tab, setTab] = useState<"review" | "orders" | "gaps">("review");
   const [template, setTemplate] = useState<Record<number, string>>({});
   const utils = trpc.useUtils();
   const listQ = trpc.inspection.list.useQuery({}, { enabled: !!me, retry: false });
@@ -63,6 +63,12 @@ export default function OpsOrders() {
           className={`rounded-full px-4 py-1.5 font-medium ${tab === "orders" ? "bg-[var(--sb-brand)] text-white" : "border border-[var(--sb-line)]"}`}
         >
           开报告（可操作订单）
+        </button>
+        <button
+          onClick={() => setTab("gaps")}
+          className={`rounded-full px-4 py-1.5 font-medium ${tab === "gaps" ? "bg-[var(--sb-brand)] text-white" : "border border-[var(--sb-line)]"}`}
+        >
+          品类缺口候选池
         </button>
       </div>
 
@@ -161,6 +167,7 @@ export default function OpsOrders() {
           ))}
         </div>
       )}
+      {tab === "gaps" && <GapPanel />}
       {createM.isSuccess && createM.data.ok && (
         <div className="fixed inset-x-4 bottom-4 mx-auto max-w-2xl rounded-xl bg-[#0f3d3e] p-4 text-sm text-white shadow-xl">
           报告已创建 {createM.data.reportNo}，工厂上传链接：
@@ -169,6 +176,101 @@ export default function OpsOrders() {
       )}
       {createM.isError && <p className="mt-3 text-sm text-[#b00020]">创建失败：{createM.error.message}</p>}
       {utils && null}
+    </div>
+  );
+}
+
+// ═══ 品类缺口候选池（P2）：买家问了库内零覆盖品类 → 后台已自动拉候选；运营在此挑厂、深调、人工触达 ═══
+// 纪律：这批厂是外部候选，未进严选库、未经我方评分——页面上不许出现"严选"字样，deepdive 结论仅供参考，判定权在人
+function GapPanel() {
+  const [openReq, setOpenReq] = useState<number | null>(null);
+  const [tradeOnly, setTradeOnly] = useState(true);
+  const [ddOpen, setDd] = useState<Record<number, any>>({});
+  const gapsQ = trpc.gap.list.useQuery(undefined, { retry: false });
+  const candQ = trpc.gap.candidates.useQuery(
+    { requestId: openReq ?? 0, tradeOnly },
+    { enabled: openReq != null, retry: false },
+  );
+  const ddM = trpc.gap.deepdive.useMutation({
+    onSuccess: (data) => {
+      setDd((s) => ({ ...s, [data.candidate.id]: data.deepdive }));
+      void candQ.refetch();
+    },
+  });
+
+  const gaps = gapsQ.data ?? [];
+  return (
+    <div className="mt-4 space-y-2.5">
+      <p className="text-xs text-[var(--sb-ink-40)]">
+        买家问了库里零覆盖的品类时，系统自动拉取外部候选（每次 ≈¥0.2）。候选未经我方核验——先看外贸/资质标签初筛，再对目标厂点「深度调研」（¥0.25/家，结果缓存）。
+      </p>
+      {gapsQ.error?.data?.code === "FORBIDDEN" && <p className="text-sm text-[#b00020]">无运营权限</p>}
+      {gaps.length === 0 && !gapsQ.isLoading && <p className="py-12 text-center text-sm text-[var(--sb-ink-40)]">暂无缺口记录——买家问的品类库里都有货，好事</p>}
+      {gaps.map((g: any) => (
+        <div key={g.id} className="rounded-xl border border-[var(--sb-line)] bg-white">
+          <button
+            onClick={() => setOpenReq(openReq === g.id ? null : g.id)}
+            className="flex w-full items-center justify-between p-4 text-left"
+          >
+            <div>
+              <p className="text-sm font-semibold">
+                「{g.keyword}」
+                <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-medium ${g.status === "enriched" ? "bg-[#e7f6ec] text-[#0a7a30]" : g.status === "error" ? "bg-[#fdeaea] text-[#b00020]" : "bg-[#fdf6e3] text-[#92610a]"}`}>
+                  {g.status === "enriched" ? "候选已就位" : g.status === "error" ? "拉取失败" : "拉取中"}
+                </span>
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--sb-ink-40)]">
+                {String(g.created_at).slice(0, 19)} · {g.locale} · 上游命中 {g.txgc_total ?? "?"} 家 · 已拉取 {g.candidate_count} 家
+                {g.error ? ` · ${g.error}` : ""}
+              </p>
+            </div>
+            <span className="text-xs text-[var(--sb-brand)]">{openReq === g.id ? "收起 ▲" : "展开 ▼"}</span>
+          </button>
+          {openReq === g.id && (
+            <div className="border-t border-[var(--sb-line)] p-4">
+              <label className="mb-2 flex items-center gap-1.5 text-xs text-[var(--sb-ink-60)]">
+                <input type="checkbox" checked={tradeOnly} onChange={(e) => setTradeOnly(e.target.checked)} />
+                只看有外贸业务的厂
+              </label>
+              {ddM.isError && <p className="mb-2 text-xs text-[#b00020]">深调失败：{ddM.error.message}</p>}
+              <div className="space-y-1.5">
+                {(candQ.data ?? []).map((c: any) => (
+                  <div key={c.id} className="rounded-lg border border-[var(--sb-line)] p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium">
+                          {c.name}
+                          {c.is_specialized ? <span className="ml-1 rounded bg-[#eef4ff] px-1 py-0.5 text-[10px] text-[#1d4ed8]">专精特新</span> : null}
+                          {c.is_high_tech ? <span className="ml-1 rounded bg-[#eef4ff] px-1 py-0.5 text-[10px] text-[#1d4ed8]">高新</span> : null}
+                          {c.is_foreign_trade ? <span className="ml-1 rounded bg-[#e7f6ec] px-1 py-0.5 text-[10px] text-[#0a7a30]">外贸</span> : null}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-[var(--sb-ink-40)]">
+                          {c.province}{c.city} · {c.establish_date ?? "?"} 成立 · 注册资本 {c.registered_capital ?? "?"} · 可触达渠道 {c.phones_count} 条
+                        </p>
+                        <p className="mt-0.5 truncate text-[11px] text-[var(--sb-ink-60)]">主营：{(Array.isArray(c.main_products) ? c.main_products : []).slice(0, 5).join("、")}</p>
+                      </div>
+                      <button
+                        onClick={() => ddM.mutate({ candidateId: c.id })}
+                        disabled={ddM.isPending}
+                        className="shrink-0 rounded-lg border border-[var(--sb-brand)] px-2.5 py-1 text-[11px] font-semibold text-[var(--sb-brand)] disabled:opacity-40"
+                      >
+                        {c.deepdive_summary || ddOpen[c.id] ? "刷新深调" : ddM.isPending ? "调研中…" : "深度调研 ¥0.25"}
+                      </button>
+                    </div>
+                    {(ddOpen[c.id]?.summary ?? c.deepdive_summary) && (
+                      <p className="mt-2 rounded-lg bg-black/[0.03] p-2.5 text-[11px] leading-relaxed text-[var(--sb-ink-60)]">
+                        {(ddOpen[c.id]?.summary ?? c.deepdive_summary).slice(0, 600)}
+                        {(ddOpen[c.id]?.summary ?? c.deepdive_summary).length > 600 ? "…" : ""}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                {candQ.data && candQ.data.length === 0 && <p className="py-6 text-center text-xs text-[var(--sb-ink-40)]">该筛选条件下无候选</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

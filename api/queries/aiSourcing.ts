@@ -3,6 +3,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { z } from "zod";
 import { listModels } from "../lib/ai-client";
 import { matchFactories } from "./factories";
+import { recordGap } from "./gapRadar";
 import { extractOfferId, offerWithFactory } from "./products";
 import { searchOffers, linkTopOffersToFactories, poolSearch, legacyLinkedFactories } from "../sourcing/offerService";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
@@ -718,6 +719,16 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     } catch (e) {
       log.warn("以货带厂失败，按原有厂单出", { error: e instanceof Error ? e.message : String(e) });
     }
+  }
+
+  // 品类缺口雷达（P2，2026-11-17）：关键词有效但严选库拿不出"证据级"的厂（无 productLinked/direct，只有桶级宽配或干脆零厂）
+  // → 记录缺口并后台拉候选池，给 /ops 48h 人工定向寻源配弹药。
+  // fire-and-forget 绝不阻塞买家答话；同关键词 24h 去重；关键词经词库清洗（整句不拉上游，防空搜白扣费）。
+  const hasEvidenceGradeFactory = factories.some((f) => f.matchBasis === "productLinked" || f.matchBasis === "direct");
+  if (keyword && !hasEvidenceGradeFactory) {
+    void recordGap(keyword, locale, userId).catch((e) =>
+      log.warn("缺口记录失败", { error: e instanceof Error ? e.message : String(e) }),
+    );
   }
 
   // 权益锁（2026-11-07 罗总授权）：未解锁买家的厂名全部换代号。

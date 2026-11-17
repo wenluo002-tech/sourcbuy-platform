@@ -24,6 +24,7 @@ import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } f
 import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, appendMessage, listThreads, getThreadMessages } from "./queries/auth";
 import { createInquiry, listMyOrders, getOrderDetail, transitionOrder } from "./queries/orders";
 import * as qc from "./queries/inspection";
+import { opsListGaps, opsGapCandidates, opsGapDeepdive } from "./queries/gapRadar";
 import {
   listAddresses, createAddress, updateAddress, removeAddress, setDefaultAddress,
   listNotifications, unreadCount, markRead, markAllRead, dashboardSummary,
@@ -553,6 +554,24 @@ export const appRouter = createRouter({
         const r = await qc.recordMeasurements(input);
         if (!r.ok) throw new TRPCError({ code: "BAD_REQUEST", message: r.error });
         return r;
+      }),
+  }),
+
+  // 品类缺口候选池（P2，2026-11-17）：买家问了我方零覆盖品类 → 后台自动拉候选，运营在这里挑厂、跑深调、人工触达
+  gap: createRouter({
+    list: opsQuery.query(() => opsListGaps()),
+    candidates: opsQuery
+      .input(z.object({ requestId: z.number().int().positive(), tradeOnly: z.boolean().optional() }))
+      .query(({ input }) => opsGapCandidates(input.requestId, !!input.tradeOnly)),
+    // deepdive 要花钱（500 credits≈¥0.25/家）→ mutation，结果缓存在候选行上
+    deepdive: opsQuery
+      .input(z.object({ candidateId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          return await opsGapDeepdive(input.candidateId);
+        } catch (e) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : String(e) });
+        }
       }),
   }),
 });
