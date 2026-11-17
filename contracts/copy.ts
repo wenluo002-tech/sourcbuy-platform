@@ -91,3 +91,27 @@ export const FREE_DELIVERY_COPY = {
   // 底部固定位
   freeFooter: { zh: "本次探源免费", en: "This sourcing request is free of charge." },
 } as const;
+
+// ─── F. 探源失败安抚话术（2026-11-18 罗总终审批复二.2：failed 不许是死胡同）───
+// 探源单状态进 failed 时：原因码 → 本表取安抚话术 + 必渲染「转人工」兜底入口。
+// 主表 sourcing_requests.fail_copy_key 存本表键名；copy_key 为空 = 代码评审/QA 打回，运营不临场编文案。
+export const FAIL_RECOVERY_COPY = {
+  no_keyword: {
+    zh: "这句话里我们没能识别出具体的产品，请补充品名或发一张产品图，我们立刻重新探源。",
+    en: "We couldn't identify a specific product in your message — add the product name or send a photo and we'll restart sourcing right away.",
+  },
+  upstream_error: {
+    zh: "上游数据服务暂时波动，本次探源未产生任何费用。我们已自动记录，稍后为您自动重试。",
+    en: "An upstream data service is temporarily unstable. No charge was incurred — we've logged it and will retry automatically.",
+  },
+  zero_candidates: {
+    zh: "这一轮暂未筛到符合条件的工厂。这不代表没有——转人工后采购团队会用线下渠道继续找。",
+    en: "No factories passed this round — that doesn't mean none exist. Hand it to our team and we'll keep looking through offline channels.",
+  },
+  manual_pending_timeout: {
+    zh: "人工核验比预期耗时更长，我们宁可慢一点也不放行存疑的工厂。您可随时催办或转人工了解进度。",
+    en: "Human verification is taking longer than expected — we'd rather be slow than pass a doubtful factory. You can nudge us or talk to a human anytime.",
+  },
+  // 统一兜底入口（所有 failed 态必渲染）
+  handoffCta: { zh: "转人工继续处理 →", en: "Hand off to our team →" },
+} as const;
