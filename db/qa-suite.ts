@@ -105,6 +105,13 @@ console.log("\n[3d] 多语言字典键集一致性（es/fr/pt/ka 与 zh 同键�
   }
 }
 
+console.log("\n[3d+] 词条表 v1.0 硬卡点（六语言禁用词 / 内部数字反向扫描 / 「直供」误用 —— 罗总 2026-11-17 终审，FAIL 即不允许存版本）");
+{
+  const { scanCopy } = await import("./qa-copy-scan");
+  const vs = await scanCopy();
+  check("六语言字典无禁用词/内部数字/「直供」误用", vs.length === 0, vs.length ? `${vs.length} 处违规：${vs.slice(0, 3).map((v) => `[${v.lang}]${v.key} ${v.rule}`).join("；")}` : "OK");
+}
+
 console.log("\n[3e] legacy 商品库召回层（39.6 万对方资产：商品召回 + 以货带厂直挂严选厂）");
 {
   const db = await getDb();
