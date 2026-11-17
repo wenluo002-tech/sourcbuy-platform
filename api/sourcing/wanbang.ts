@@ -75,6 +75,12 @@ export async function wbSearchFactoryNick(companyName: string): Promise<string |
   return hit?.seller_nick ? String(hit.seller_nick) : null;
 }
 
+// ---------- item_search_factory 原始返回（P4 核查报告交叉核实层用：取 tpservice_year/cat_name/area 免费事实） ----------
+export async function wbSearchFactoryRaw(companyName: string): Promise<{ item: any[]; billed: boolean }> {
+  const { data, billed } = await call("item_search_factory", { q: companyName, page: "1" });
+  return { item: Array.isArray((data as any)?.item) ? (data as any).item : [], billed };
+}
+
 // ---------- item_get_app：全能详情（0.05 元/次） ----------
 // 已验证路径：title=productTitle.fields.title；图片=Root.fields.dataJson.images[].fullPathImageURI；
 // 子域名=offerBaseInfo.sellerWinportUrl；MOQ=finalPriceModel.tradeWithoutPromotion.offerBeginAmount；

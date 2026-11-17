@@ -4,10 +4,23 @@ import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/auth";
 import { useT } from "@/i18n";
 
+const POINT_REASON_KEY: Record<string, string> = {
+  register_gift: "points.registerGift",
+  order_payment: "points.orderPayment",
+  refund_clawback: "points.refundClawback",
+  report_redeem: "points.reportRedeem",
+  report_refund: "points.reportRefund",
+  manual_adjust: "points.manualAdjust",
+};
+
+type PointLedgerRow = { id: number | string; delta: number; reason: string; created_at: string | Date };
+
 export default function Dashboard() {
   const { me, loading } = useAuth();
   const { t } = useT();
   const sumQ = trpc.dashboard.summary.useQuery(undefined, { enabled: !!me });
+  const pointsQ = trpc.points.balance.useQuery(undefined, { enabled: !!me });
+  const ledgerQ = trpc.points.ledger.useQuery(undefined, { enabled: !!me });
 
   if (loading) return null;
 
@@ -40,7 +53,7 @@ export default function Dashboard() {
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--sb-brand)]">Dashboard</p>
           <h1 className="mt-1 font-[var(--sb-font-display)] text-2xl font-semibold">
-            {t("dash.welcome")}，{me.displayName || me.email.split("@")[0]}
+            {t("dash.welcome")}, {me.displayName || me.email.split("@")[0]}
           </h1>
           <p className="mt-1 text-xs text-[var(--sb-ink-40)]">{t("dash.sub")}</p>
         </div>
@@ -60,6 +73,55 @@ export default function Dashboard() {
             <p className="mt-1 text-xs text-[var(--sb-ink-60)]">{it.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* 积分卡：余额 + 最近流水 + 冻结规则（全走服务端/字典，不做前端假设） */}
+      <div className="mt-6 rounded-2xl border border-[var(--sb-line)] bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold">{t("points.title")}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {(pointsQ.data?.balance ?? 0).toLocaleString()}
+              <span className="ml-1 text-xs font-medium text-[var(--sb-ink-40)]">{t("verify.pointsUnit")}</span>
+            </p>
+            <p className="mt-1 text-xs text-[var(--sb-ink-60)]">
+              {t("verify.cost")}: {(pointsQ.data?.reportCost ?? 1000).toLocaleString()} {t("verify.pointsUnit")}
+            </p>
+          </div>
+          <Link
+            to="/verify"
+            className="rounded-xl bg-[var(--sb-brand)] px-4 py-2 text-xs font-semibold text-[#eef4f5] hover:bg-[var(--sb-brand-hover)]"
+          >
+            {t("verify.title")}
+          </Link>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 border-t border-[var(--sb-line)] pt-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold">{t("points.history")}</p>
+            <div className="mt-2 space-y-1.5">
+              {(ledgerQ.data ?? []).length === 0 ? (
+                <p className="text-xs text-[var(--sb-ink-40)]">{t("points.empty")}</p>
+              ) : (
+                (ledgerQ.data ?? []).slice(0, 4).map((r: PointLedgerRow) => (
+                  <div key={r.id} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 flex-1 truncate text-[var(--sb-ink-60)]">
+                      {t(POINT_REASON_KEY[r.reason] ?? "points.manualAdjust")}
+                    </span>
+                    <span className={`shrink-0 font-semibold tabular-nums ${r.delta >= 0 ? "text-[#0a7a30]" : "text-[#b00020]"}`}>
+                      {r.delta >= 0 ? "+" : ""}{r.delta.toLocaleString()}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-[var(--sb-ink-40)]">{String(r.created_at).slice(0, 10)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="rounded-xl bg-[#f7f9fc] p-3 text-xs leading-5 text-[var(--sb-ink-60)]">
+            <p>{t("points.rule1")}</p>
+            <p className="mt-1">{t("points.rule2")}</p>
+            <p className="mt-1">{t("points.rule3")}</p>
+          </div>
+        </div>
       </div>
 
       {/* 待办 */}

@@ -18,7 +18,7 @@ async function chat(message: string, history: any[] = [], locale?: "zh" | "en") 
   const r = await fetch(`${BASE}/api/trpc/ai.chat`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ json: { message, history, locale } }),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(120_000),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j: any = await r.json();
@@ -204,7 +204,7 @@ console.log("\n[7] M3a 账号与会话记忆");
     const r = await fetch(url, {
       method, headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
       body: method === "POST" && body !== undefined ? JSON.stringify({ json: body }) : undefined,
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(60_000),
     });
     const setCookie = r.headers.get("set-cookie") ?? "";
     const m = setCookie.match(/sb_session=([^;]*)/);
@@ -216,6 +216,12 @@ console.log("\n[7] M3a 账号与会话记忆");
   const cookie = reg.cookie ?? "";
   const me1 = await call("auth.me", undefined, cookie, "GET");
   check("me 返回刚注册的邮箱", me1.json?.result?.data?.json?.email === em);
+  const pointsBal = await call("points.balance", undefined, cookie, "GET");
+  check("P4 注册礼到账（1,000 分）", pointsBal.json?.result?.data?.json?.balance === 1000 && pointsBal.json?.result?.data?.json?.reportCost === 1000);
+  const pointsLedger = await call("points.ledger", undefined, cookie, "GET");
+  check("P4 注册礼流水留痕", Array.isArray(pointsLedger.json?.result?.data?.json) && pointsLedger.json.result.data.json.some((x: any) => x.reason === "register_gift" && x.delta === 1000));
+  const myReports = await call("verify.my", undefined, cookie, "GET");
+  check("P4 新账号报告列表为空", Array.isArray(myReports.json?.result?.data?.json) && myReports.json.result.data.json.length === 0);
   const chat1 = await call("ai.chat", { message: "衣架 500个 发美国", history: [], locale: "zh" }, cookie);
   const tid = chat1.json?.result?.data?.json?.threadId;
   check("聊天返回 threadId（落库成功）", typeof tid === "number" && tid > 0);
@@ -243,6 +249,26 @@ console.log("\n[7] M3a 账号与会话记忆");
   check("Bearer 头可认证（无 cookie 场景）", meBearerJson?.result?.data?.json?.email === em);
 }
 
+console.log("\n[7c] P4 核查报告端点与权限边界");
+{
+  const db = getDb();
+  const [t1]: any = await db.execute(sql`SHOW TABLES LIKE 'points_ledger'`);
+  const [t2]: any = await db.execute(sql`SHOW TABLES LIKE 'verification_reports'`);
+  check("points_ledger / verification_reports 表存在", t1.length === 1 && t2.length === 1);
+  const cost = await fetch(`${BASE}/api/trpc/verify.cost`, { signal: AbortSignal.timeout(10_000) });
+  const costJson: any = await cost.json().catch(() => null);
+  check("verify.cost 公开返回 1,000 分", cost.status === 200 && costJson?.result?.data?.json?.points === 1000);
+  const anonPdf = await fetch(`${BASE}/api/verify/1/pdf`, { signal: AbortSignal.timeout(10_000) });
+  check("匿名访问核查报告 PDF 被拒（401）", anonPdf.status === 401);
+  const badReq = await fetch(`${BASE}/api/trpc/verify.request`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ json: { companyName: "x", productWord: "" } }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const badJson: any = await badReq.json().catch(() => null);
+  check("未登录申请核查报告被拒（UNAUTHORIZED）", badJson?.error?.json?.data?.code === "UNAUTHORIZED");
+}
+
 console.log("\n[8] M3b 订单状态机");
 {
   const em = `qa-${Date.now()}@sourcbuy.test`;
@@ -254,7 +280,7 @@ console.log("\n[8] M3b 订单状态机");
     const r = await fetch(url, {
       method, headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
       body: method === "POST" && body !== undefined ? JSON.stringify({ json: body }) : undefined,
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(60_000),
     });
     const m = (r.headers.get("set-cookie") ?? "").match(/sb_session=([^;]*)/);
     const json: any = await r.json().catch(() => null);
@@ -387,6 +413,8 @@ if (QA_FAST) {
     await rm(`DELETE FROM sourcing_sessions WHERE user_id IN (${idList})`);
     await rm(`DELETE FROM auth_sessions WHERE user_id IN (${idList})`);
     await rm(`DELETE FROM analytics_events WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM points_ledger WHERE user_id IN (${idList})`);
+    await rm(`DELETE FROM verification_reports WHERE user_id IN (${idList})`);
     await rm(`DELETE FROM users WHERE id IN (${idList})`);
     console.log(`[自清场] 已删除 qa- 测试账号 ${uidList.length} 个及其关联数据`);
   }

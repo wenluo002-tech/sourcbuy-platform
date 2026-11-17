@@ -25,6 +25,8 @@ import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, app
 import { createInquiry, listMyOrders, getOrderDetail, transitionOrder } from "./queries/orders";
 import * as qc from "./queries/inspection";
 import { opsListGaps, opsGapCandidates, opsGapDeepdive } from "./queries/gapRadar";
+import { requestReport, getReportForUser, listMyReports, REPORT_COST } from "./queries/verification";
+import { balanceOf, ledgerOf } from "./lib/points";
 import {
   listAddresses, createAddress, updateAddress, removeAddress, setDefaultAddress,
   listNotifications, unreadCount, markRead, markAllRead, dashboardSummary,
@@ -573,6 +575,34 @@ export const appRouter = createRouter({
           throw new TRPCError({ code: "BAD_REQUEST", message: e instanceof Error ? e.message : String(e) });
         }
       }),
+  }),
+
+  // ---- P4 工厂核查报告 + 积分（2026-11-17 罗总拍板；1,000 分兑 1 份，失败自动退分）----
+  verify: createRouter({
+    request: authedQuery
+      .input(z.object({ companyName: z.string().min(4).max(100), productWord: z.string().max(128).optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await requestReport({ userId: ctx.user.id, companyName: input.companyName, productWord: input.productWord, locale: ctx.user.locale ?? "zh" });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg === "not_enough_points" || msg === "invalid_company_name") throw new TRPCError({ code: "BAD_REQUEST", message: msg });
+          throw e;
+        }
+      }),
+    get: authedQuery
+      .input(z.object({ reportId: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        const r = await getReportForUser(input.reportId, ctx.user.id);
+        if (!r) throw new TRPCError({ code: "NOT_FOUND" });
+        return r;
+      }),
+    my: authedQuery.query(({ ctx }) => listMyReports(ctx.user.id)),
+    cost: publicQuery.query(() => ({ points: REPORT_COST })), // 前端展示兑换价，无需登录
+  }),
+  points: createRouter({
+    balance: authedQuery.query(({ ctx }) => balanceOf(ctx.user.id).then((balance) => ({ balance, reportCost: REPORT_COST }))),
+    ledger: authedQuery.query(({ ctx }) => ledgerOf(ctx.user.id, 50)),
   }),
 });
 

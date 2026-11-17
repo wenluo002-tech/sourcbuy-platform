@@ -3,6 +3,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "./connection";
 import { chatMessages, chatThreads, users } from "@db/schema";
 import { createSession, hashPassword, verifyPassword, type SessionUser } from "../lib/auth";
+import { awardRegisterGift } from "../lib/points";
 
 const normEmail = (e: string) => e.trim().toLowerCase();
 
@@ -28,6 +29,7 @@ export async function registerUser(email: string, password: string, displayName?
   });
   const userId = Number(r[0].insertId);
   await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, userId));
+  await awardRegisterGift(userId, em); // P4 注册礼 1,000 分（测试号自动跳过，失败不阻塞注册）
   const { token, expiresAt } = await createSession(userId);
   return { user: { id: userId, email: em, displayName: displayName ?? null, locale: locale ?? null } as SessionUser, token, expiresAt };
 }

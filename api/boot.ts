@@ -15,6 +15,7 @@ import { getSessionUser, readSessionToken } from "./lib/auth";
 import { validateUpload, registerEvidence, evidenceCounts, canAccessReport, getEvidenceWithReport, getOpsDetail } from "./queries/inspection";
 import { recordEvent } from "./queries/analytics";
 import { generateReportPdf } from "./lib/qcPdf";
+import { getReportForUser } from "./queries/verification";
 import { decodeImgToken } from "./lib/imgProxy";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
@@ -261,6 +262,20 @@ app.get("/api/qc/:reportId/pdf", async (c) => {
   c.header("Content-Type", "application/pdf");
   c.header("Content-Disposition", `inline; filename="${rep.reportNo}.pdf"`);
   return c.body(fs.readFileSync(abs));
+});
+
+// ═══ P4 核查报告 PDF 下载（仅报告属主，登录态双通道）═══
+app.get("/api/verify/:reportId/pdf", async (c) => {
+  const reportId = Number(c.req.param("reportId"));
+  if (!Number.isFinite(reportId)) return c.json({ error: "Not Found" }, 404);
+  const user = await getSessionUser(readSessionToken(c.req.raw)).catch(() => null);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const rep = await getReportForUser(reportId, user.id);
+  if (!rep) return c.json({ error: "Not Found" }, 404);
+  if (rep.status !== "ready" || !rep.pdf_path || !fs.existsSync(rep.pdf_path)) return c.json({ error: "Report not ready" }, 409);
+  c.header("Content-Type", "application/pdf");
+  c.header("Content-Disposition", `inline; filename="${rep.report_no}.pdf"`);
+  return c.body(new Uint8Array(fs.readFileSync(rep.pdf_path)));
 });
 
 // ═══ M5 经营埋点采集（2026-11-11）═══
