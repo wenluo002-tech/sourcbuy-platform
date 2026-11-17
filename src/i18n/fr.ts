@@ -64,6 +64,10 @@ export const fr = {
       "800 poussettes pliables pour animaux, livraison États-Unis"
     ],
     pledge: "Uniquement côté acheteur · pas de commissions vendeur · commissions transparentes · remboursement prioritaire en cas de perte",
+    verifyKicker: "Supplier verification",
+    verifyTitle: "Vérification de fournisseurs",
+    verifyLead: "Saisissez le nom complet d'une usine chinoise que vous connaissez et obtenez un rapport de vérification numéroté et téléchargeable : registre du commerce, certifications et historique, chaque élément avec sa source. 1 rapport offert aux nouveaux comptes.",
+    verifyCta: "Vérifier une usine gratuitement →",
     radarKicker: "Hot signals",
     radarTitle: "Radar mondial des produits viraux",
     radarMore: "Voir le classement complet →",

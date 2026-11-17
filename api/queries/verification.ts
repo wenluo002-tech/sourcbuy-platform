@@ -8,7 +8,8 @@ import { sql as dsql } from "drizzle-orm";
 import { redeemForReport, refundReport, REPORT_COST } from "../lib/points";
 import { isOpsEmail } from "../middleware";
 import { txgcSearch, txgcDetail, txgcDeepdive } from "../lib/txgc";
-import { wbSearchItems, wbSearchFactoryRaw } from "../sourcing/wanbang";
+import { wbSearchItems } from "../sourcing/wanbang";
+import { locateForVerification, type TempCheckReport } from "./tempCheck";
 
 // ─── 脱敏：上游平台品牌名绝不进报告（v13 铁律）───
 export function cleanDeep<T>(o: T): T {
@@ -113,36 +114,39 @@ export async function runPipeline(reportId: number) {
     if (m) { inOurSystem = 1; factoryId = Number(m.id); }
   }
 
-  // ② TXGC 定位企业（company_query：按全称查）
+  const norm = (s: string) => s.replace(/[\s()（）]/g, "").toLowerCase();
+
+  // ② 万邦定位（v96 罗总拍板接口合并：与 /factories 初核同一套搜索、同一 24h 缓存池、同一匹配规则。
+  //    免费事实=在营年数/品类/地区/信用代码/经营模式；seller_nick 顺路撞严选库 member_id；脱敏为「国内主流 B2B 平台」口径）
+  const wbRep = await locateForVerification(name).catch(() => null);
+  if (!inOurSystem && wbRep?.vettedFactory) { inOurSystem = 1; factoryId = wbRep.vettedFactory.id; }
+  const wbCross: ReportSnapshot["wbCross"] = wbRep?.status === "ok"
+    ? { years: wbRep.facts.years, category: wbRep.facts.home, area: wbRep.facts.region }
+    : null;
+
+  // ③ TXGC 定位企业（company_query：按全称查；工商底档 + AI 深调的核心来源）
   const found = await txgcSearch(name, { intent: "company_query", per_page: 5 });
   costCredits += found.credits_charged ?? 0;
   const items = found.data?.items ?? [];
-  const norm = (s: string) => s.replace(/[\s()（）]/g, "").toLowerCase();
   const target = items.find((f) => norm(f.name) === norm(name))
     ?? items.find((f) => norm(f.name).includes(norm(name)) || norm(name).includes(norm(f.name)));
-  if (!target) return failReport(reportId, job.user_id, "company_not_found");
 
-  // ③ detail + deepdive（deepdive 30–90s，客户端超时已放宽）
-  const [det, dd] = await Promise.all([
-    txgcDetail(target.id).catch(() => null),
-    txgcDeepdive(target.id, target.name, job.product_word ?? undefined).catch(() => null),
-  ]);
+  // ③b TXGC 未收录 ≠ 查无此厂（罗总 11-17 实测案例：超级工厂在营 5 年，TXGC 池未覆盖）——
+  //     万邦已定位到店铺档案就出「平台档案版」报告：工商底档/资质/司法列待人工核实，绝不整份失败；
+  //     两边都查不到才失败退分（远程核查做不了的绝不硬做）。
+  if (!target && wbRep?.status !== "ok") return failReport(reportId, job.user_id, "company_not_found");
+
+  // ④ detail + deepdive（deepdive 30–90s，客户端超时已放宽；TXGC 未命中时跳过，不花冤枉钱）
+  const [det, dd] = target
+    ? await Promise.all([
+        txgcDetail(target.id).catch(() => null),
+        txgcDeepdive(target.id, target.name, job.product_word ?? undefined).catch(() => null),
+      ])
+    : [null, null];
   costCredits += (det?.credits_charged ?? 0) + (dd?.credits_charged ?? 0);
   const detail = cleanDeep(det?.data ?? {});
   const deep = cleanDeep(dd?.data ?? {});
   const st = (deep.structured ?? {}) as Record<string, any>;
-
-  // ④ 万邦交叉核实（免费事实：在营年数/品类/地区；脱敏为「国内主流 B2B 平台」口径）
-  let wbCross: ReportSnapshot["wbCross"] = null;
-  try {
-    const r1 = await wbSearchFactoryRaw(name);
-    const hitWb = r1.item.find((f: any) => norm(String(f?.title ?? "")) === norm(name)) ?? r1.item.find((f: any) => norm(String(f?.title ?? "")).includes(norm(name).slice(0, 6)));
-    if (hitWb) wbCross = {
-      years: hitWb.tpservice_year != null ? Number(hitWb.tpservice_year) || null : null,
-      category: hitWb.cat_name ? String(hitWb.cat_name) : null,
-      area: hitWb.area ? String(hitWb.area) : null,
-    };
-  } catch { /* 万邦挂了不阻塞报告：交叉层缺失显式留 null */ }
 
   // ⑤ 价格情报（买家给了产品词才有）：我方 offer_pool 价格分布 + 万邦在售补强
   let priceIntel: ReportSnapshot["priceIntel"] = null;
@@ -164,14 +168,16 @@ export async function runPipeline(reportId: number) {
     }
   }
 
-  // ⑥ 组装快照
-  const snap = assembleSnapshot({ job, reportNo: job.report_no, target: cleanDeep(target), detail, deep, st, wbCross, priceIntel, inOurSystem: !!inOurSystem, factoryId });
+  // ⑥ 组装快照（TXGC 命中=完整版；未命中但万邦已定位=平台档案版）
+  const snap = target
+    ? assembleSnapshot({ job, reportNo: job.report_no, target: cleanDeep(target), detail, deep, st, wbCross, priceIntel, inOurSystem: !!inOurSystem, factoryId })
+    : assembleWbOnlySnapshot({ job, reportNo: job.report_no, wb: wbRep!, priceIntel, inOurSystem: !!inOurSystem, factoryId });
 
   // ⑦ 非中文报告：正文长文走翻译管线（await 等齐，v80 教训）
   if (job.locale && job.locale !== "zh") await translateSnapshot(snap);
 
   await db.execute(dsql`UPDATE verification_reports SET
-    status = 'ready', report = ${JSON.stringify(snap)}, txgc_id = ${target.id},
+    status = 'ready', report = ${JSON.stringify(snap)}, txgc_id = ${target?.id ?? null},
     in_our_system = ${inOurSystem}, factory_id = ${factoryId}, cost_credits = ${costCredits}
     WHERE id = ${reportId}`);
 
@@ -182,8 +188,8 @@ export async function runPipeline(reportId: number) {
     await db.execute(dsql`UPDATE verification_reports SET pdf_path = ${pdfPath} WHERE id = ${reportId}`);
   } catch (e) { console.error("[verification] pdf render failed", reportId, e); }
 
-  // ⑨ 结果回流我方库：干净→候选池标记（gap_candidates 体系外，单走 tags 不挂严选）
-  if (!inOurSystem) {
+  // ⑨ 结果回流我方库：干净→候选池标记（gap_candidates 体系外，单走 tags 不挂严选）；平台档案版无 txgc_id 不回灌
+  if (!inOurSystem && target) {
     await db.execute(dsql`INSERT INTO gap_candidates (request_id, txgc_id, name, province, city, establish_date, registered_capital, is_foreign_trade, phones_count, decision_maker_count, main_products, deepdive, deepdived_at)
       VALUES (0, ${target.id}, ${target.name}, ${target.province ?? null}, ${target.city ?? null}, ${target.establish_date ?? null}, ${target.registered_capital ?? null},
       ${target.is_foreign_trade ? 1 : 0}, ${target.phones_count ?? 0}, ${target.decision_maker_count ?? 0},
@@ -273,6 +279,81 @@ function assembleSnapshot(x: {
       website: st.official_site ? String(st.official_site) : null,
     },
     sources: buildSources(deep.sources),
+  };
+}
+
+// ─── 平台档案版快照（v96）：TXGC 工商库未收录、万邦已在主流 B2B 平台定位到该厂——
+//     能核实什么写什么（平台在营记录为 verified），工商/资质/司法一律列「待人工核实」，绝不编、绝不整份失败 ───
+function assembleWbOnlySnapshot(x: {
+  job: any; reportNo: string; wb: TempCheckReport;
+  priceIntel: ReportSnapshot["priceIntel"]; inOurSystem: boolean; factoryId: number | null;
+}): ReportSnapshot {
+  const f = x.wb.facts;
+  const title = x.wb.matchedTitle ?? x.job.company_name;
+  const scaleFacts = [
+    f.employeeCount != null ? `员工约 ${f.employeeCount} 人` : null,
+    f.areaSqm != null ? `厂房约 ${f.areaSqm} ㎡` : null,
+    f.customService === true ? "提供加工/定制服务" : null,
+    f.qualityControl ? `质量控制：${f.qualityControl}` : null,
+  ].filter(Boolean).join("；");
+
+  const matrix: ReportMatrixItem[] = [
+    { item: "主流 B2B 平台在营记录", status: "verified", detail: `国内主流 B2B 批发平台在营 ${f.years ?? "—"} 年${f.home ? `（经营品类：${f.home}）` : ""}${f.level ? `；平台等级：${f.level}` : ""}`, source: "公开报道" },
+    { item: "企业名称与信用代码", status: f.creditCode ? "verified" : "pending", detail: f.creditCode ? `平台档案载明统一社会信用代码 ${f.creditCode}，与企业全称一致` : "平台档案未载明信用代码——待人工核实。", source: "官方公示" },
+    { item: "工商登记状态", status: "pending", detail: "公开工商数据库暂未收录该企业——工商底档以人工核验为准。", source: "官方公示" },
+    { item: "经营模式", status: "pending", detail: f.productionType ? `平台档案载明「${f.productionType}」（企业自述口径，以实地核验为准）` : "平台档案未载明经营模式——待人工核实。", source: "企业自述" },
+    { item: "外贸经营资质", status: "pending", detail: "公开渠道未能核到进出口备案记录——以下单前人工核验为准。", source: "官方公示" },
+    { item: "实际产能", status: "pending", detail: scaleFacts ? `平台档案载明：${scaleFacts}（企业自述口径）` : "产能数据未公开——以下单前实地验厂为准。", source: "企业自述" },
+    { item: "涉诉与经营风险", status: "pending", detail: "公开渠道初筛未能覆盖；正式结论以司法数据库人工核验为准。", source: "司法公示" },
+    { item: "现场生产条件", status: "uncovered", detail: "远程核查无法覆盖：实际产线、在制品、仓储与现场管理——可升级实地验厂。", source: "官方公示" },
+    { item: "银行资信与海关明细", status: "uncovered", detail: "远程核查无法覆盖：银行资信证明、逐票进出口记录。", source: "官方公示" },
+  ];
+  const pending = matrix.filter((m) => m.status === "pending").length;
+  const uncovered = matrix.filter((m) => m.status === "uncovered").length;
+
+  return {
+    meta: { reportNo: x.reportNo, date: new Date().toISOString().slice(0, 10), companyName: title, uscc: f.creditCode, locale: x.job.locale ?? "zh" },
+    conclusion: {
+      pending, uncovered,
+      summary: `该企业在国内主流 B2B 批发平台有 ${f.years ?? "多"} 年在营记录${f.productionType ? `，平台档案为「${f.productionType}」企业` : ""}；但公开工商数据库暂未收录其工商底档，资质与司法记录未能远程核实——共 ${pending} 项待人工核实，建议批量下单前完成工商核验与实地验厂。`,
+    },
+    metrics: { years: null, certs: 0, coverageDone: matrix.filter((m) => m.status === "verified").length, coverageTotal: matrix.length },
+    maxRisk: "公开工商数据库暂未收录该企业的工商底档——企业身份与资质须人工核验后方可下单。",
+    facts: { establishDate: null, regCapital: null, status: "待人工核实", foreignTrade: "未核到备案" },
+    inOurSystem: x.inOurSystem, factoryId: x.factoryId,
+    matrix,
+    registration: [
+      { label: "企业全称", value: title, source: "公开报道" as SrcTag },
+      { label: "统一社会信用代码", value: f.creditCode ?? "—", source: "官方公示" as SrcTag },
+      { label: "法定代表人", value: "—（待人工核实）", source: "官方公示" as SrcTag },
+      { label: "成立日期", value: "—（待人工核实）", source: "官方公示" as SrcTag },
+      { label: "注册资本", value: "—（待人工核实）", source: "官方公示" as SrcTag },
+      { label: "登记状态", value: "待人工核实", source: "官方公示" as SrcTag },
+      { label: "注册地址", value: f.region ?? "—", source: "公开报道" as SrcTag },
+      { label: "行业分类", value: f.home ?? "—", source: "公开报道" as SrcTag },
+    ],
+    mainProducts: f.home,
+    businessScope: null,
+    intro: null,
+    capacity: {
+      paragraphs: scaleFacts ? [{ text: `平台档案载明：${scaleFacts}。以上为企业在平台档案中的自述口径，我方未独立核实。`, source: "企业自述" as SrcTag }] : [],
+      conflicts: [],
+      equipment: [],
+      productLines: [],
+    },
+    certs: f.cert ? [{ group: "信用、备案与其他在册许可", items: [{ name: `${f.cert}（平台档案载明，企业自述口径）` }] }] : [],
+    exportMarket: { markets: null, historyClients: null, customs: null },
+    wbCross: { years: f.years, category: f.home, area: f.region },
+    priceIntel: x.priceIntel,
+    boundaries: [
+      { item: "工商底档", note: "公开工商数据库暂未收录该企业——注册信息、股东、变更记录以人工核验为准。" },
+      { item: "现场生产条件", note: "实际产线数量、在制品、仓储与现场管理水平——可升级实地验厂覆盖。" },
+      { item: "银行资信", note: "开户行资信证明、授信额度——需委托后由我方按规核验。" },
+      { item: "海关数据明细", note: "逐票进出口记录、真实出口额——公开渠道无法获取。" },
+      { item: "涉诉与被执行", note: "以司法数据库正式核验为准；本次远程核查未能覆盖。" },
+    ],
+    reachability: { phoneCount: 0, dmCount: 0, website: null },
+    sources: [{ category: "国内主流 B2B 平台公开档案（在营年限 · 经营模式 · 规模自述）", count: 1 }],
   };
 }
 

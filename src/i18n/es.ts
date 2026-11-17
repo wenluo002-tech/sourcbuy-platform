@@ -64,6 +64,10 @@ export const es = {
       "800 cochecitos plegables para mascotas, envío a EE. UU."
     ],
     pledge: "Solo defendemos al comprador · Sin comisiones de vendedores · Tarifas públicas · Indemnización anticipada por daños",
+    verifyKicker: "Supplier verification",
+    verifyTitle: "Verificación de proveedores",
+    verifyLead: "Ingrese el nombre completo de una fábrica china que conozca y obtenga un informe de verificación numerado y descargable: registro mercantil, certificaciones e historial, cada ítem con su fuente. Las cuentas nuevas reciben 1 informe gratis.",
+    verifyCta: "Verificar una fábrica gratis →",
     radarKicker: "Hot signals",
     radarTitle: "Radar global de tendencias",
     radarMore: "Ver lista completa →",

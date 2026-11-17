@@ -156,48 +156,16 @@ async function promoteNominated(db: any, report: TempCheckReport): Promise<void>
   }
 }
 
-export async function tempCheckFactory(rawName: string, userId: number): Promise<TempCheckResult> {
-  const name = (rawName ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
-  if (name.length < 4 || !KEY || !SECRET) return { ok: false, reason: "invalid" };
-  const db: any = getDb();
+interface WbLocateOutcome { status: TempCheckReport["status"]; report: TempCheckReport | null; cost: number }
 
-  // ① 24h 同名缓存（归一化匹配），命中零成本
-  const [cacheRows]: any = await db.execute(
-    dsql`SELECT report_json, created_at FROM temp_factory_checks
-         WHERE REPLACE(REPLACE(query_name,' ',''),'　','') = ${norm(name)} AND status='ok'
-           AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-         ORDER BY id DESC LIMIT 1`,
-  );
-  const rawCache = cacheRows?.[0]?.report_json;
-  if (rawCache) {
-    try {
-      // mysql2 对 JSON 列自动解析——字符串和对象两种形态都要接
-      const r = typeof rawCache === "string" ? JSON.parse(rawCache) : rawCache;
-      if (r && r.status === "ok") {
-        r.cached = true;
-        r.vettedFactory = await findVettedByNick(db, r.sellerNick ?? null); // 缓存是旧报告，撞库入口每次现查
-        return { ok: true, report: r };
-      }
-    } catch { /* 缓存损坏则重查 */ }
-  }
-
-  // ② 每买家每日新查上限
-  const [uc]: any = await db.execute(
-    dsql`SELECT COUNT(*) c FROM temp_factory_checks WHERE user_id=${userId} AND DATE(created_at)=CURDATE()`,
-  );
-  if (Number(uc?.[0]?.c ?? 0) >= PER_USER_DAILY) return { ok: false, reason: "daily_cap" };
-
-  // ③ 本端点当日费用熔断（独立账本，见上）
-  const [sp]: any = await db.execute(
-    dsql`SELECT COALESCE(SUM(cost_cny),0) s FROM sourcing_api_logs WHERE provider='wanbang' AND endpoint='tempCheck' AND DATE(created_at)=CURDATE()`,
-  );
-  if (Number(sp?.[0]?.s ?? 0) >= DAY_FUSE_CNY) return { ok: false, reason: "fuse" };
-
+/** 万邦定位核心（v96 抽取共享：买家初核 tempCheckFactory 与核查报告 locateForVerification 同走这一条
+ *  搜索+解析+打分链路，同一套匹配规则——罗总 11-17 拍板「核查与严选库初核接口合并」） */
+async function wbLocate(name: string): Promise<WbLocateOutcome> {
+  const db = getDb();
   let cost = 0;
   let status: TempCheckReport["status"] = "not_found";
   let report: TempCheckReport | null = null;
 
-  try {
     // ④ 公司名 → seller_nick（5000=查无此名 → not_found）
     let arr: any[] = [];
     try {
@@ -300,12 +268,105 @@ export async function tempCheckFactory(rawName: string, userId: number): Promise
         };
       }
     }
+  return { status, report, cost };
+}
+
+/** 核查报告定位层（v96）：与买家初核同一个 24h 缓存池（公开事实，谁沉淀的都复用，省钱）。
+ *  差异：报告侧已由积分闸控费，不受买家每日 5 次闸与 ¥10 熔断限制；系统级新查留档 user_id=0。
+ *  返回 null=名称非法或上游异常；report.status = ok / not_found / mismatch */
+export async function locateForVerification(rawName: string): Promise<TempCheckReport | null> {
+  const name = (rawName ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+  if (name.length < 4 || !KEY || !SECRET) return null;
+  const db = getDb();
+  const [cacheRows] = (await db.execute(
+    dsql`SELECT report_json FROM temp_factory_checks
+         WHERE REPLACE(REPLACE(query_name,' ',''),'　','') = ${norm(name)} AND status='ok'
+           AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+         ORDER BY id DESC LIMIT 1`,
+  )) as unknown as [[{ report_json?: unknown }?]];
+  const rawCache = cacheRows?.[0]?.report_json;
+  if (rawCache) {
+    try {
+      const r = (typeof rawCache === "string" ? JSON.parse(rawCache) : rawCache) as TempCheckReport;
+      if (r && r.status === "ok") {
+        r.cached = true;
+        r.vettedFactory = await findVettedByNick(db, r.sellerNick ?? null); // 撞库入口每次现查
+        return r;
+      }
+    } catch { /* 缓存损坏则重查 */ }
+  }
+  let out: WbLocateOutcome;
+  try {
+    out = await wbLocate(name);
   } catch (e) {
     await db.execute(
-      dsql`INSERT INTO sourcing_api_logs (provider, endpoint, query, cost_cny, billed, ok, duration_ms, error) VALUES ('wanbang','tempCheck',${name},${cost},${cost > 0},0,0,${String(e instanceof Error ? e.message : e).slice(0, 150)})`,
+      dsql`INSERT INTO sourcing_api_logs (provider, endpoint, query, cost_cny, billed, ok, duration_ms, error) VALUES ('wanbang','verifyLocate',${name},0,0,0,0,${String(e instanceof Error ? e.message : e).slice(0, 150)})`,
+    ).catch(() => {});
+    return null;
+  }
+  const { status, report, cost } = out;
+  await db.execute(
+    dsql`INSERT INTO temp_factory_checks (user_id, query_name, matched_title, seller_nick, status, score, report_json, cost_cny)
+         VALUES (0, ${norm(name)}, ${report?.matchedTitle ?? null}, ${report?.sellerNick ?? null}, ${status}, ${report?.score ?? null}, ${report && status === "ok" ? JSON.stringify(report) : null}, ${cost})`,
+  ).catch(() => {});
+  // 优质提名厂入库钩子与初核同款（罗总 2026-11-11 拍板数据资产化；fire-and-forget 不阻塞报告）
+  if (status === "ok" && report && (report.score ?? 0) >= PROMOTE_MIN_SCORE && !report.vettedFactory) {
+    void promoteNominated(db, report).catch(() => {});
+  }
+  await db.execute(
+    dsql`INSERT INTO sourcing_api_logs (provider, endpoint, query, cost_cny, billed, ok, duration_ms, error) VALUES ('wanbang','verifyLocate',${name},${cost},${cost > 0},1,0,${status === "ok" ? null : status})`,
+  ).catch(() => {});
+  return report;
+}
+
+export async function tempCheckFactory(rawName: string, userId: number): Promise<TempCheckResult> {
+  const name = (rawName ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+  if (name.length < 4 || !KEY || !SECRET) return { ok: false, reason: "invalid" };
+  const db: any = getDb();
+
+  // ① 24h 同名缓存（归一化匹配），命中零成本
+  const [cacheRows]: any = await db.execute(
+    dsql`SELECT report_json, created_at FROM temp_factory_checks
+         WHERE REPLACE(REPLACE(query_name,' ',''),'　','') = ${norm(name)} AND status='ok'
+           AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+         ORDER BY id DESC LIMIT 1`,
+  );
+  const rawCache = cacheRows?.[0]?.report_json;
+  if (rawCache) {
+    try {
+      // mysql2 对 JSON 列自动解析——字符串和对象两种形态都要接
+      const r = typeof rawCache === "string" ? JSON.parse(rawCache) : rawCache;
+      if (r && r.status === "ok") {
+        r.cached = true;
+        r.vettedFactory = await findVettedByNick(db, r.sellerNick ?? null); // 缓存是旧报告，撞库入口每次现查
+        return { ok: true, report: r };
+      }
+    } catch { /* 缓存损坏则重查 */ }
+  }
+
+  // ② 每买家每日新查上限
+  const [uc]: any = await db.execute(
+    dsql`SELECT COUNT(*) c FROM temp_factory_checks WHERE user_id=${userId} AND DATE(created_at)=CURDATE()`,
+  );
+  if (Number(uc?.[0]?.c ?? 0) >= PER_USER_DAILY) return { ok: false, reason: "daily_cap" };
+
+  // ③ 本端点当日费用熔断（独立账本，见上）
+  const [sp]: any = await db.execute(
+    dsql`SELECT COALESCE(SUM(cost_cny),0) s FROM sourcing_api_logs WHERE provider='wanbang' AND endpoint='tempCheck' AND DATE(created_at)=CURDATE()`,
+  );
+  if (Number(sp?.[0]?.s ?? 0) >= DAY_FUSE_CNY) return { ok: false, reason: "fuse" };
+
+  let out: WbLocateOutcome;
+  try {
+    out = await wbLocate(name);
+  } catch (e) {
+    await db.execute(
+      dsql`INSERT INTO sourcing_api_logs (provider, endpoint, query, cost_cny, billed, ok, duration_ms, error) VALUES ('wanbang','tempCheck',${name},0,0,0,0,${String(e instanceof Error ? e.message : e).slice(0, 150)})`,
     ).catch(() => {});
     return { ok: false, reason: "upstream" };
   }
+  const { status, cost } = out;
+  let report = out.report;
 
   // 台账 + 留档（低分/不匹配的记录只留档 24h 缓存用；优质提名厂由下方钩子入严选库培育档——罗总 2026-11-11 拍板）
   await db.execute(

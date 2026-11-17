@@ -64,6 +64,10 @@ export const pt = {
       "800 carrinhos de pet dobráveis, envio para os EUA"
     ],
     pledge: "Só representamos o comprador · sem comissões de vendedores · taxa de comissão pública · reembolso antecipado de avarias",
+    verifyKicker: "Supplier verification",
+    verifyTitle: "Verificação de fornecedores",
+    verifyLead: "Digite o nome completo de uma fábrica chinesa que você conhece e receba um relatório de verificação numerado e baixável — registro empresarial, certificações e histórico, cada item com sua fonte. Contas novas ganham 1 relatório grátis.",
+    verifyCta: "Verificar uma fábrica grátis →",
     radarKicker: "Hot signals",
     radarTitle: "Radar global de tendências",
     radarMore: "Ver ranking completo →",

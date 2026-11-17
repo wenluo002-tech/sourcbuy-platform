@@ -241,6 +241,31 @@ export default function Home() {
           </div>
       </section>
 
+      {/* ===== 供应商核查入口（v96 罗总拍板：获客钩子上首页显眼位）——与 /factories 初核、正式报告同一套定位层 ===== */}
+      <section className="sb-reveal">
+        <Link
+          to="/verify"
+          className="group block rounded-2xl border border-[var(--sb-brand)]/25 bg-[var(--sb-brand-soft)] p-6 transition hover:border-[var(--sb-brand)]/50 sm:p-8"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 max-w-2xl">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
+                {t("home.verifyKicker")}
+              </span>
+              <h2 className="sb-display mt-2 text-[22px] font-semibold leading-snug text-[var(--sb-ink)] sm:text-[26px]">
+                {t("home.verifyTitle")}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-black/55">
+                {t("home.verifyLead")}
+              </p>
+            </div>
+            <span className="sb-pill shrink-0 bg-[var(--sb-brand)] px-5 py-2.5 text-sm font-semibold text-white group-hover:opacity-90">
+              {t("home.verifyCta")}
+            </span>
+          </div>
+        </Link>
+      </section>
+
       {/* ===== 海外爆款雷达：需求信号 → 产能 → 出厂价带，每周更新 ===== */}
       {/* 区域框架常驻：接口失败/加载中只换内容行，不让整个区块消失 */}
       <section>
