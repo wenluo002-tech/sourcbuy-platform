@@ -23,20 +23,32 @@ export default function Verify() {
 
   if (!me) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+      <div className="mx-auto max-w-2xl px-4 py-16">
         <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--sb-brand)]">Supplier Verification</p>
-        <h1 className="mt-2 text-xl font-semibold">{t("verify.title")}</h1>
-        <p className="mt-3 text-sm text-[var(--sb-ink-60)]">{t("verify.loginFirst")}</p>
-        <Link to="/login?next=/verify" className="mt-6 inline-block rounded-xl bg-[var(--sb-brand)] px-6 py-2.5 text-sm font-semibold text-[#eef4f5] hover:bg-[var(--sb-brand-hover)]">
-          {t("nav.signIn")}
-        </Link>
+        <h1 className="mt-2 font-[var(--sb-font-display)] text-2xl font-semibold">{t("verify.title")}</h1>
+        <p className="mt-3 text-sm leading-6 text-[var(--sb-ink-60)]">{t("verify.publicLead")}</p>
+        <ul className="mt-5 space-y-2.5 text-left">
+          {(["publicPoint1", "publicPoint2", "publicPoint3"] as const).map((k) => (
+            <li key={k} className="flex items-start gap-2.5 text-sm text-[var(--sb-ink-60)]">
+              <span className="mt-0.5 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-[#e7f6ec] text-[10px] font-bold text-[#0a7a30]">✓</span>
+              {t(`verify.${k}`)}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-8 rounded-2xl border border-[var(--sb-line)] bg-white p-5 text-center">
+          <p className="text-sm text-[var(--sb-ink-60)]">{t("verify.loginFirst")}</p>
+          <Link to="/login?next=/verify" className="mt-4 inline-block rounded-xl bg-[var(--sb-brand)] px-8 py-3 text-sm font-semibold text-[#eef4f5] hover:bg-[var(--sb-brand-hover)]">
+            {t("verify.publicCta")}
+          </Link>
+        </div>
       </div>
     );
   }
 
+  const exempt = !!balQ.data?.exempt;
   const balance = balQ.data?.balance ?? 0;
   const cost = balQ.data?.reportCost ?? 1000;
-  const enough = balance >= cost;
+  const enough = exempt || balance >= cost;
 
   const submit = async () => {
     setErr(null);
@@ -61,11 +73,15 @@ export default function Verify() {
       <div className="mt-6 rounded-2xl border border-[var(--sb-line)] bg-white p-5">
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="rounded-full bg-[#f2f7fd] px-3 py-1.5 font-medium text-[var(--sb-ink)]">
-            {t("verify.balance")}: <b className="tabular-nums text-[var(--sb-brand)]">{balance.toLocaleString()}</b> {t("verify.pointsUnit")}
+            {exempt
+              ? t("verify.unlimited")
+              : <>{t("verify.balance")}: <b className="tabular-nums text-[var(--sb-brand)]">{balance.toLocaleString()}</b> {t("verify.pointsUnit")}</>}
           </span>
-          <span className="rounded-full bg-[#f2f7fd] px-3 py-1.5 font-medium text-[var(--sb-ink)]">
-            {t("verify.cost")}: <b className="tabular-nums">{cost.toLocaleString()}</b> {t("verify.pointsUnit")}
-          </span>
+          {!exempt && (
+            <span className="rounded-full bg-[#f2f7fd] px-3 py-1.5 font-medium text-[var(--sb-ink)]">
+              {t("verify.cost")}: <b className="tabular-nums">{cost.toLocaleString()}</b> {t("verify.pointsUnit")}
+            </span>
+          )}
         </div>
         <label className="mt-4 block text-xs font-medium text-[var(--sb-ink-60)]">{t("verify.companyLabel")}</label>
         <input

@@ -583,7 +583,7 @@ export const appRouter = createRouter({
       .input(z.object({ companyName: z.string().min(4).max(100), productWord: z.string().max(128).optional() }))
       .mutation(async ({ input, ctx }) => {
         try {
-          return await requestReport({ userId: ctx.user.id, companyName: input.companyName, productWord: input.productWord, locale: ctx.user.locale ?? "zh" });
+          return await requestReport({ userId: ctx.user.id, email: ctx.user.email, companyName: input.companyName, productWord: input.productWord, locale: ctx.user.locale ?? "zh" });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           if (msg === "not_enough_points" || msg === "invalid_company_name") throw new TRPCError({ code: "BAD_REQUEST", message: msg });
@@ -601,7 +601,7 @@ export const appRouter = createRouter({
     cost: publicQuery.query(() => ({ points: REPORT_COST })), // 前端展示兑换价，无需登录
   }),
   points: createRouter({
-    balance: authedQuery.query(({ ctx }) => balanceOf(ctx.user.id).then((balance) => ({ balance, reportCost: REPORT_COST }))),
+    balance: authedQuery.query(({ ctx }) => balanceOf(ctx.user.id).then((balance) => ({ balance, reportCost: REPORT_COST, exempt: isOpsEmail(ctx.user.email) }))),
     ledger: authedQuery.query(({ ctx }) => ledgerOf(ctx.user.id, 50)),
   }),
 });

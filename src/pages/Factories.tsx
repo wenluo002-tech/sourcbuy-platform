@@ -219,6 +219,17 @@ function TempCheck({ sel }: { sel: string }) {
         )}
       </div>
 
+      {/* P4 入口：初核只是免费快筛，正式核查报告（带编号+PDF）挂在这里收口——未登录也可点，落地 /verify 引导注册领报告 */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--sb-brand)]/25 bg-[var(--sb-brand-soft)] px-4 py-3">
+        <p className="text-xs leading-relaxed text-black/55">{t("factories.reportCtaLine")}</p>
+        <Link
+          to="/verify"
+          className="sb-pill shrink-0 bg-[var(--sb-brand)] px-4 py-2 text-xs font-semibold text-white hover:opacity-90"
+        >
+          {t("factories.reportCtaBtn")}
+        </Link>
+      </div>
+
       {m.isError && (
         <p className="mt-3 text-sm text-[var(--sb-warn)]">{t("factories.tempUpstream")}</p>
       )}

@@ -6,6 +6,7 @@
 import { getDb } from "./connection";
 import { sql as dsql } from "drizzle-orm";
 import { redeemForReport, refundReport, REPORT_COST } from "../lib/points";
+import { isOpsEmail } from "../middleware";
 import { txgcSearch, txgcDetail, txgcDeepdive } from "../lib/txgc";
 import { wbSearchItems, wbSearchFactoryRaw } from "../sourcing/wanbang";
 
@@ -59,19 +60,23 @@ export function validateCompanyName(name: string): string | null {
 }
 
 // ═══ 申请入口：扣分 + 建行 + 异步生成 ═══
-export async function requestReport(opts: { userId: number; companyName: string; productWord?: string; locale?: string }) {
+export async function requestReport(opts: { userId: number; email?: string | null; companyName: string; productWord?: string; locale?: string }) {
   const db = getDb();
   const name = validateCompanyName(opts.companyName);
   if (!name) throw new Error("invalid_company_name");
+  // 罗总拍板：ops 白名单账号（老板测试号）生成报告不扣分、不限次数、不留积分流水
+  const exempt = isOpsEmail(opts.email);
   const reportNo = await nextReportNo();
   const r: any = await db.execute(dsql`INSERT INTO verification_reports
     (report_no, user_id, company_name, company_key, locale, product_word)
     VALUES (${reportNo}, ${opts.userId}, ${name}, ${name.toLowerCase()}, ${opts.locale ?? "zh"}, ${opts.productWord?.trim().slice(0, 128) || null})`);
   const reportId = Number(r[0]?.insertId);
-  const redeem = await redeemForReport(opts.userId, reportId);
-  if (redeem !== "ok") {
-    await db.execute(dsql`DELETE FROM verification_reports WHERE id = ${reportId}`);
-    throw new Error("not_enough_points");
+  if (!exempt) {
+    const redeem = await redeemForReport(opts.userId, reportId);
+    if (redeem !== "ok") {
+      await db.execute(dsql`DELETE FROM verification_reports WHERE id = ${reportId}`);
+      throw new Error("not_enough_points");
+    }
   }
   // 异步管线：HTTP 不挂起，前端轮询状态
   setImmediate(() => runPipeline(reportId).catch(async (e) => {
@@ -84,7 +89,9 @@ export async function requestReport(opts: { userId: number; companyName: string;
 async function failReport(reportId: number, userId: number, error: string) {
   const db = getDb();
   await db.execute(dsql`UPDATE verification_reports SET status = 'failed', error = ${error} WHERE id = ${reportId}`);
-  await refundReport(userId, reportId); // 生成失败自动退分（幂等）
+  // 只有真扣过分的才退分（白名单免扣账号没有 redeem 流水，退分会凭空 +1000）
+  const paid: any = await db.execute(dsql`SELECT id FROM points_ledger WHERE dedup_key = ${"report_redeem:" + reportId} LIMIT 1`);
+  if (paid[0]?.length) await refundReport(userId, reportId); // 生成失败自动退分（幂等）
 }
 
 // ═══ 生成管线（导出供 db/test-verification.ts 端到端实测）═══
