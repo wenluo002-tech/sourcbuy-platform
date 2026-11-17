@@ -135,11 +135,9 @@ doc.roundedRect(58, ry, PW - 20, 26, 5).fill(AMBER_BG);
 doc.font("r").fontSize(8.5).fillColor(AMBER).text("最大风险：产能数据含企业自述成分、司法核查远程未覆盖——建议批量下单前升级实地验厂。", 68, ry + 7.5, { width: PW - 40 });
 doc.y = CY + 184;
 
-// 声明框
-noteBox("重要声明：本报告基于截至出具日的公开资料整理，为初步核查结论，不构成对该企业的担保或交易建议。远程无法核实项已在文中显式标注，最终判定以实地验厂与官方记录为准。");
 // 四事实卡（决策依据向）
 {
-  const fy2 = doc.y + 10;
+  const fy2 = doc.y + 4;
   const facts: [string, string][] = [
     ["成立时间", item.establish_date ?? "—"],
     ["注册资本（实缴一致）", item.registered_capital ?? "—"],
@@ -154,6 +152,22 @@ noteBox("重要声明：本报告基于截至出具日的公开资料整理，�
     fx += 124;
   }
   doc.y = fy2 + 66;
+}
+// 声明框
+noteBox("重要声明：本报告基于截至出具日的公开资料整理，为初步核查结论，不构成对该企业的担保或交易建议。远程无法核实项已在文中显式标注，最终判定以实地验厂与官方记录为准。");
+// 报告内容导览（填封面底部）
+{
+  doc.moveDown(0.4);
+  const y0 = doc.y;
+  doc.font("b").fontSize(9).fillColor(INK40).text("本报告内容", 48, y0, { lineBreak: false });
+  const toc = ["核验矩阵（结论一览）", "工商底档", "经营与产能", "资质证书与验厂记录", "出口与市场 · 核查边界", "来源附录与可信度分级"];
+  toc.forEach((t, i) => {
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = 48 + col * 250, y = y0 + 20 + row * 24;
+    doc.font("b").fontSize(9).fillColor(BRAND).text(`0${i + 1}`, x, y, { lineBreak: false });
+    doc.font("r").fontSize(9).fillColor(INK60).text(t, x + 24, y, { lineBreak: false });
+  });
+  doc.y = y0 + 20 + 3 * 24 + 6;
 }
 
 // ═══ 核验矩阵（风险前置 + 来源角标）═══
@@ -229,14 +243,29 @@ function chipBase(x: number, y: number, label: string, fg: string, bg: string) {
 // ═══ 工商底档 ═══
 doc.addPage();
 pageTitle("Registration Profile", "工商底档", "以下各行均来自官方登记公示渠道");
-kvRow("企业全称", item.name, false, "官方公示");
-kvRow("统一社会信用代码", item.uscc ?? "—", true, "官方公示");
-kvRow("法定代表人", item.legal_person ?? "—", false, "官方公示");
-kvRow("成立日期", item.establish_date ?? "—", true, "官方公示");
-kvRow("注册资本", item.registered_capital ?? "—", false, "官方公示");
-kvRow("登记状态", item.business_status ?? "—", true, "官方公示");
-kvRow("注册地址", item.address ?? "—", false, "官方公示");
-kvRow("行业分类", (item.industries ?? []).join("、") || "—", true, "官方公示");
+{
+  const cells: [string, string][] = [
+    ["企业全称", item.name],
+    ["统一社会信用代码", item.uscc ?? "—"],
+    ["法定代表人", item.legal_person ?? "—"],
+    ["成立日期", item.establish_date ?? "—"],
+    ["注册资本", item.registered_capital ?? "—"],
+    ["登记状态", item.business_status ?? "—"],
+    ["注册地址", item.address ?? "—"],
+    ["行业分类", (item.industries ?? []).join("、") || "—"],
+  ];
+  const CW = (PW - 12) / 2;
+  const y0 = doc.y;
+  cells.forEach(([k, v], i) => {
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = 48 + col * (CW + 12), y = y0 + row * 58;
+    doc.roundedRect(x, y, CW, 50, 6).fill("#f7f9fc");
+    doc.font("r").fontSize(7.5).fillColor(INK40).text(k, x + 10, y + 7, { width: CW - 20 });
+    doc.font("b").fontSize(9.5).fillColor(INK).text(v, x + 10, y + 22, { width: CW - 20 });
+    srcTag(x + CW - 6, y + 7, "官方公示");
+  });
+  doc.y = y0 + 4 * 58 + 10;
+}
 kvRow("主营产品（登记口径）", (item.main_products ?? []).join("、") || "—", false, "官方公示");
 doc.moveDown(0.6);
 h2("经营范围（登记全文）");
@@ -390,32 +419,65 @@ needSpace(240);
 doc.moveDown(0.8);
 pageTitle("Sources", "来源附录", "本报告信息来自以下类别的公开渠道（截至 2026-11-17），多源交叉印证后成稿");
 {
-  let i = 1;
-  for (const [label, n] of srcCount) {
-    const y = doc.y;
-    doc.font("b").fontSize(9.5).fillColor(BRAND).text(`[${i}]`, 48, y, { lineBreak: false });
-    doc.font("r").fontSize(9.5).fillColor(INK).text(label, 76, y, { width: PW - 100 });
-    doc.font("r").fontSize(9.5).fillColor(INK40).text(`${n} 条`, 76, y, { width: PW - 36, align: "right" });
-    doc.y = y + 20;
-    i++;
-  }
+  // 来源类别 → 两列网格卡
+  const arr = [...srcCount.entries()];
+  const CW = (PW - 12) / 2;
+  const y0 = doc.y;
+  arr.forEach(([label, n], i) => {
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = 48 + col * (CW + 12), y = y0 + row * 54;
+    doc.roundedRect(x, y, CW, 46, 6).fill("#f7f9fc");
+    doc.font("b").fontSize(9).fillColor(BRAND).text(`[${i + 1}]`, x + 10, y + 8, { lineBreak: false });
+    doc.font("b").fontSize(13).fillColor(INK).text(`${n} 条`, x, y + 8, { width: CW - 12, align: "right", lineBreak: false });
+    doc.font("r").fontSize(8.5).fillColor(INK).text(label, x + 10, y + 27, { width: CW - 20 });
+  });
+  doc.y = y0 + Math.ceil(arr.length / 2) * 54 + 8;
 }
-doc.moveDown(0.8);
 h2("来源可信度分级（本报告标注规则）");
-for (const [tag, desc, color] of [
-  ["官方公示", "工商、认证、海关、政务等官方记录 —— 事实性最强", "#1f6fb2"],
-  ["司法公示", "裁判文书、执行信息、行政处罚 —— 事实性最强（本次未取得完整覆盖）", "#5b3fa8"],
-  ["公开报道", "媒体、行业名录、展会名录 —— 需注明时间与出处", "#92610a"],
-  ["企业自述", "企业官网、宣传材料、招聘自填 —— 仅供参考，不作履约证明", "#6b7688"],
-] as [string, string, string][]) {
-  const y = doc.y;
-  doc.roundedRect(48, y, 62, 16, 8).fill("#f2f7fd");
-  doc.font("b").fontSize(8).fillColor(color).text(tag, 48, y + 4, { width: 62, align: "center" });
-  doc.font("r").fontSize(8.5).fillColor(INK60).text(desc, 120, y + 4, { width: PW - 80 });
-  doc.y = y + 22;
+{
+  const legend: [string, string, string][] = [
+    ["官方公示", "工商、认证、海关、政务等官方记录——事实性最强", "#1f6fb2"],
+    ["司法公示", "裁判文书、执行信息、行政处罚——事实性最强（本次未取得完整覆盖）", "#5b3fa8"],
+    ["公开报道", "媒体、行业名录、展会名录——需注明时间与出处", "#92610a"],
+    ["企业自述", "企业官网、宣传材料、招聘自填——仅供参考，不作履约证明", "#6b7688"],
+  ];
+  const CW = (PW - 12) / 2;
+  const y0 = doc.y;
+  legend.forEach(([tag, desc, color], i) => {
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = 48 + col * (CW + 12), y = y0 + row * 52;
+    doc.roundedRect(x, y, CW, 44, 6).lineWidth(1).strokeColor(LINE).stroke();
+    doc.roundedRect(x + 10, y + 8, 58, 15, 7.5).fill("#f2f7fd");
+    doc.font("b").fontSize(7.5).fillColor(color).text(tag, x + 10, y + 11.5, { width: 58, align: "center" });
+    doc.font("r").fontSize(7.5).fillColor(INK60).text(desc, x + 76, y + 8, { width: CW - 88, lineGap: 2 });
+  });
+  doc.y = y0 + 2 * 52 + 8;
 }
-doc.moveDown(0.6);
+h2("核查方法");
+{
+  const steps: [string, string][] = [
+    ["多源采集", "官方登记、认证库、展会名录、公开报道等多渠道独立采集"],
+    ["交叉印证", "同一事实至少两个独立来源一致才采信，孤证标注口径"],
+    ["如实标注", "查不到、查不全的项显式列出，不猜测、不编造"],
+  ];
+  const CW = (PW - 24) / 3;
+  const y0 = doc.y;
+  steps.forEach(([t, d], i) => {
+    const x = 48 + i * (CW + 12);
+    doc.roundedRect(x, y0, CW, 62, 6).fill("#f2f7fd");
+    doc.font("b").fontSize(9).fillColor(INK).text(`${i + 1}. ${t}`, x + 10, y0 + 8, { width: CW - 20 });
+    doc.font("r").fontSize(7.5).fillColor(INK60).text(d, x + 10, y0 + 24, { width: CW - 20, lineGap: 2 });
+  });
+  doc.y = y0 + 72;
+}
 para(`说明：共引用公开来源 ${[...srcCount.values()].reduce((a, b) => a + b, 0)} 条，逐条原始链接随报告数据存档，可凭报告编号向我方索取核对。为保护我方采购渠道，供应链上游平台来源不在本报告中列示。`, 8.5, INK40);
+{
+  const y = doc.y + 14;
+  doc.roundedRect(48, y, PW, 44, 8).fill("#eef4fd");
+  doc.font("b").fontSize(9.5).fillColor("#1f4e9c").text("需要逐条核对原始链接？", 66, y + 9, { lineBreak: false });
+  doc.font("r").fontSize(8).fillColor(INK60).text(`凭报告编号 ${RID} 在 sourcbuyai.com 验真页即可索取完整来源清单与核查底稿。`, 66, y + 25, { width: PW - 36 });
+  doc.y = y + 54;
+}
 
 // ═══ 收口页：三出口 ═══
 doc.addPage();
@@ -429,21 +491,50 @@ const cta: [string, string, string, boolean][] = [
   ["C", "升级实地验厂", "对这家厂有兴趣但心里没底？验厂员上门：核产线、核库存、核管理，出具图文验厂报告后再决定。", false],
 ];
 for (const [tag, title, body, hot] of cta) {
-  needSpace(110);
+  needSpace(122);
   const y = doc.y;
-  doc.roundedRect(48, y, PW, 96, 8).lineWidth(hot ? 1.5 : 1).strokeColor(hot ? BRAND : LINE).stroke();
+  doc.roundedRect(48, y, PW, 108, 8).lineWidth(hot ? 1.5 : 1).strokeColor(hot ? BRAND : LINE).stroke();
   if (hot) {
     doc.roundedRect(48 + PW - 52, y + 12, 40, 16, 8).fill(BRAND);
     doc.font("b").fontSize(8).fillColor("#ffffff").text("推荐", 48 + PW - 52, y + 16, { width: 40, align: "center" });
   }
-  doc.circle(72, y + 30, 13).fill(BRAND);
-  doc.font("b").fontSize(13).fillColor("#ffffff").text(tag, 66.5, y + 21, { lineBreak: false });
-  doc.font("b").fontSize(12).fillColor(INK).text(title, 96, y + 18, { width: PW - 180 });
-  doc.font("r").fontSize(9).fillColor(INK60).text(body, 96, y + 42, { width: PW - 130, lineGap: 3.5 });
-  doc.y = y + 110;
+  doc.circle(72, y + 38, 13).fill(BRAND);
+  doc.font("b").fontSize(13).fillColor("#ffffff").text(tag, 66.5, y + 29, { lineBreak: false });
+  doc.font("b").fontSize(12).fillColor(INK).text(title, 96, y + 26, { width: PW - 180 });
+  doc.font("r").fontSize(9).fillColor(INK60).text(body, 96, y + 50, { width: PW - 130, lineGap: 3.5 });
+  doc.y = y + 122;
 }
-doc.moveDown(0.4);
-doc.font("r").fontSize(9).fillColor(INK40).text(`报告编号 ${RID} · 验真入口 sourcbuyai.com（输入编号即可核对原件）`, 48, doc.y, { width: PW, align: "center" });
+doc.moveDown(0.5);
+// 委托流程四步
+doc.font("b").fontSize(11).fillColor(INK).text("委托 SourcBuy 的完整流程", 48, doc.y, { width: PW });
+doc.moveDown(0.35);
+{
+  const steps: [string, string][] = [
+    ["提交采购需求", "告诉我们产品与数量，中文英文都行"],
+    ["48 小时核价报价", "直连工厂拿实价，佣金费率事前明示"],
+    ["分段支付 · 双检出货", "出厂检 + 入仓检，每步拍照留证"],
+    ["先行赔付兜底", "货不对板我们先赔，您不找工厂追责"],
+  ];
+  const CW = (PW - 36) / 4;
+  const y0 = doc.y;
+  steps.forEach(([t, d], i) => {
+    const x = 48 + i * (CW + 12);
+    doc.roundedRect(x, y0, CW, 76, 6).fill("#f2f7fd");
+    doc.circle(x + 18, y0 + 17, 9).fill(BRAND);
+    doc.font("b").fontSize(9).fillColor("#ffffff").text(String(i + 1), x + 14.5, y0 + 11.5, { lineBreak: false });
+    doc.font("b").fontSize(8.5).fillColor(INK).text(t, x + 10, y0 + 32, { width: CW - 20 });
+    doc.font("r").fontSize(7).fillColor(INK60).text(d, x + 10, y0 + 47, { width: CW - 20, lineGap: 2 });
+  });
+  doc.y = y0 + 88;
+}
+// 底部联系条
+{
+  const y = doc.y + 6;
+  doc.roundedRect(48, y, PW, 44, 8).fill(NAVY);
+  doc.font("b").fontSize(10).fillColor("#ffffff").text("SourcBuy · 您的 AI 采购代理", 66, y + 10, { lineBreak: false });
+  doc.font("r").fontSize(8).fillColor("rgba(255,255,255,0.75)").text(`验真入口 sourcbuyai.com · 报告编号 ${RID} · 随时回复本报告对话即可发起委托`, 66, y + 26, { width: PW - 36 });
+  doc.y = y + 54;
+}
 
 // ═══ 页眉页脚（补绘；临时放开 margin 防自动分页）═══
 const range = doc.bufferedPageRange();
@@ -459,6 +550,7 @@ for (let i = 0; i < range.count; i++) {
     doc.moveTo(48, 42).lineTo(547.28, 42).lineWidth(0.5).strokeColor(LINE).stroke();
   }
   doc.font("r").fontSize(7.5).fillColor(INK40).text(`第 ${i + 1} / ${range.count} 页 · 本报告基于公开资料初步核查，不构成担保`, 48, 806, { align: "center", lineBreak: false });
+  doc.rect(0, 837.89, 595.28, 4).fill(BRAND); // 底边品牌收口条：每页视觉落地
   doc.page.margins.bottom = savedBottom;
   doc.page.margins.top = savedTop;
 }
