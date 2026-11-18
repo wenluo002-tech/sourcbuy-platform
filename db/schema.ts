@@ -227,6 +227,7 @@ export const offerPool = mysqlTable(
     memberId: varchar("member_id", { length: 64 }), // 1688 会员 ID（b2b-xxx）→ join factories
     sellerLoginId: varchar("seller_login_id", { length: 64 }), // 会员登录名（老格式）→ join factories 兜底
     sellerUserId: varchar("seller_user_id", { length: 32 }), // 卖家数字 userId（图片 CDN "!!{userId}" 零成本提取）→ b2b-{userId}% 前缀 join
+    catPath: varchar("cat_path", { length: 255 }), // 上游三级类目路径（"居家日用品>打火机及烟具>烟壶…"），V103 类目圈定用
     detailFetchedAt: timestamp("detail_fetched_at"), // memberId 的数据时间
     hitCount: int("hit_count").notNull().default(1), // 被不同搜索词命中次数（热度信号）
     firstSeenAt: timestamp("first_seen_at").notNull().defaultNow(),

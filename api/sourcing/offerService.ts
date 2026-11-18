@@ -2,13 +2,14 @@
 // getOfferDetail 链路：MySQL 缓存(24h) → 万邦 item_get_app(0.05) → 点金 1688xq3(0.28,纯灾备) → 旧聚合 API
 // searchOffers 链路：30min 防刷缓存 → 产品池(长期,零成本) → 万邦 item_search(0.022,结果回填产品池)
 // 每一笔真实调用都落 sourcingApiLogs（万邦下架/无效也计费，必须可审计）
-import { eq, and, desc, gt, sql } from "drizzle-orm";
+import { eq, and, desc, gt, inArray, sql } from "drizzle-orm";
 import { getDb } from "../queries/connection";
 import { offers, offerSearchCache, offerPool, sourcingApiLogs, factories, legacyProducts } from "@db/schema";
 import { wbGetOfferApp, wbSearchItems, WANBANG_COST } from "./wanbang";
 import { djGetOffer, DIANJIN_COST } from "./dianjin";
 import { fetchOffer } from "../queries/products";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
+import { lookupCategories } from "../../contracts/categoryMap";
 import { looksLikeAccessory, prioritizeWholeMachines, queryWantsAccessory, synonymTerms } from "../../contracts/productForm";
 import type { OfferDetail, OfferSearchItem, OfferSearchResult } from "../../contracts/offer";
 
@@ -334,10 +335,26 @@ function extractTermTiers(query: string): string[][] {
 }
 
 // 池内检索（导出：aiSourcing 以货带厂也用它取候选——严选厂货排前）
+// V103 类目圈定：命中词→类目导航图时，先在期许类目内召回（cat_path 叶子匹配；
+// 475 条 cat_path 为 NULL 的池内货不过滤——实测"立柱"11 条对题货全在 NULL 组）。
+// 圈定结果 <min(3,limit) 条自动回落不圈定重查（宁可掺，不能空）。
 export async function poolSearch(query: string, limit = 8): Promise<OfferSearchItem[]> {
+  const scopeCats = lookupCategories(query);
+  if (scopeCats.length) {
+    const scoped = await poolSearchInner(query, limit, scopeCats);
+    if (scoped.length >= Math.min(3, limit)) return scoped;
+  }
+  return poolSearchInner(query, limit, undefined);
+}
+
+async function poolSearchInner(query: string, limit: number, scopeCats?: string[]): Promise<OfferSearchItem[]> {
   const tiers = extractTermTiers(query);
   if (!tiers.length) return [];
   const budget = Math.max(limit * 3, 24); // 多取候选，给严选厂货留排前空间
+  // 类目圈定条件：叶子类目做 cat_path 子串匹配；NULL 类目放行（池内货本身已过销量/价格门槛）
+  const scopeCond = scopeCats?.length
+    ? sql`(${sql.join(scopeCats.map((c) => sql`${offerPool.catPath} LIKE ${"%" + c + "%"}`), sql` OR `)} OR ${offerPool.catPath} IS NULL)`
+    : undefined;
   // 阶段一：分层取候选——原词层取满再补同义词层，原词命中永远优先进入候选；tier 随行保留，排序要用
   const rows: ((typeof offerPool.$inferSelect) & { _tier: number })[] = [];
   const seenId = new Set<string>();
@@ -353,6 +370,7 @@ export async function poolSearch(query: string, limit = 8): Promise<OfferSearchI
           gt(offerPool.sales, 0),
           sql`COALESCE(${offerPool.promotionPrice}, ${offerPool.price}) > 0.01`,
           sql`COALESCE(${offerPool.promotionPrice}, ${offerPool.price}) < 50000`,
+          ...(scopeCond ? [scopeCond] : []),
         ),
       )
       .orderBy(desc(offerPool.sales), desc(offerPool.lastSeenAt))
@@ -400,7 +418,18 @@ interface LegacyHit {
   factory: { id: number; name: string; tier: string | null; score: string | null; years: string | null; location: string | null; cert: string | null } | null;
 }
 
-async function queryLegacy(query: string, limit: number): Promise<LegacyHit[]> {
+// V103 类目圈定：命中导航图的词先圈定 fine_category 召回，<min(3,limit) 条回落不圈定。
+// 实证：legacy 层"水烟壶"7 条命中里 3 条是试管滴管——不圈定时排序层救不回来。
+async function queryLegacyScoped(query: string, limit: number): Promise<LegacyHit[]> {
+  const scopeCats = lookupCategories(query);
+  if (scopeCats.length) {
+    const scoped = await queryLegacy(query, limit, scopeCats);
+    if (scoped.length >= Math.min(3, limit)) return scoped;
+  }
+  return queryLegacy(query, limit);
+}
+
+async function queryLegacy(query: string, limit: number, scopeCats?: string[]): Promise<LegacyHit[]> {
   const tiers = extractTermTiers(query);
   if (!tiers.length) return [];
   const budget = Math.max(limit * 8, 80);
@@ -430,6 +459,7 @@ async function queryLegacy(query: string, limit: number): Promise<LegacyHit[]> {
           sql`${legacyProducts.priceCny} > 0.01 AND ${legacyProducts.priceCny} < 50000`,
           sql`${legacyProducts.image} IS NOT NULL AND ${legacyProducts.image} != ''`,
           sql`(${legacyProducts.tierLegacy} IS NULL OR ${legacyProducts.tierLegacy} != '死链')`,
+          ...(scopeCats?.length ? [inArray(legacyProducts.fineCategory, scopeCats)] : []),
         ),
       )
       .limit(budget);
@@ -467,13 +497,13 @@ async function queryLegacy(query: string, limit: number): Promise<LegacyHit[]> {
 
 // 商品召回（给 searchOffers）：产品池不足时的零成本补充
 export async function legacySearchItems(query: string, limit = 8): Promise<OfferSearchItem[]> {
-  const rows = await queryLegacy(query, limit).catch(() => [] as LegacyHit[]);
+  const rows = await queryLegacyScoped(query, limit).catch(() => [] as LegacyHit[]);
   return rows.map((r) => r.item);
 }
 
 // 以货带厂（legacy 层）：member_id 直接 join 严选库，只返回命中的，同厂不重复
 export async function legacyLinkedFactories(query: string, limit = 3): Promise<LinkedOfferFactory[]> {
-  const rows = await queryLegacy(query, Math.max(limit * 3, 12)).catch(() => [] as LegacyHit[]);
+  const rows = await queryLegacyScoped(query, Math.max(limit * 3, 12)).catch(() => [] as LegacyHit[]);
   const out: LinkedOfferFactory[] = [];
   const seenFactory = new Set<number>();
   for (const r of rows) {

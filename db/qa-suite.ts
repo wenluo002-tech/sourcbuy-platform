@@ -418,6 +418,34 @@ console.log("\n[8] 质检双检（2026-11-09 PRD v1.1）：表结构 + 鉴权边
   check("无会话查买家报告被拒（UNAUTHORIZED）", noSessListJson?.error?.json?.data?.code === "UNAUTHORIZED");
 }
 
+// [V103] 搜索精准度黄金集（2026-11-19 罗总拍板的「词→类目圈定」机制防回归）
+// 20 词（含罗总亲测重症词 316不锈钢立柱/水烟壶/中国结/钳子——圈定前 0/8 对题，圈定后 8/8）：
+// ① 全部命中词→类目导航图 ② 合并召回 ≥6 条（圈定+回落保底不死）
+// ③ 重症词 pool top8 ≥6 条落在期许类目内（cat_path NULL 组按设计放行——"立柱"11 条对题货全在 NULL 组）
+{
+  const { poolSearch, legacySearchItems } = await import("../api/sourcing/offerService");
+  const { lookupCategories } = await import("../contracts/categoryMap");
+  const { getDb } = await import("../api/queries/connection");
+  const dbG = getDb();
+  const GOLD = ["脐钉","唇钉","舌钉","车载电饭煲","户外净水吸管","防水床笠","折叠宠物推车","316不锈钢立柱","水烟壶","订书机","回形针","中国结","刨丝器","削皮器","开瓶器","缠绕膜","钳子","草坪灯","倒车影像","宠物零食"];
+  const CRITICAL = ["316不锈钢立柱", "水烟壶", "中国结", "钳子"];
+  const unmapped = GOLD.filter((w) => !lookupCategories(w).length);
+  check("黄金集 20 词全部命中词→类目导航图", unmapped.length === 0, unmapped.join(",") || "20/20");
+  for (const w of GOLD) {
+    const pooled = await poolSearch(w, 8).catch(() => []);
+    const legacy = pooled.length >= 8 ? [] : await legacySearchItems(w, 8 - pooled.length).catch(() => []);
+    const merged = [...pooled, ...legacy];
+    check(`黄金集「${w}」合并召回 ≥6 条`, merged.length >= 6, `${merged.length} 条`);
+    if (CRITICAL.includes(w) && pooled.length) {
+      const cats = lookupCategories(w);
+      const idList = pooled.map((p) => `'${p.offerId.replace(/'/g, "")}'`).join(",");
+      const [cp]: any = await dbG.execute(sql.raw(`SELECT cat_path FROM offer_pool WHERE offer_id IN (${idList})`));
+      const inScope = cp.filter((r: any) => !r.cat_path || cats.some((c) => String(r.cat_path).includes(c))).length;
+      check(`重症词「${w}」pool top${pooled.length} ≥6 条在期许类目`, inScope >= Math.min(6, pooled.length), `${inScope}/${pooled.length}`);
+    }
+  }
+}
+
 // [收官] 多语言零残留巡检（罗总 2026-11-11 指令：专业机器巡检取代肉眼）：en/es/fr/pt × 6 核心页全量扫描，
 // 巡检器=预热器+判官一体（首扫触发缓存补缺，45s 后重扫判定），有残留即 FAIL——不存版本。
 // 分级机制（2026-11-16 罗总反馈每轮太慢后设）：QA_FAST=1 冒烟档跳过本段（5-10 分钟）。
