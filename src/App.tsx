@@ -20,6 +20,7 @@ import SourcingRequest from './pages/SourcingRequest'
 import QcUpload from './pages/QcUpload'
 import OpsOrders from './pages/OpsOrders'
 import OpsInspection from './pages/OpsInspection'
+import NotFound from './pages/NotFound'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/Dashboard'
 import AdminChannels from './pages/admin/Channels'
@@ -81,6 +82,8 @@ export default function App() {
           {/* 运营质检工作台（白名单闸在服务端 opsQuery，页面只兜展示） */}
           <Route path="/ops" element={<OpsOrders />} />
           <Route path="/ops/qc/:id" element={<OpsInspection />} />
+          {/* 全局兜底：未知路由进品牌 404（v101 前无 catch-all，/products 等裸路径直接白屏） */}
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </>

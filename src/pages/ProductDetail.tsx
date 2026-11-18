@@ -467,10 +467,7 @@ export default function ProductDetail() {
                   {[factory.tier ? t("product.factoryMetaTier", { tier: t(`home.tierName.${factory.tier}`) }) : null, factory.location, factory.years ? t("product.yearsOld", { n: factory.years }) : null].filter(Boolean).join(" · ")}
                 </p>
               </div>
-              <div className="text-right">
-                <p className="sb-num text-2xl font-bold text-[var(--sb-brand)]">{factory.score}</p>
-                <p className="text-[10px] text-[var(--sb-ink-40)]">{t("factoryDetail.scoreLabel")}</p>
-              </div>
+              {/* 裸分不外露（v101 口径合规）：档位已在上行元信息中 */}
             </div>
             <p className="mt-3 border-t border-[var(--sb-line)] pt-3 text-xs leading-relaxed text-[var(--sb-ink-60)]">
               {t("product.vettedNote")}

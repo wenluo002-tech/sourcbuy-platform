@@ -9,6 +9,13 @@ export const pt = {
     signOut: "Sair",
     account: "Minha conta"
   },
+  notFound: {
+    kicker: "404",
+    title: "Página não encontrada",
+    desc: "Este endereço não existe ou foi movido. Volte ao início — ou conte-nos o que você está procurando.",
+    backHome: "Voltar ao início",
+    goSourcing: "Iniciar cotação"
+  },
   sr: {
     cardTitle: "Sourcing em andamento",
     cardTitleDone: "Sourcing entregue",
@@ -110,13 +117,12 @@ export const pt = {
     radarError: "Os dados do ranking não carregaram agora — atualize e tente de novo; sem dados frescos, não vamos te passar informação velha.",
     radarLoading: "Carregando ranking…",
     statsKicker: "Live from our database",
-    statsNote: "Estatísticas em tempo real da base de fábricas",
+    statsNote: "Grupo selecionado · níveis atualizados conforme desempenho e credenciais",
     statFactories: "Fábricas de origem selecionadas",
     statFactoriesSub: "Tripla triagem: qualificação · capacidade · cumprimento",
     catKicker: "Category coverage",
     catTitle: "Cobertura de categorias",
-    catTagged: "fábricas cadastradas com categoria principal",
-    catRest: "Perfis das demais fábricas em complementação",
+    catNote: "Marcação real por categoria · perfis de fábricas em complementação",
     catAsk: "Me ajude a encontrar fábricas desta categoria",
     tierSuffix: "Fábrica",
     tierName: {

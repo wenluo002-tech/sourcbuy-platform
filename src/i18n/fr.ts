@@ -9,6 +9,13 @@ export const fr = {
     signOut: "Se déconnecter",
     account: "Mon compte"
   },
+  notFound: {
+    kicker: "404",
+    title: "Page introuvable",
+    desc: "Cette adresse n'existe pas ou a été déplacée. Retournez à l'accueil — ou dites-nous ce que vous recherchez.",
+    backHome: "Retour à l'accueil",
+    goSourcing: "Lancer une demande"
+  },
   sr: {
     cardTitle: "Sourcing en cours",
     cardTitleDone: "Sourcing livré",
@@ -110,13 +117,12 @@ export const fr = {
     radarError: "Le classement n'a pas pu être récupéré — rafraîchissez ; pas de vieilles données pour faire semblant.",
     radarLoading: "Chargement du classement…",
     statsKicker: "Live from our database",
-    statsNote: "Statistiques en direct depuis notre base usines",
+    statsNote: "Vivier sélectionné · niveaux mis à jour selon exécution et qualifications",
     statFactories: "Usines sources sélectionnées",
     statFactoriesSub: "Triple filtre : qualifications · capacité · exécution",
     catKicker: "Category coverage",
     catTitle: "Couverture catégories",
-    catTagged: "catégories principales déjà archivées",
-    catRest: "Dossiers d'autres usines en cours de complétion",
+    catNote: "Étiquetage réel par catégorie · dossiers d'usines en cours de complétion",
     catAsk: "Trouver des usines pour cette catégorie",
     tierSuffix: "Usines",
     tierName: {

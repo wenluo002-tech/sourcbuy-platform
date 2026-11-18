@@ -36,6 +36,8 @@ export const TIER_CTA = {
 // ─── B. 规模口径（唯一说法）───
 export const SCALE_CLAIM = {
   vettedCount: { zh: "7,000+ 家严选工厂", en: "7,000+ vetted factories" },
+  // 短口径：数据墙/计数位等大数字展示位用（语言中立，内部精确数字永不进前台）
+  scale: "7,000+",
   coverage: { zh: "覆盖中国主要产业带在产工厂", en: "covering active factories across China's major industrial belts" },
   // 「可探源档案」仅允许出现在 gap 场景（用户查不到时的引导），禁止用于 hero/常规介绍
   gapOnly: { zh: "可探源档案", en: "traceable profiles" },

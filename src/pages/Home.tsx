@@ -1,8 +1,9 @@
 import { Link, useNavigate } from "react-router";
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
-import { CountUp, useReveal } from "@/hooks/useReveal";
+import { useReveal } from "@/hooks/useReveal";
 import { useT } from "@/i18n";
+import { SCALE_CLAIM } from "@contracts/copy";
 import { catLabel } from "@/i18n/categories";
 import { RadarCard } from "@/pages/Radar";
 import { AttachButton, PickerBlockedHint } from "@/components/AttachButton";
@@ -12,7 +13,6 @@ const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
 
 export default function Home() {
   const { t, lang } = useT();
-  const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
   const catStats = trpc.factories.categoryStats.useQuery({ locale: lang }, { staleTime: 60_000 });
   const featured = trpc.factories.match.useQuery({ minScore: 90, limit: 6, locale: lang });
   const radar = trpc.radar.list.useQuery({ locale: lang }, { staleTime: 60_000 });
@@ -52,9 +52,6 @@ export default function Home() {
         setAttachError(t("chat.imageBadFormat"));
       });
   }
-
-  const tierCount = (t: string) =>
-    stats.data?.byTier.find((x) => x.tier === t)?.c ?? 0;
 
   return (
     <div ref={pageRef} className="space-y-14 md:space-y-20">
@@ -300,8 +297,7 @@ export default function Home() {
         )}
       </section>
 
-      {/* ===== 实时数字：台账版式——衬线大数字 + 纵向细线分栏 ===== */}
-      {!stats.isError && (
+      {/* ===== 规模与分级：口径锁 7,000+（SCALE_CLAIM 单一事实源），五档只亮档位含义不露精确计数（数字降噪铁律） ===== */}
       <section>
         <div className="sb-reveal sb-rule flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-3">
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
@@ -312,7 +308,7 @@ export default function Home() {
         <div className="mt-4 grid grid-cols-2 gap-y-7 border-t border-[var(--sb-line)] sm:grid-cols-3 lg:grid-cols-6">
           <div className="sb-reveal pt-6 sm:pt-7">
             <div className="sb-display text-[34px] leading-none tracking-tight sm:text-[40px]">
-              {stats.data ? <CountUp value={stats.data.total} /> : "…"}
+              {SCALE_CLAIM.scale}
             </div>
             <div className="mt-2.5 text-xs font-medium text-[var(--sb-ink)]">{t("home.statFactories")}</div>
             <div className="mt-1 text-[11px] leading-snug text-[var(--sb-ink-40)]">
@@ -321,18 +317,16 @@ export default function Home() {
           </div>
           {TIER_ORDER.map((t2, i) => (
             <div key={t2} className="sb-reveal border-l border-[var(--sb-line)] pl-4 pt-6 sm:pl-5 sm:pt-7" style={{ ["--sb-delay" as string]: `${(i + 1) * 90}ms` }}>
-              <div className="sb-display text-[34px] leading-none tracking-tight sm:text-[40px]">
-                {stats.data ? <CountUp value={tierCount(t2)} /> : "…"}
+              <div className="sb-display text-[22px] leading-tight tracking-tight sm:text-[24px]">
+                {t(`home.tierName.${t2}`)}{t("home.tierSuffix") && ` ${t("home.tierSuffix")}`}
               </div>
-              <div className="mt-2.5 text-xs font-medium text-[var(--sb-ink)]">{t(`home.tierName.${t2}`)}{t("home.tierSuffix") && ` ${t("home.tierSuffix")}`}</div>
-              <div className="mt-1 text-[11px] leading-snug text-[var(--sb-ink-40)]">
+              <div className="mt-2 text-[11px] leading-snug text-[var(--sb-ink-40)]">
                 {t(`home.tierDesc.${t2}`)}
               </div>
             </div>
           ))}
         </div>
       </section>
-      )}
 
       {/* ===== 品类覆盖：类目×独立工厂数（真实打标统计），点击直接发起 AI 寻源 ===== */}
       {!catStats.isError && (catStats.data?.byCategory?.length ?? 0) > 0 && (
@@ -342,7 +336,7 @@ export default function Home() {
             {t("home.catKicker")} · {t("home.catTitle")}
           </h2>
           <span className="whitespace-nowrap text-xs text-[var(--sb-ink-40)]">
-            <b className="font-semibold text-[var(--sb-ink)]">{catStats.data!.tagged.toLocaleString()}</b> {t("home.catTagged")} · {t("home.catRest")}
+            {t("home.catNote")}
           </span>
         </div>
         <div className="mt-4 grid border-t border-[var(--sb-line)] sm:grid-cols-2 lg:grid-cols-3">
@@ -446,7 +440,7 @@ export default function Home() {
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <span className="sb-num shrink-0 text-xs font-semibold text-[var(--sb-brand)]">
-                  {t(`home.tierName.${f.tier}`)} {f.score}
+                  {t(`home.tierName.${f.tier}`)}
                 </span>
               </div>
               <h3 className="sb-display mt-1.5 line-clamp-1 text-[16px] leading-snug text-[var(--sb-ink)] [@media(hover:hover)]:group-hover:text-[var(--sb-brand)]">

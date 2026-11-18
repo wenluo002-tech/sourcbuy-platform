@@ -9,6 +9,13 @@ export const es = {
     signOut: "Cerrar sesión",
     account: "Mi cuenta"
   },
+  notFound: {
+    kicker: "404",
+    title: "Página no encontrada",
+    desc: "Esta dirección no existe o ha cambiado. Vuelve al inicio o cuéntanos qué estás buscando.",
+    backHome: "Volver al inicio",
+    goSourcing: "Iniciar cotización"
+  },
   sr: {
     cardTitle: "Abastecimiento en curso",
     cardTitleDone: "Abastecimiento entregado",
@@ -110,13 +117,12 @@ export const es = {
     radarError: "No se pudieron cargar los datos de la lista: actualiza e inténtalo de nuevo. No te engañamos con datos antiguos.",
     radarLoading: "Cargando lista…",
     statsKicker: "Live from our database",
-    statsNote: "Estadísticas en tiempo real de la base de datos de fábricas",
+    statsNote: "Grupo seleccionado · niveles actualizados según cumplimiento y credenciales",
     statFactories: "Fábricas de origen seleccionadas",
     statFactoriesSub: "Filtrado triple: credenciales, capacidad y cumplimiento",
     catKicker: "Category coverage",
     catTitle: "Cobertura de categorías",
-    catTagged: "categorías principales con ficha creada",
-    catRest: "Completando fichas del resto de fábricas",
+    catNote: "Etiquetado real por categorías · fichas de fábrica en completación",
     catAsk: "Búscame fábricas de esta categoría",
     tierSuffix: "Fábrica",
     tierName: {

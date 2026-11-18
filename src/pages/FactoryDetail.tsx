@@ -118,14 +118,12 @@ function FactoryDetailView({ f }: { f: any }) {
               ))}
             </div>
           </div>
-          <div className="text-right">
-            {f.score != null ? (
-              <div className="sb-num text-3xl font-bold text-[var(--sb-brand)]">{f.score}</div>
-            ) : (
+          {/* 裸分不外露（v101 口径合规）：档位徽章已在厂名下，仅无档位且未出分时亮「核算中」 */}
+          {!f.tier && f.score == null && (
+            <div className="text-right">
               <div className="text-sm font-semibold text-[var(--sb-warn)]">{t("factoryDetail.scorePending")}</div>
-            )}
-            <div className="text-xs text-black/45">{t("factoryDetail.scoreLabel")}</div>
-          </div>
+            </div>
+          )}
         </div>
 
         {f.review && (

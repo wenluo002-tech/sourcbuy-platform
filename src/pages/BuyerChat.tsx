@@ -1025,9 +1025,12 @@ export default function BuyerChat() {
                           {/* 未解锁代号按界面语言显示（后端 mask 固定中文模板，外语界面这里换 i18n 版） */}
                           {(f as any).masked ? t("chat.maskedName", { n: String(f.id).padStart(4, "0") }) : f.name}
                         </Link>
-                        <span className="shrink-0 rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
-                          {f.score}
-                        </span>
+                        {/* 裸分不外露（v101 口径合规）：改亮档位徽章 */}
+                        {f.tier && (
+                          <span className="shrink-0 rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
+                            {t(`home.tierName.${f.tier}`)}
+                          </span>
+                        )}
                       </div>
                       {(f as any).masked && (
                         <p className="mt-1 flex items-center gap-1 text-[10px] text-[var(--sb-ink-40)]">

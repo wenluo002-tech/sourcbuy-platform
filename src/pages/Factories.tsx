@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useT } from "@/i18n";
 import { useAuth } from "@/auth";
+import { SCALE_CLAIM } from "@contracts/copy";
 
 const TIERS = ["金标", "银标", "铜标", "优选", "培育"];
 const CERTS = [
@@ -84,7 +85,10 @@ export default function Factories() {
       </div>
 
       <p className="text-xs text-black/45">
-        {q.isLoading ? t("factories.loading") : t("factories.totalLine", { n: q.data?.total ?? 0 })}
+        {/* 规模口径锁 7,000+（SCALE_CLAIM 单一事实源）；筛选后小结果集仍亮精确命中数——内部台账总量永不外露 */}
+        {q.isLoading
+          ? t("factories.loading")
+          : t("factories.totalLine", { n: (q.data?.total ?? 0) >= 7000 ? SCALE_CLAIM.scale : (q.data?.total ?? 0) })}
       </p>
 
       <TempCheck sel={sel} />
@@ -115,9 +119,7 @@ export default function Factories() {
               <h3 className="line-clamp-1 font-semibold tracking-tight group-hover:text-[var(--sb-brand)]">
                 {(f as any).masked ? t("chat.maskedName", { n: String(f.id).padStart(4, "0") }) : f.name}
               </h3>
-              <span className="sb-num shrink-0 text-lg font-bold leading-none text-[var(--sb-brand)]">
-                {f.score}
-              </span>
+              {/* 裸分不外露（v101 口径合规）：评分撞分无区分度，买家侧只亮档位徽章（下行） */}
             </div>
             {(f as any).masked && (
               <p className="mt-1.5 flex items-center gap-1 text-[10px] text-black/40">
