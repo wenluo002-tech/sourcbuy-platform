@@ -7,6 +7,7 @@ import { useT } from "@/i18n";
 import { unitLabel } from "@/lib/unit";
 import { getAnonId, useAuth } from "@/auth";
 import { AttachButton, PickerBlockedHint } from "@/components/AttachButton";
+import { SourcingProgressCard } from "@/components/SourcingProgressCard";
 import { compressImageToDataURL } from "@/lib/imageCompress";
 
 interface MatchedFactory {
@@ -81,6 +82,7 @@ interface Turn {
   followUp?: FollowUpCardData | null;
   followUpDone?: string | null; // 已提交/已跳过后的摘要（卡片变一行灰字）
   manualQuote?: boolean; // 建材工业桶：费率估算不适用，卡片换"人工核价"提示
+  sourcingRequestId?: number | null; // 本轮触发的探源单（P0+P1）：挂步骤条卡
 }
 
 /* 补充问题卡（追问卡优化版：多题同卡一次提交 + 跳过直寻，非阻塞——结果已先出） */
@@ -792,6 +794,7 @@ export default function BuyerChat() {
               intentSources: (res as any).intentSources ?? null,
               followUp: (res as any).followUp ?? null,
               manualQuote: !!(res as any).manualQuote,
+              sourcingRequestId: (res as any).sourcingRequestId ?? null,
             },
           ]);
         },
@@ -834,6 +837,7 @@ export default function BuyerChat() {
                 intentSources: p.intentSources ?? null,
                 followUp: null,
                 manualQuote: !!p.manualQuote,
+                sourcingRequestId: p.sourcingRequestId ?? null, // 探源步骤条卡回放（读实时 events，非快照）
               };
         }),
       );
@@ -958,6 +962,9 @@ export default function BuyerChat() {
 
               {/* 「我理解的需求」来源行：AI 推断的字段亮明身份（不编数据铁律的界面化） */}
               {turn.intentSources && <IntentEcho sources={turn.intentSources} intent={turn.echoIntent} />}
+
+              {/* 探源步骤条卡（P1）：本轮触发探源单时挂载，读实时 events 流水 */}
+              {turn.sourcingRequestId && <SourcingProgressCard requestId={turn.sourcingRequestId} />}
 
               {/* 补充问题卡：多题同卡一次提交 / 跳过直寻 */}
               {turn.followUp && (

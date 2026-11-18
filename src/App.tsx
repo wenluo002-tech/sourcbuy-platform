@@ -16,6 +16,7 @@ import Notifications from './pages/Notifications'
 import Inquiries from './pages/Inquiries'
 import Verify from './pages/Verify'
 import VerifyReport from './pages/VerifyReport'
+import SourcingRequest from './pages/SourcingRequest'
 import QcUpload from './pages/QcUpload'
 import OpsOrders from './pages/OpsOrders'
 import OpsInspection from './pages/OpsInspection'
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/verify" element={<Verify />} />
           <Route path="/verify/:id" element={<VerifyReport />} />
+          <Route path="/sourcing/:id" element={<SourcingRequest />} />
           <Route path="/addresses" element={<Addresses />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/inquiries" element={<Inquiries />} />

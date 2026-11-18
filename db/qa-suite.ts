@@ -137,6 +137,47 @@ console.log("\n[3e] legacy 商品库召回层（39.6 万对方资产：商品召
   }
 }
 
+console.log("\n[3f] 探源引擎 P0 状态机（罗总 2026-11-18 终审：建单/失败兜底话术键/转人工逃生门/属主校验/gap_candidates 无 score 列）");
+{
+  const db = await getDb();
+  const { createSourcingRequest, failRequest, escalateToHuman, getSourcingRequestView } = await import("../api/lib/sourcingRequest");
+  const qaIds: number[] = [];
+  try {
+    // 粗筛纪律：只过滤不打分，gap_candidates 绝不出现 score 列
+    const [colRows] = (await db.execute(sql`SHOW COLUMNS FROM gap_candidates`)) as unknown as [Array<{ Field: string }>];
+    const scoreCols = colRows.map((c) => c.Field).filter((n) => /score/i.test(n));
+    check("gap_candidates 无 score 列（粗筛只过滤不打分）", scoreCols.length === 0, scoreCols.join(",") || "OK");
+    check("gap_candidates 有 sourcing_request_id 双写列", colRows.some((c) => c.Field === "sourcing_request_id"), "OK");
+
+    // 建单 → failed（词条表内原因码）→ 转人工 → 非 failed 拒绝 → 属主校验
+    const sr = await createSourcingRequest({ userId: 600001, keyword: "QA状态机自测", locale: "zh" });
+    check("建单返回 id + SB-SR 编号体例", !!sr && /^SB-SR-\d{8}-\d{3}$/.test(sr.requestNo), sr?.requestNo ?? "");
+    if (sr) {
+      qaIds.push(sr.id);
+      await failRequest(sr.id, "zero_candidates", "QA 自测");
+      const v1 = await getSourcingRequestView(sr.id, 600001);
+      check("failRequest 落 failed + 原因码 + 安抚话术键", v1?.status === "failed" && v1?.failReason === "zero_candidates", v1?.failReason ?? "");
+      check("events 留痕 received→failed", JSON.stringify(v1?.events.map((e) => e.stage)) === JSON.stringify(["received", "failed"]), "OK");
+      const esc = await escalateToHuman(sr.id);
+      const v2 = await getSourcingRequestView(sr.id, 600001);
+      check("转人工 failed→verifying 且事件留痕", esc === true && v2?.status === "verifying" && v2.events.some((e) => e.reason === "买家主动转人工"), "OK");
+      check("非 failed 单重复转人工被拒", (await escalateToHuman(sr.id)) === false, "OK");
+      check("他人读单被拒（属主校验）", (await getSourcingRequestView(sr.id, 999999)) === null, "OK");
+      check("匿名读他单被拒", (await getSourcingRequestView(sr.id, null)) === null, "OK");
+    }
+    // 存量不变量：failed 单原因码全部合法；每单必有 received 事件（两端同源底座）
+    const [bf] = (await db.execute(sql`SELECT COUNT(*) AS c FROM sourcing_requests WHERE status='failed' AND (fail_reason NOT IN ('no_keyword','upstream_error','zero_candidates','manual_pending_timeout') OR fail_copy_key IS NULL)`)) as unknown as [[{ c: number | string }?]];
+    check("存量 failed 单原因码全部合法且 fail_copy_key 非空", Number(bf?.[0]?.c ?? 0) === 0, "OK");
+    const [ne] = (await db.execute(sql`SELECT COUNT(*) AS c FROM sourcing_requests sr WHERE NOT EXISTS (SELECT 1 FROM sourcing_request_events e WHERE e.request_id = sr.id AND e.stage='received')`)) as unknown as [[{ c: number | string }?]];
+    check("每单必有 received 事件（两端同源底座）", Number(ne?.[0]?.c ?? 0) === 0, "OK");
+  } finally {
+    for (const id of qaIds) {
+      await db.execute(sql`DELETE FROM sourcing_request_events WHERE request_id = ${id}`).catch(() => {});
+      await db.execute(sql`DELETE FROM sourcing_requests WHERE id = ${id}`).catch(() => {});
+    }
+  }
+}
+
 console.log("\n[3b] 追问卡四场景");
 {
   const a = await chat("我想采购一批瑜伽裤");

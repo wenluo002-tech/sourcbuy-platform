@@ -420,8 +420,9 @@ function buildFallbackReplyEn(
   return parts.join("\n\n");
 }
 
-// 话术语言指令：非中文买家走英文人格体系，es/fr/pt/de/ja 追加"用买家语言回复"指令（LLM 多语言能力足够）
-const REPLY_LANG_NAME: Record<string, string> = { es: "Spanish", fr: "French", pt: "Portuguese", de: "German", ja: "Japanese" };
+// 话术语言指令：非中文买家走英文人格体系，es/fr/pt/de/ja/ka 追加"用买家语言回复"指令（LLM 多语言能力足够）
+// 2026-11-18：ka 漏进表导致 ka 回复被规则 21 锁成英文脚手架（QA 巡检实抓英文残留根因）
+const REPLY_LANG_NAME: Record<string, string> = { es: "Spanish", fr: "French", pt: "Portuguese", de: "German", ja: "Japanese", ka: "Georgian" };
 function replySystemFor(locale: string): string {
   if (locale === "zh") return REPLY_SYSTEM;
   const langName = REPLY_LANG_NAME[locale];
@@ -680,6 +681,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
           return {
             ...f,
             matchBasis: "productLinked" as const,
+            exactProduct: true, // 以货带厂=这款货就在这家厂在售，最硬的"做过这款"证据
             linkedOffer: { offerId: l.offerId, title: l.title, price: l.price, sales: l.sales },
             categoryRank: f.categoryRank, // 保留原排名（若有）
             evidence: [
@@ -705,6 +707,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
             reason: "严选库在册 · 有这款在售货",
             subScores: null,
             matchBasis: "productLinked" as const,
+            exactProduct: true, // 以货带厂=这款货就在这家厂在售
             linkedOffer: { offerId: l.offerId, title: l.title, price: l.price, sales: l.sales },
             categoryRank: null,
             evidence: [`在售这款货：「${l.title.slice(0, 40)}」¥${l.price} 起` + (l.sales > 0 ? ` · 上游销量 ${l.sales.toLocaleString()}（实时核对）` : " · 在册档案货源")],
@@ -721,14 +724,19 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     }
   }
 
-  // 品类缺口雷达（P2，2026-11-17）：关键词有效但严选库拿不出"证据级"的厂（无 productLinked/direct，只有桶级宽配或干脆零厂）
-  // → 记录缺口并后台拉候选池，给 /ops 48h 人工定向寻源配弹药。
-  // fire-and-forget 绝不阻塞买家答话；同关键词 24h 去重；关键词经词库清洗（整句不拉上游，防空搜白扣费）。
-  const hasEvidenceGradeFactory = factories.some((f) => f.matchBasis === "productLinked" || f.matchBasis === "direct");
+  // 品类缺口雷达 → 探源单（P0 2026-11-18）：关键词有效但严选库拿不出"做过这款产品"的厂
+  // （判定口径=exactProduct/productLinked：厂名/评语/标签含这款产品词，或有这款在售货源。
+  //   注意不用 matchBasis=direct——direct 命中类目兄弟词即算（脐钉→耳环厂），大类有厂 ≠ 核实做过这款。
+  //   2026-11-18 实测：脐钉/舌钉/鼻钉全部 4 direct 但 zero exactProduct，旧口径下探源永远不会触发）
+  // → 建探源单（sourcing_requests，同步毫秒级）并后台拉候选池。TXGC 拉取仍 fire-and-forget 绝不阻塞答话；
+  // 同关键词 24h 去重；关键词经词库清洗（整句不拉上游，防空搜白扣费）。sourcingRequestId 透出给路由补会话链+前端挂步骤条卡。
+  const hasEvidenceGradeFactory = factories.some((f) => f.matchBasis === "productLinked" || f.exactProduct);
+  let sourcingRequestId: number | null = null;
   if (keyword && !hasEvidenceGradeFactory) {
-    void recordGap(keyword, locale, userId).catch((e) =>
-      log.warn("缺口记录失败", { error: e instanceof Error ? e.message : String(e) }),
-    );
+    sourcingRequestId = await recordGap(keyword, locale, userId).catch((e) => {
+      log.warn("缺口记录失败", { error: e instanceof Error ? e.message : String(e) });
+      return null;
+    });
   }
 
   // 权益锁（2026-11-07 罗总授权）：未解锁买家的厂名全部换代号。
@@ -826,7 +834,8 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
         }
         for (const f of factories) {
           f.name = (f.name as string).replace(/^严选工厂 No\.(\d+)$/, "Vetted Factory No.$1");
-          if (f.tier) f.tier = tierLabel(f.tier, locale);
+          // tier 保持枚举原值（金标/银标…）——卡片由前端 t(`home.tierName.${tier}`) 自译；
+          // v80 曾在此预译成英文，导致前端拼出 home.tierName.Gold 死键（2026-11-18 截图实抓）
           const lo = (f as any).linkedOffer;
           if (lo?.title && loMap[lo.title]) lo.title = loMap[lo.title];
         }
@@ -995,6 +1004,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     intentSources, // 字段级来源标注（四态）——前端逐字段亮明"你说的/AI推断"
     factoryQa: !!factoryCard, // 供推荐证据链落库标记"本轮触发了问到即采"
     manualQuote, // 建材工业桶：前端据此把费率估算行换成"人工核价"提示
+    sourcingRequestId, // 探源单 id（无缺口触发时为 null）；前端挂步骤条卡、路由补会话链
     factories,
     products: searchProducts,
     linkContext: linkCtx

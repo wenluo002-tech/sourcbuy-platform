@@ -269,7 +269,7 @@ export const appRouter = createRouter({
         let threadId: number | null = null;
         try {
           threadId = await ensureThread({ threadId: input.threadId, anonId: input.anonId, userId: ctx.user?.id ?? null, locale: input.locale, firstMessage: input.message });
-          await appendMessage(threadId, "user", input.message, input.imageData ? { hasImage: true } : null);
+          const userMsgId = await appendMessage(threadId, "user", input.message, input.imageData ? { hasImage: true } : null);
           await appendMessage(threadId, "assistant", result.reply, {
             intent: result.intent ?? null,
             factories: result.factories ?? [],
@@ -278,7 +278,13 @@ export const appRouter = createRouter({
             linkContext: result.linkContext ?? null,
             followUp: result.followUp ?? null,
             manualQuote: (result as any).manualQuote ?? false,
+            sourcingRequestId: result.sourcingRequestId ?? null,
           });
+          // 探源单会话链回填（P0）：客服可回溯"买家哪句话触发的这张单"
+          if (result.sourcingRequestId) {
+            const { attachConversation } = await import("./lib/sourcingRequest");
+            void attachConversation(result.sourcingRequestId, threadId, userMsgId);
+          }
         } catch (e) {
           log.error("chat 落库失败（聊天本身已返回）", { error: e instanceof Error ? e.message : String(e) });
         }
@@ -599,6 +605,31 @@ export const appRouter = createRouter({
       }),
     my: authedQuery.query(({ ctx }) => listMyReports(ctx.user.id)),
     cost: publicQuery.query(() => ({ points: REPORT_COST })), // 前端展示兑换价，无需登录
+  }),
+  // ---- 探源引擎买家端（P0+P1，2026-11-18）：步骤条/详情/转人工，两端同源读 events ----
+  sourcing: createRouter({
+    get: publicQuery
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        const { getSourcingRequestView } = await import("./lib/sourcingRequest");
+        const v = await getSourcingRequestView(input.id, ctx.user?.id ?? null);
+        if (!v) throw new TRPCError({ code: "NOT_FOUND" });
+        return v;
+      }),
+    mine: authedQuery.query(async ({ ctx }) => {
+      const { listMySourcingRequests } = await import("./lib/sourcingRequest");
+      return listMySourcingRequests(ctx.user.id);
+    }),
+    escalate: publicQuery
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const { getSourcingRequestView, escalateToHuman } = await import("./lib/sourcingRequest");
+        const v = await getSourcingRequestView(input.id, ctx.user?.id ?? null); // 同属主校验
+        if (!v) throw new TRPCError({ code: "NOT_FOUND" });
+        const ok = await escalateToHuman(input.id);
+        if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "not_failed" });
+        return { ok: true };
+      }),
   }),
   points: createRouter({
     balance: authedQuery.query(({ ctx }) => balanceOf(ctx.user.id).then((balance) => ({ balance, reportCost: REPORT_COST, exempt: isOpsEmail(ctx.user.email) }))),

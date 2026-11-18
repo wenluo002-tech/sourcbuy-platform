@@ -63,11 +63,11 @@ async function todaySpent(): Promise<number> {
 
 let tableReady = false;
 
-/** 统一调用入口：成本熔断 → 调用 → 对账落库 → 限流退避重试 */
+/** 统一调用入口：成本熔断 → 调用 → 对账落库 → 限流退避重试。opts.srNo=探源单号对账（2026-11-18 罗总拍板④） */
 export async function txgcCall<T = any>(
   capability: TxgcCapability,
   args: Record<string, unknown>,
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; srNo?: string } = {},
 ): Promise<TxgcResp<T>> {
   if (!KEY) throw new Error("TXGC_KEY 未配置");
   if (!tableReady) { await ensureTable(); tableReady = true; }
@@ -103,8 +103,8 @@ export async function txgcCall<T = any>(
     // 对账落库（失败也记，credits_charged=0）
     try {
       const db = getDb();
-      await db.execute(sql`INSERT INTO txgc_calls (request_id, capability, params, code, credits_charged, credits_balance, ms)
-        VALUES (${resp.request_id ?? ""}, ${capability}, ${JSON.stringify(args)}, ${resp.code}, ${resp.credits_charged ?? 0}, ${resp.credits_balance ?? 0}, ${ms})`);
+      await db.execute(sql`INSERT INTO txgc_calls (request_id, capability, params, code, credits_charged, credits_balance, ms, sr_no)
+        VALUES (${resp.request_id ?? ""}, ${capability}, ${JSON.stringify(args)}, ${resp.code}, ${resp.credits_charged ?? 0}, ${resp.credits_balance ?? 0}, ${ms}, ${opts.srNo ?? null})`);
     } catch { /* 对账失败不阻断业务 */ }
 
     if (resp.code === 0) return resp;
@@ -133,10 +133,11 @@ export interface TxgcFactoryBrief {
 export async function txgcSearch(keyword: string, opts: {
   intent?: "sales" | "purchase" | "company_query";
   province?: string; city?: string; district?: string; industry?: string;
-  page?: number; per_page?: number;
+  page?: number; per_page?: number; srNo?: string;
 } = {}) {
+  const { srNo, ...args } = opts;
   return txgcCall<{ total: number; page: number; per_page: number; items: TxgcFactoryBrief[] }>(
-    "factory_search", { keyword, intent: "purchase", ...opts });
+    "factory_search", { keyword, intent: "purchase", ...args }, { srNo });
 }
 
 export async function txgcDetail(company_id: number) {

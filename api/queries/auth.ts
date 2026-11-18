@@ -76,8 +76,9 @@ export async function ensureThread(opts: { threadId?: number; anonId?: string; u
 
 export async function appendMessage(threadId: number, role: "user" | "assistant", content: string, payload?: unknown) {
   const db = getDb();
-  await db.insert(chatMessages).values({ threadId, role, content, payload: payload ?? null });
+  const r = await db.insert(chatMessages).values({ threadId, role, content, payload: payload ?? null });
   await db.update(chatThreads).set({ updatedAt: new Date() }).where(eq(chatThreads.id, threadId)).catch(() => {});
+  return Number(r[0].insertId);
 }
 
 export async function listThreads(userId: number) {
