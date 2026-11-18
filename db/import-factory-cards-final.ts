@@ -20,7 +20,8 @@ interface CardRow {
   card?: {
     years?: number | null; repurchase?: number | null; ptype?: string | null;
     oem?: string[] | null; areaSqm?: number | null; deepInspected?: boolean;
-    isSuper?: boolean; info?: { 员工人数?: string; 近90天销量?: string };
+    isSuper?: boolean; orders30d?: number | null;
+    info?: { 员工人数?: string; 近90天销量?: string };
   };
 }
 
@@ -61,12 +62,13 @@ async function main() {
       is_super: c?.isSuper != null ? (c.isSuper ? 1 : 0) : null,
       employee_count: parseEmployees(c?.info?.员工人数),
       near90d_sales: c?.info?.近90天销量 ?? null,
+      orders_30d: c?.orders30d ?? null, // 近30天支付订单数（1688 档案页原值；与 monthlyBuyers 语义不同，独立成列）
     };
     // 只填 NULL/空：COALESCE(旧值, 新值)，旧值有值则新值不落
     // 列名来自上方 vals 固定白名单（安全），值走参数绑定；dsql.raw 不接参数——必须用模板拼接
     // 2026-11-18 复现确认：NULLIF(decimal/int列,'') 触发 ER_TRUNCATED_WRONG_VALUE(1292)——
     //   空串比较只对 varchar 列用；数值列不可能存 ''，纯 COALESCE 即可
-    const NUMERIC_COLS = new Set(["years", "repurchase_rate", "area_sqm", "deep_inspected", "is_super", "employee_count"]);
+    const NUMERIC_COLS = new Set(["years", "repurchase_rate", "area_sqm", "deep_inspected", "is_super", "employee_count", "orders_30d"]);
     const setClauses = [];
     for (const [k, v] of Object.entries(vals)) {
       if (v == null) continue;
@@ -84,7 +86,7 @@ async function main() {
       if (res?.affectedRows) updated++;
     } else {
       // dry-run：统计各字段会填多少（库内当前为空且新值非空）
-      const [rows] = (await db.execute(dsql`SELECT years, repurchase_rate, production_type, oem_mode, area_sqm, deep_inspected, is_super, employee_count, near90d_sales FROM factories WHERE id = ${r.id}`)) as unknown as [Array<Record<string, unknown>>];
+      const [rows] = (await db.execute(dsql`SELECT years, repurchase_rate, production_type, oem_mode, area_sqm, deep_inspected, is_super, employee_count, near90d_sales, orders_30d FROM factories WHERE id = ${r.id}`)) as unknown as [Array<Record<string, unknown>>];
       const row = rows[0];
       if (!row) { noRow++; continue; }
       for (const [k, v] of Object.entries(vals)) {
