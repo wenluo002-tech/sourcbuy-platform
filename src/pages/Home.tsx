@@ -11,8 +11,17 @@ import { compressImageToDataURL } from "@/lib/imageCompress";
 
 const TIER_ORDER = ["金标", "银标", "铜标", "优选", "培育"];
 
+// 量级词：向下取整到百位（≥100）或十位（≥10）加「+」——与「7,000+」同一套口径手法，
+// 真实（必超所标）但反推不出精确台账；太少（<10）不显示数字回落纯档位名
+const magnitude = (n: number): string | null => {
+  if (n >= 100) return `${(Math.floor(n / 100) * 100).toLocaleString("en-US")}+`;
+  if (n >= 10) return `${Math.floor(n / 10) * 10}+`;
+  return null;
+};
+
 export default function Home() {
   const { t, lang } = useT();
+  const stats = trpc.factories.stats.useQuery(undefined, { staleTime: 60_000 });
   const catStats = trpc.factories.categoryStats.useQuery({ locale: lang }, { staleTime: 60_000 });
   const featured = trpc.factories.match.useQuery({ minScore: 90, limit: 6, locale: lang });
   const radar = trpc.radar.list.useQuery({ locale: lang }, { staleTime: 60_000 });
@@ -297,7 +306,7 @@ export default function Home() {
         )}
       </section>
 
-      {/* ===== 规模与分级：口径锁 7,000+（SCALE_CLAIM 单一事实源），五档只亮档位含义不露精确计数（数字降噪铁律） ===== */}
+      {/* ===== 规模与分级：总数锁 7,000+（SCALE_CLAIM 单一事实源），五档亮量级词（magnitude 向下取整+「+」）不露精确计数 ===== */}
       <section>
         <div className="sb-reveal sb-rule flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pt-3">
           <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--sb-brand)]">
@@ -315,16 +324,22 @@ export default function Home() {
               {t("home.statFactoriesSub")}
             </div>
           </div>
-          {TIER_ORDER.map((t2, i) => (
+          {TIER_ORDER.map((t2, i) => {
+            const mag = stats.data ? magnitude(stats.data.byTier.find((x) => x.tier === t2)?.c ?? 0) : null;
+            return (
             <div key={t2} className="sb-reveal border-l border-[var(--sb-line)] pl-4 pt-6 sm:pl-5 sm:pt-7" style={{ ["--sb-delay" as string]: `${(i + 1) * 90}ms` }}>
-              <div className="sb-display text-[22px] leading-tight tracking-tight sm:text-[24px]">
+              {mag && (
+                <div className="sb-display text-[30px] leading-none tracking-tight sm:text-[34px]">{mag}</div>
+              )}
+              <div className={`text-xs font-medium text-[var(--sb-ink)] ${mag ? "mt-2" : "sb-display text-[22px] leading-tight tracking-tight sm:text-[24px]"}`}>
                 {t(`home.tierName.${t2}`)}{t("home.tierSuffix") && ` ${t("home.tierSuffix")}`}
               </div>
-              <div className="mt-2 text-[11px] leading-snug text-[var(--sb-ink-40)]">
+              <div className="mt-1 text-[11px] leading-snug text-[var(--sb-ink-40)]">
                 {t(`home.tierDesc.${t2}`)}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
