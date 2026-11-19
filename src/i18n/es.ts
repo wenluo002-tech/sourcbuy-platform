@@ -184,6 +184,8 @@ export const es = {
   },
   chat: {
     greeting: "Hola, soy tu comprador IA. Llevo más de diez años en esto. Dime qué producto quieres, qué cantidad y a dónde lo envías; yo busco el mejor producto al mejor precio directo de fábrica — todas las fábricas están verificadas. Te explico con evidencia por qué recomiendo cada opción y cuánto cuesta de verdad; y si tu pedido no es viable, te lo digo claro.",
+    greetingAsk: "Por cierto, ¿cómo te llamo? Dímelo y la comunicación será más fluida.",
+    greetingBack: "{name}, qué bueno verte de nuevo. ¿Qué buscamos esta vez? Dame categoría, cantidad y destino, y me pongo manos a la obra.",
     aiBuyerTag: "Comprador veterano",
     working: "· Trabajando",
     stages: [
@@ -444,7 +446,13 @@ export const es = {
     messagesDesc: "Cotizaciones listas y avances de pedidos, todo llega aquí",
     loginTitle: "Primero ve al panel; necesitas iniciar sesión",
     loginBody: "Pedidos, cotizaciones y direcciones van con tu cuenta — al entrar, aquí está tu centro de compras.",
-    loginCta: "Iniciar sesión"
+    loginCta: "Iniciar sesión",
+    salutationTitle: "Cómo debe llamarte tu comprador IA",
+    salutationDesc: "Tu comprador te llamará así al saludarte, al entregar resultados y al señalar riesgos — no en cada frase. También puedes decírselo directamente en el chat; ambos escriben en el mismo perfil.",
+    salutationPlaceholder: "p. ej.: Kevin / Sr. García",
+    salutationSave: "Guardar",
+    salutationSaved: "Guardado — se aplica en tu próximo chat",
+    salutationInvalid: "Ese nombre no sirve — usa un nombre o tratamiento normal (sin símbolos especiales)"
   },
   addr: {
     title: "Dirección de entrega",

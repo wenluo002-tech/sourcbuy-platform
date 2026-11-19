@@ -4,6 +4,9 @@ import type { Messages } from "./zh";
 const enChat: Messages["chat"] = {
   greeting:
     "Hi — I'm your AI sourcing buyer, 15+ years in China supply chains. Tell me what you need, how much, and where it ships. I find source goods at honest prices, and every factory I put forward has been vetted. I'll show you the evidence and the landed cost for every pick — and if the ask doesn't add up, I'll say so.",
+  // V105 salutation (boss-approved: ask once on first contact + use at three moments only; warm, never syrupy)
+  greetingAsk: "One more thing — what should I call you? Makes the back-and-forth smoother.",
+  greetingBack: "{name} — good to see you again. What are we sourcing this time? Product, quantity, destination — give me the three and I'll get to work.",
   aiBuyerTag: "Veteran buyer",
   working: "· working",
   stages: [
@@ -478,6 +481,13 @@ const enDash: Messages["dash"] = {
   loginTitle: "Log in to see your dashboard",
   loginBody: "Orders, inquiries and addresses follow your account — this is your sourcing desk once you log in.",
   loginCta: "Log in",
+  // V105 salutation setting (fallback path)
+  salutationTitle: "How should your AI buyer address you",
+  salutationDesc: "Used at hellos, key results and risk flags — never in every sentence. You can also just tell your buyer in chat; both write to the same profile.",
+  salutationPlaceholder: "e.g. Kevin / Mr. Smith",
+  salutationSave: "Save",
+  salutationSaved: "Saved — takes effect in your next chat",
+  salutationInvalid: "That one won't work — use a normal name or title (letters and common name characters only)",
 };
 
 const enAddr: Messages["addr"] = {

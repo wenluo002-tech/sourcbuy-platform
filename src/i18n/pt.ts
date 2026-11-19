@@ -184,6 +184,8 @@ export const pt = {
   },
   chat: {
     greeting: "Olá, sou seu comprador de IA com mais de dez anos de estrada. Diga o produto, volume e destino — encontro fonte e preço bons; as fábricas por trás eu já investiguei. Para cada pedido, mostro evidências do porquê e do custo final; se o pedido não fizer sentido, falo direto.",
+    greetingAsk: "Aliás, como devo te chamar? Me diz para a comunicação ficar mais fluida.",
+    greetingBack: "{name}, bom te ver de novo. O que vamos buscar desta vez? Me passa categoria, quantidade e destino, e eu começo agora.",
     aiBuyerTag: "Comprador veterano",
     working: "· em andamento",
     stages: [
@@ -444,7 +446,13 @@ export const pt = {
     messagesDesc: "Cotação pronta ou pedido avançou? Veja aqui",
     loginTitle: "Para ver o painel, faça login",
     loginBody: "Pedidos, cotações e endereços seguem sua conta; após login, aqui é seu painel de compras",
-    loginCta: "Ir para login"
+    loginCta: "Ir para login",
+    salutationTitle: "Como seu comprador IA deve te chamar",
+    salutationDesc: "Seu comprador vai te chamar assim na abertura, ao entregar resultados e ao sinalizar riscos — nunca em cada frase. Você também pode dizer isso diretamente no chat; os dois gravam no mesmo perfil.",
+    salutationPlaceholder: "ex.: Kevin / Sr. Silva",
+    salutationSave: "Salvar",
+    salutationSaved: "Salvo — vale a partir do próximo chat",
+    salutationInvalid: "Esse nome não funciona — use um nome ou tratamento normal (sem símbolos especiais)"
   },
   addr: {
     title: "Endereço de entrega",

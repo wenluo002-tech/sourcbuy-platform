@@ -4,6 +4,7 @@ import { getDb } from "./connection";
 import { chatMessages, chatThreads, users } from "@db/schema";
 import { createSession, hashPassword, verifyPassword, type SessionUser } from "../lib/auth";
 import { awardRegisterGift } from "../lib/points";
+import { sanitizeSalutation } from "../../contracts/salutation";
 
 const normEmail = (e: string) => e.trim().toLowerCase();
 
@@ -44,6 +45,20 @@ export async function loginUser(email: string, password: string) {
   await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, u.id));
   const { token, expiresAt } = await createSession(u.id);
   return { user: { id: u.id, email: u.email, displayName: u.displayName, locale: u.locale } as SessionUser, token, expiresAt };
+}
+
+// V105 称谓：displayName 即"买家希望被如何称呼"。读取时过 sanitizeSalutation——
+// 注册时填的 displayName 可能不合称谓规范（emoji/超长），注入话术前必须防呆
+export async function getUserSalutation(userId: number): Promise<string | null> {
+  const db = getDb();
+  const rows = await db.select({ displayName: users.displayName }).from(users).where(eq(users.id, userId)).limit(1);
+  return sanitizeSalutation(rows[0]?.displayName);
+}
+
+// 写入称谓（聊天中告知 / 后台修改同一条路径）；name 必须已过 sanitizeSalutation，null=清除
+export async function updateUserSalutation(userId: number, name: string | null): Promise<void> {
+  const db = getDb();
+  await db.update(users).set({ displayName: name }).where(eq(users.id, userId));
 }
 
 // 登录/注册后把匿名期会话并到账号下——对话跟着人走

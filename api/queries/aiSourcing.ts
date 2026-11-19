@@ -8,6 +8,8 @@ import { extractOfferId, offerWithFactory } from "./products";
 import { searchOffers, linkTopOffersToFactories, poolSearch, legacyLinkedFactories } from "../sourcing/offerService";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
 import { looksLikeAccessory, mentionIsAccessoryCompound, queryWantsAccessory } from "../../contracts/productForm";
+import { sanitizeSalutation } from "../../contracts/salutation";
+import { getUserSalutation, updateUserSalutation } from "./auth";
 import { log } from "../lib/logger";
 import { listRadar, getRadarItem } from "./radar";
 import { extractExternalUrl, resolveExternalLink, type LinkContext } from "./linkResolve";
@@ -93,7 +95,8 @@ const INTENT_SYSTEM = `你是采购需求解析器。从用户消息和对话历
 3. budgetNote = 用户提到的目标价/预算，原样摘录（或 null）。
 4. followUp = 还差关键信息时，一个最关键的追问（优先级：品类 → 数量 → 目标价/预算）。信息够则 null。
 4.5 region = 买家指定的产地/城市（如"中山的灯饰厂"→"中山"，"义乌小商品"→"义乌"）。买家没指定产地时=null。注意与 destination（发往国）区分：region 是"货从哪产"，destination 是"货运到哪"。
-5. 用户只是打招呼/闲聊/说"继续"但没有新品类时：isGreeting=true。`;
+5. 用户只是打招呼/闲聊/说"继续"但没有新品类时：isGreeting=true。
+6. salutation = 用户在这条消息里告知的"希望被如何称呼"（如"叫我王哥"→"王哥"、"I'm Kevin"→"Kevin"、"张总就行"→"张总"）。只有用户明确在回答/告知称呼时才抽取，其余一律 null——绝不从消息里猜名字，绝不把产品词当人名。只从最后这条用户消息里抽；历史消息里已经出现过的称呼不要重复抽取。`;
 
 const intentSchema = z.object({
   product: z.string().nullable(),
@@ -103,6 +106,7 @@ const intentSchema = z.object({
   followUp: z.string().nullable(),
   region: z.string().nullable(), // 买家指定的产地/城市（如"中山""义乌"），没指定=null
   isGreeting: z.boolean(),
+  salutation: z.string().nullable(), // V105 称谓：用户明确告知/回答"怎么称呼您"时抽取（"叫我王哥"→"王哥"），否则 null
 });
 
 // 带商品图时的扩展意图：单次 LLM 调用同时出品类词与图上可见规格（省一次往返）
@@ -137,11 +141,21 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
    - direct=这家厂的名称/评语/标签里明确出现过这类产品词，可以说"做这类产品的"。
    - bucket=它只是该类目大类下的高分厂，没有直接证据表明做过这款——你必须说清楚"这几家是大类下的高分厂，做没做过这款要拿图询价确认，我不打包票"，绝不暗示它们做这款。
    清单全是 bucket 时口径同规则 12："严选库里我没核实到专做这款的厂"，再介绍大类高分厂作为询价线索。
-17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego 等）时，必须提醒：品牌正品只能走品牌授权渠道，中国工厂只能做无牌白底同款，仿牌在目的国海关和平台都有法律风险，我们不碰。提醒完再给白牌同款的货源和厂。
+17. 买家要的品带知名品牌（如 Bose、Nike、Apple、Disney、Lego、恒洁 HEGII 等）时，按三轨处理（品牌三轨，罗总 2026-11-19 终审话术口径）：
+   - 要仿牌/贴牌假货：明确拒绝——仿牌在海关和平台都有法律风险，我们不碰，也不帮他找；但必须给出路：同样的品质找能做 OEM 的厂，打买家自己的品牌，去掉品牌溢价才是海外好卖的路。拒绝的是仿牌，不是生意。
+   - 要正品且量大（定制/大单）：这个量值得走正门——采购团队 48 小时内去触达品牌方/授权厂，探授权定制的可行性、起订量和出厂价；只说"去探、去争取"，绝不承诺一定拿到授权；让买家给三样东西：目标数量、目标市场（认证要求不同）、要不要定制改动。
+   - 要正品但量小：直说这个量品牌厂没价格优势，官方旗舰店的海外渠道或品牌官网是最优解（价格透明、有保修、清关没风险）；再点一句：要品质不要牌子的话，白牌同品质价格能下来一大截。
+   - 品牌名只在确认时提一次，后续话术不重复；量不明时不替买家选轨，先问：要正品还是要这个品质？量大概多少？
 18. 买家消息以"[补充]"开头 = 他在回答界面上的补充问题卡：把答案并入理解，照着更新判断，别重复问已答过的项。以"[跳过补充]"开头 = 他明确不想补这些，按现有信息直接配，话术里别再追问这些信息。界面若附了补充问题卡（结构化选项由界面呈现），你话术里最多一句带过（如"数量和目的地顺手补上，我算得更准"），绝不逐条罗列问题。
 19. 工厂名显示为「严选工厂 No.XXXX」代号 = 该买家尚未完成首单付款，档案分层解锁是平台规则。你可以拿代号自然点评（如"排最前这家 12 年老厂"），但绝不猜测、编造或暗示真实厂名，也不要把证据/tags 拼回去反推厂名。买家追问真名时统一口径："首单完成后自动解锁完整工厂档案——厂名、验厂报告、直连方式一次给齐。"这是保护买家自己的交付仪式，说得自然，别说得像防贼。20. 如果系统事实里有 factoryCard：买家正在打听这家工厂的底细，直接正面回答。卡里的字段（员工人数/厂房面积/认证/开店年限/月买家数等）全部是核过的真实档案；注意 storeYears 是诚信通店铺年限，不是工厂成立年份，别混着说。liveChecked=true 时可以自然地说"我刚帮你现场核实了这家店铺的档案"。missingFields 列出的字段就是还没核实到的——标准口径是"这个我不猜，跟工厂核实后回复你"，绝不允许编数字或含糊带过。可以顺带给同类工厂的常见区间作参考（如"做这类产品的厂通常 50–100 人规模"），但必须明说那是同类参考、不是这家的事实。答完底细顺势往下一步引：问数量/目的地，或者说"要不要我按你的量出一份含运费到门的报价？拿不准就先下样品单（$30 起）验货再放大。"
 21. 如果系统事实里有 buyerProfile：这是从这位买家历史询价行为自动推断的画像（常问品类/常发目的地/历史单量），不是他填的资料。可以自然地用来显得"我记得你"（如"还是发美国对吧"），但只能轻轻带过一句，绝不逐条报他的历史数据；画像与本次需求冲突时以本次消息为准。
-22. 如果系统事实里 manualQuoteCategory=true：买家问的是建材/工业品类（栏杆、铝型材、玻璃幕墙、管阀、石材等）。这类品价格高度依赖规格（材质/壁厚/表面处理/图纸），差一点规格价格差很多——绝不引用佣金比例或费率数字，绝不把页面估算当价格承诺。标准口径："这个品类规格差一点价格差很多，我让采购团队按你的规格或图纸人工核价，48 小时内给你正式报价"，并顺势问清规格（材质/尺寸/数量/目的地）。工厂卡、商品卡照常点评。`;
+22. 如果系统事实里 manualQuoteCategory=true：买家问的是建材/工业品类（栏杆、铝型材、玻璃幕墙、管阀、石材等）。这类品价格高度依赖规格（材质/壁厚/表面处理/图纸），差一点规格价格差很多——绝不引用佣金比例或费率数字，绝不把页面估算当价格承诺。标准口径："这个品类规格差一点价格差很多，我让采购团队按你的规格或图纸人工核价，48 小时内给你正式报价"，并顺势问清规格（材质/尺寸/数量/目的地）。工厂卡、商品卡照常点评。
+23. 称呼（看系统事实里的 buyerSalutation / buyerSalutationJustGiven / shouldAskSalutation；V105 罗总终审口径：要"温度且专业"，不是淘宝客服）：
+- buyerSalutation 非空：买家希望你这样称呼 TA。只在三个节点用——开场第一句、交付关键结果（报价格/给厂单）、提示风险；一轮最多用一次，自然带进句子里（如"王哥，这批货我看下来……"），绝不句句挂嘴边，绝不堆敬语（不用"亲""尊贵的"这类词）。句句带称呼的是卖房中介，不是资深买手。
+- buyerSalutationJustGiven=true：买家在这条消息里刚告诉你称呼——先自然确认一句（如"好，王哥，记下了"），立刻回到正事，别围着称呼聊。
+- buyerSalutationRejected=true：买家刚给的称呼不合规（脏话/特殊符号）——绝不复述原词，也别假装记下了；一句带过"这个称呼用不了，换一个试试"，然后回正事。
+- buyerSalutation 为空且 shouldAskSalutation=true：先把正事答完，结尾用一句轻量的话问怎么称呼（如"对了，怎么称呼你方便？后面沟通顺畅些"）。只问这一次；买家不接茬就永远别再提。
+- buyerSalutation 为空且 shouldAskSalutation=false：全程不提称呼的事，直接谈正事。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -178,14 +192,24 @@ Rules:
    - direct = the factory's name / review / tags explicitly mention this product type — you can say "they make this kind of product".
    - bucket = merely a high scorer in the broader category, no direct evidence they've made this exact item — you must say clearly "these are high scorers in the broader category; whether they've made this exact item needs confirmation with photos and an inquiry — no promises", never imply they make it.
    If the whole list is bucket, use rule 12's framing: "no vetted factory verified for this exact item", and present the category high-scorers as inquiry leads.
-17. When the requested item carries a famous brand (Bose, Nike, Apple, Disney, Lego etc.), you must warn: genuine branded goods only move through authorized channels; Chinese factories can only make unbranded white-label equivalents; counterfeits carry legal risk at customs and on marketplaces — we don't touch them. Then give white-label sources and factories.
+17. When the requested item carries a famous brand (Bose, Nike, Apple, Disney, Lego, HEGII etc.), route it three ways (final wording approved by the boss 2026-11-19):
+   - Wants counterfeits / logo-slapped fakes: refuse flatly — counterfeits carry legal risk at customs and on marketplaces; we don't touch them and won't find someone who does. But always offer the way out: same quality from OEM factories under the BUYER's own brand — no brand markup is what actually sells overseas. Refuse the counterfeit, never the business.
+   - Wants genuine units in LARGE quantity (custom run / big order): this volume deserves the front door — our sourcing team reaches out to the brand or its authorized plants within 48 hours to test feasibility, MOQ and EXW pricing for an authorized custom run. Only ever say "we'll explore / fight for it" — never promise authorization will come through. Ask for three things: target quantity, destination market (certifications differ), and what to customize.
+   - Wants genuine units in SMALL quantity: be straight — brand factories won't price or slot small volumes; the brand's official overseas store or website is the best move (transparent pricing, warranty, zero customs risk). Then add: if they want this quality rather than this logo, white-label at the same tier costs a fraction.
+   - Name the brand once when confirming, never repeat it afterwards; if quantity is unclear, don't pick a track for the buyer — ask: genuine brand, or this quality? Roughly how many?
 18. A buyer message starting with "[补充]" = they're answering the follow-up question card: merge the answers into your understanding, update your judgment, don't re-ask what they've answered. Starting with "[跳过补充]" = they explicitly declined; proceed with what you have and don't ask again. If a follow-up card is attached to your reply (structured options rendered by the UI), mention it in at most one short sentence (e.g. "add quantity and destination when you can — sharper numbers"), never enumerate the questions one by one.
 19. When the buyer names a production region (e.g. "factories in Zhongshan"): open by answering the region head-on — "here are the vetted lighting factories I have in Zhongshan". If no factory in the list is from that region, say so honestly ("I don't have a vetted factory there yet"); you may share sourcing-cluster knowledge (e.g. "Guzhen, Zhongshan is China's lighting capital"), but never present a factory from another region as being in the requested one, and never imply a top pick is from the requested region when it is not.
 20. When factory names show as codenames like 「严选工厂 No.XXXX」, the buyer hasn't completed a first paid order — tiered profile unlock is platform policy. Use the codename naturally in comments ("the top pick, a 12-year veteran shop"), but NEVER guess, invent, or hint at the real factory name, and never piece it together from evidence or tags. If the buyer asks for the name, give the standard line: "the full factory profile — name, audit report, direct contact — unlocks automatically once your first order completes." Frame it as a delivery milestone that protects the buyer, not as suspicion.
 21. Always reply in English.
 22. If system facts contain factoryCard: the buyer is asking about this specific factory's credentials — answer head-on. Every field on the card (headcount / floor area / certifications / store age / monthly buyers) is verified real profile data; note storeYears is the supplier-platform store age, NOT the factory's founding year — don't conflate them. When liveChecked=true you may naturally say "I just re-verified this shop's profile live". Fields listed in missingFields are NOT yet verified — the standard line is "I won't guess on that one; I'll confirm with the factory and get back to you", and you must NEVER invent numbers or gloss over them. You may add typical ranges for comparable factories (e.g. "factories making this usually run 50–100 staff") but must label them explicitly as category-typical reference, not this factory's fact. After answering, steer to the next step: ask quantity / destination, or offer "want a landed-cost quote at your quantity? If you're unsure, start with a sample order (from $30) to verify quality before scaling."
 23. If system facts contain buyerProfile: this is inferred from the buyer's own past inquiry behavior (frequent categories / usual destinations / typical quantities) — not something they filled in. You may use it naturally to show you remember them ("shipping to the US again?"), but at most one light touch — never recite their history back; if the profile conflicts with the current message, the current message wins.
-24. If system facts show manualQuoteCategory=true: the buyer is asking about building materials / industrial supplies (railings, aluminum profiles, glass curtain walls, pipes/valves, stone). Pricing here is highly spec-dependent (material grade, wall thickness, surface finish, drawings) — NEVER quote commission rates or fee percentages, and never present on-page estimates as a price commitment. Standard line: "specs move the price a lot in this category — I'll have our sourcing team price it manually against your specs or drawings, with a firm quote within 48 hours", then ask for specs (material / dimensions / quantity / destination). Comment on factory and product cards as usual.`;
+24. If system facts show manualQuoteCategory=true: the buyer is asking about building materials / industrial supplies (railings, aluminum profiles, glass curtain walls, pipes/valves, stone). Pricing here is highly spec-dependent (material grade, wall thickness, surface finish, drawings) — NEVER quote commission rates or fee percentages, and never present on-page estimates as a price commitment. Standard line: "specs move the price a lot in this category — I'll have our sourcing team price it manually against your specs or drawings, with a firm quote within 48 hours", then ask for specs (material / dimensions / quantity / destination). Comment on factory and product cards as usual.
+25. Forms of address (see buyerSalutation / buyerSalutationJustGiven / shouldAskSalutation in system facts; boss-approved tone: warm but professional, never customer-service syrup):
+- If buyerSalutation is set, that is how the buyer wants to be addressed. Use it only at three moments: your opening line, when delivering key results (a price / the factory picks), and when flagging a risk. At most once per reply, worked in naturally ("Kevin, here's what this batch looks like…") — never tacked onto every sentence, never stacked with honorifics. Someone who drops your name in every sentence is a timeshare salesman, not a sourcing agent.
+- If buyerSalutationJustGiven=true, the buyer just told you their preferred name in this message — acknowledge it in a few words ("Got it, Kevin") and get straight back to business; don't dwell on it.
+- If buyerSalutationRejected=true, the name they just gave failed our checks (profanity / invalid characters) — never repeat it, never pretend you saved it; one line — "that one won't work, try another" — then back to business.
+- If buyerSalutation is empty and shouldAskSalutation=true: answer the substance first, then close with one light question asking what to call them ("by the way, what should I call you? Keeps the back-and-forth smooth"). Ask once only — if they don't bite, never bring it up again.
+- If buyerSalutation is empty and shouldAskSalutation=false: never mention names at all — just talk business.`;
 
 // greeting 英文静态开场白
 const GREETING_FALLBACK_EN =
@@ -203,7 +227,7 @@ export const DEST_WORDS = [
 function localIntentFallback(message: string): z.infer<typeof intentSchema> {
   // 纯问候/寒暄本地判定：不查库，交给 greeting 静态开场白（否则"你好"会被当品类去搜货）
   if (/^(你好|您好|hi|hello|hey|嗨|喂|在吗|在不在|早上好|下午好|晚上好|good\s*(morning|afternoon|evening))\s*[!！~～。.。]*$/i.test(message.trim())) {
-    return { product: null, quantity: null, destination: null, budgetNote: null, followUp: null, region: null, isGreeting: true };
+    return { product: null, quantity: null, destination: null, budgetNote: null, followUp: null, region: null, isGreeting: true, salutation: null };
   }
   // 具体产品词优先（跨类目取最长命中），其次类目名，最后短消息原文
   let product: string | null = null;
@@ -227,7 +251,7 @@ function localIntentFallback(message: string): z.infer<typeof intentSchema> {
   // 产地城市词（买家指定"哪产的"）——与 destination（运到哪）严格分开
   const REGION_WORDS = ["中山","义乌","深圳","广州","东莞","佛山","宁波","杭州","温州","金华","泉州","厦门","苏州","无锡","常州","青岛","台州","绍兴","湖州","惠州","汕头","潮州","揭阳","江门","珠海","肇庆","嘉兴","慈溪","余姚","永康","临海","温岭"];
   const region = REGION_WORDS.find((w) => message.includes(w)) ?? null;
-  return { product, quantity, destination, budgetNote: null, followUp: null, region, isGreeting: false };
+  return { product, quantity, destination, budgetNote: null, followUp: null, region, isGreeting: false, salutation: null };
 }
 
 // 话术生成超时/失败时的规则兜底——只用系统已拿到的真实数据，一句都不编
@@ -294,13 +318,17 @@ function buildFallbackReply(
   radarCtx?: { title: string; signalText: string; signalDate: string } | null,
   linkCtx?: LinkContext | null,
   imageNote?: { specsNote: string | null; failed: boolean } | null,
+  salutation?: string | null, // V105：生效称谓（兜底话术也要守三节点口径）
+  salutationJustGiven?: boolean, // 本条刚告知——开头先确认一句
+  shouldAskSalutation?: boolean, // 首轮未问过——结尾轻问一句
 ): string {
   const parts: string[] = [];
-  const brandHit = /(bose|nike|apple|sony|disney|lego|adidas|dyson|supreme|lv|gucci|chanel)/i.test(
+  if (salutation && salutationJustGiven) parts.push(`好，${salutation}，记下了。`);
+  const brandHit = /(bose|nike|apple|sony|disney|lego|adidas|dyson|supreme|lv|gucci|chanel|hegii)/i.test(
     `${intent.product ?? ""} ${linkCtx?.title ?? ""}`,
   );
   if (brandHit) {
-    parts.push("先说个要紧的：这是品牌货。品牌正品只能走授权渠道，工厂只能做无牌白底同款——仿牌在海关和平台都有法律风险，这个我不碰，也不建议你做。下面按白底同款给你查。");
+    parts.push("先说个要紧的：这是品牌货。仿牌我不碰——海关和平台都有法律风险，这个没得谈。但正路有三条：量小要正品，走品牌官方海外渠道或官网最稳，有保修、清关没风险；量大可以谈授权定制，我让采购团队 48 小时内去探品牌方的可行性，不打包票，但值得探；要是您要的是这个品质而不是这个牌子，我给您找同品质的 OEM 厂，打您自己的品牌，价格能下来一大截。您大概是什么量？");
   }
   if (imageNote) {
     if (imageNote.failed) {
@@ -349,6 +377,9 @@ function buildFallbackReply(
   if (!intent.quantity) parts.push("你打算拿多少量？量不同，我谈的价和选的厂都不一样。");
   else if (!intent.destination) parts.push("发往哪个国家？目的地定了，到手价我给你算到个位数。");
   parts.push("（刚才话术生成有点慢，我先把真数据给你，细节咱接着聊。）");
+  if (shouldAskSalutation) parts.push("对了，怎么称呼你方便？告诉我一声，后面沟通更顺畅。");
+  // 三节点口径在兜底路径同样生效：已知称呼且非"刚告知"时，开场段带一次（一轮只此一次）
+  if (salutation && !salutationJustGiven && parts.length) parts[0] = `${salutation}，` + parts[0];
   return parts.join("\n\n");
 }
 
@@ -361,13 +392,17 @@ function buildFallbackReplyEn(
   radarCtx?: { title: string; signalText: string; signalDate: string } | null,
   linkCtx?: LinkContext | null,
   imageNote?: { specsNote: string | null; failed: boolean } | null,
+  salutation?: string | null, // V105: effective salutation (fallback copy obeys the same three-moment rule)
+  salutationJustGiven?: boolean, // told us in this message — acknowledge first
+  shouldAskSalutation?: boolean, // never asked this conversation — one light ask at the end
 ): string {
   const parts: string[] = [];
-  const brandHit = /(bose|nike|apple|sony|disney|lego|adidas|dyson|supreme|lv|gucci|chanel)/i.test(
+  if (salutation && salutationJustGiven) parts.push(`Got it, ${salutation}.`);
+  const brandHit = /(bose|nike|apple|sony|disney|lego|adidas|dyson|supreme|lv|gucci|chanel|hegii)/i.test(
     `${intent.product ?? ""} ${linkCtx?.title ?? ""}`,
   );
   if (brandHit) {
-    parts.push("First things first: that's a branded item. Genuine brand goods only move through authorized channels — factories here can only make unbranded white-label equivalents. Counterfeits carry legal risk at customs and on marketplaces; I don't touch them, and neither should you. Below I've looked up white-label equivalents for you.");
+    parts.push("First things first: that's a branded item. Counterfeits are off the table — legal risk at customs and on marketplaces, non-negotiable. But there are three straight roads: small volume of genuine units — the brand's official overseas store or website is your safest bet, with warranty and zero customs risk; large volume — an authorized custom run is worth exploring, and our sourcing team will sound out the brand within 48 hours (no promises, but worth the shot); and if it's the quality you're after rather than the logo, I'll find you OEM factories at the same tier under your own brand, at a fraction of the price. Roughly what quantity are we talking?");
   }
   if (imageNote) {
     if (imageNote.failed) {
@@ -418,6 +453,9 @@ function buildFallbackReplyEn(
   if (!intent.quantity) parts.push("How many units are you thinking? Quantity changes both the price I negotiate and the factories I pick.");
   else if (!intent.destination) parts.push("Which country is it headed to? With a destination I'll price the landed cost down to the cent.");
   parts.push("(The write-up ran slow just now, so I've given you the real data first — details as we go.)");
+  if (shouldAskSalutation) parts.push("By the way — what should I call you? Keeps the back-and-forth smooth.");
+  // Same three-moment rule on the fallback path: known name (and not just given) opens the first line once
+  if (salutation && !salutationJustGiven && parts.length) parts[0] = `${salutation}, ` + parts[0];
   return parts.join("\n\n");
 }
 
@@ -427,10 +465,10 @@ const REPLY_LANG_NAME: Record<string, string> = { es: "Spanish", fr: "French", p
 function replySystemFor(locale: string): string {
   if (locale === "zh") return REPLY_SYSTEM;
   const langName = REPLY_LANG_NAME[locale];
-  return REPLY_SYSTEM_EN + (langName ? `\n25. Always reply in ${langName}.` : "");
+  return REPLY_SYSTEM_EN + (langName ? `\n26. Always reply in ${langName}.` : "");
 }
 
-async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: string = "zh", unlocked = false, userId: number | null = null) {
+async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: string = "zh", unlocked = false, userId: number | null = null, salutationHint: string | null = null) {
   // 雷达卡 CTA 直达：radarId 钉死品类与信号上下文，跳过 LLM 意图抽取（词库没收录的品也不受影响）
   // 必须在选品意图拦截之前——CTA 话术含"爆款"字样，否则会被误判成选品意图
   let radarCtx: Awaited<ReturnType<typeof getRadarItem>> | null = null;
@@ -509,7 +547,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   let imageFailed = false;
   let intent: z.infer<typeof intentSchema>;
   if (radarCtx) {
-    intent = { product: radarCtx.keyword, quantity: null, destination: null, budgetNote: null, followUp: null, region: null, isGreeting: false };
+    intent = { product: radarCtx.keyword, quantity: null, destination: null, budgetNote: null, followUp: null, region: null, isGreeting: false, salutation: null };
   } else if (imageData) {
     // 商品图识别与意图抽取合一：单次调用出品类词+可见规格（网关默认模型支持图片输入）
     try {
@@ -582,21 +620,68 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     }
   }
 
-  // 纯闲聊（且没带链接/商品）：直接回，不查库；LLM 失败时给静态开场白，不报错
-  if (intent.isGreeting && !intent.product && !productInfo && !linkCtx) {
+  // ---- V105 称谓解析：本条消息刚告知的称呼 > 登录档案 displayName > 前端 localStorage 传来的 hint ----
+  // 无状态架构每轮重建 facts，称谓永不遗忘；所有写入/注入一律过 sanitizeSalutation 防呆（罗总口径：只拦明显脏词，不过度拦截）。
+  const newSal = sanitizeSalutation(intent.salutation);
+  // 抽到了称呼但防呆拦下（脏词/特殊符号）——话术要明确"这个用不了、请换一个"，绝不复述原词、绝不假装记下
+  const salRejected = !!intent.salutation && !newSal;
+  const storedSal = userId
+    ? await getUserSalutation(userId).catch(() => null)
+    : sanitizeSalutation(salutationHint);
+  const salutation = newSal ?? storedSal;
+  // "刚告知"判定要过一道去重：LLM 会从历史里重复抽取同一个称呼（实测抓到）——
+  // 与既有称呼相同的抽取不算"刚告知"，否则每轮都"好，王哥，记下了"，正是罗总红线的客服感
+  const justGiven = !!newSal && newSal !== storedSal;
+  // 登录买家告知了新称呼 → 写回档案（跨会话记住；失败静默不阻塞答话）
+  if (newSal && userId && newSal !== storedSal) {
+    await updateUserSalutation(userId, newSal).catch((e) => {
+      log.warn("称谓写回失败", { error: e instanceof Error ? e.message : String(e) });
+    });
+  }
+  // 方案 B「首轮开口问」：无任何已知称呼 + 本会话第一条用户消息是正经需求（纯问候不重复问——前端开场白已问过）+ 非雷达/图片/链接/货号直达
+  const shouldAskSalutation =
+    !salutation &&
+    !intent.isGreeting &&
+    history.filter((m) => m.role === "user").length === 0 &&
+    !radarCtx && !imageData && !linkCtx && !offerId;
+
+  // 纯闲聊（且没带链接/商品）：直接回，不查库；LLM 失败时给静态开场白，不报错。
+  // intent.salutation 非空也算这类——"叫我王哥"不是采购需求，走问候口径确认称呼
+  if ((intent.isGreeting || intent.salutation) && !intent.product && !productInfo && !linkCtx) {
+    const salHintZh = salutation
+      ? justGiven
+        ? `\n称呼：买家在这条消息里刚告诉你，TA 希望被称为「${salutation}」——先自然确认一句（"好，${salutation}，记下了"），再顺势问 TA 想看什么货。`
+        : `\n称呼：买家希望被称为「${salutation}」，开场带上一次即可。`
+      : salRejected
+        ? `\n称呼：买家刚给了一个不能用的称呼（含脏话或特殊符号）——绝不复述原词，也别假装记下了；就礼貌说一句这个称呼用不了、请换一个，然后回正事。`
+        : "";
+    const salHintEn = salutation
+      ? justGiven
+        ? `\nForm of address: the buyer just told you in this message they want to be called "${salutation}" — acknowledge it in a few words ("Got it, ${salutation}"), then ask what they're looking to source.`
+        : `\nForm of address: the buyer likes to be called "${salutation}" — use it once in your opening.`
+      : salRejected
+        ? `\nForm of address: the buyer just gave a name we can't use (profanity or invalid characters) — never repeat it, never pretend you saved it; politely say that one won't work and ask for another, then get back to business.`
+        : "";
     try {
       const { text } = await generateText({
         model: kimiGw(defaultModelId),
         system: replySystemFor(locale),
         prompt: locale !== "zh"
-          ? `User message: ${message}\nSourcing intent: small talk / no clear category\nFactory list: []`
-          : `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]`,
+          ? `User message: ${message}\nSourcing intent: small talk / no clear category\nFactory list: []${salHintEn}`
+          : `用户消息：${message}\n采购意图：纯闲聊/无明确品类\n工厂清单：[]${salHintZh}`,
         abortSignal: AbortSignal.timeout(12_000),
       });
-      return { reply: text, understood: false, intent, intentSources, factories: [], product: null, followUp: null };
+      return { reply: text, understood: false, intent, intentSources, factories: [], product: null, followUp: null, salutation };
     } catch (e) {
       log.warn("greeting 话术生成失败，用静态开场白", { error: e instanceof Error ? e.message : String(e) });
-      return { reply: locale !== "zh" ? GREETING_FALLBACK_EN : GREETING_FALLBACK, understood: false, intent, intentSources, factories: [], product: null, followUp: null };
+      // 静态兜底也带上称呼：刚告知的先确认，已知的开场带一次
+      const gf = locale !== "zh" ? GREETING_FALLBACK_EN : GREETING_FALLBACK;
+      const prefix = !salutation
+        ? ""
+        : justGiven
+          ? locale !== "zh" ? `Got it, ${salutation}. ` : `好，${salutation}，记下了。`
+          : locale !== "zh" ? `${salutation}, ` : `${salutation}，`;
+      return { reply: prefix + gf, understood: false, intent, intentSources, factories: [], product: null, followUp: null, salutation };
     }
   }
 
@@ -865,6 +950,10 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
 
   const facts = JSON.stringify({
     intent,
+    buyerSalutation: salutation, // V105：买家希望被如何称呼（已过防呆清洗）；null=未知
+    buyerSalutationJustGiven: justGiven, // 本条消息刚告知新称呼（与既有称呼去重后）——先确认一句再回正事（规则 23/25）
+    buyerSalutationRejected: salRejected, // 本条给的称呼被防呆拦下——不复述原词、不假装记下，礼貌请 TA 换一个
+    shouldAskSalutation, // true=首轮可在答完正事后轻问一次称呼（方案 B，只此一次）
     manualQuoteCategory: manualQuote,
     buyerProfile: buyerProfile && buyerProfile.sampleSize >= 3
       ? {
@@ -966,8 +1055,8 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       } catch { /* 查缓存失败静默回落原词 */ }
     }
     reply = locale !== "zh"
-      ? buildFallbackReplyEn(dispIntent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null)
-      : buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null);
+      ? buildFallbackReplyEn(dispIntent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null, salutation, justGiven, shouldAskSalutation)
+      : buildFallbackReply(intent, factories, searchProducts, relaxed, radarCtx, linkCtx, imageData ? { specsNote: imageSpecsNote, failed: imageFailed } : null, salutation, justGiven, shouldAskSalutation);
     // 建材工业桶：兜底话术是模板，不经过 LLM 规则——人工核价口径在这里确定性补上
     if (manualQuote) {
       reply += locale !== "zh"
@@ -1030,13 +1119,14 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
       ? { offer: productInfo.offer, factory: productInfo.factory }
       : null,
     followUp,
+    salutation, // V105：当前生效称谓（null=未知）；前端据此写 localStorage 闭环
   };
 }
 
 // 最外层保险：任何漏网异常都不让买家看到报错——返回诚实的降级话术（HTTP 200），并留日志可查
-export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: string = "zh", unlocked = false, userId: number | null = null) {
+export async function sourcingChat(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: string = "zh", unlocked = false, userId: number | null = null, salutationHint: string | null = null) {
   try {
-    return await sourcingChatInner(message, history, radarId, imageData, locale, unlocked, userId);
+    return await sourcingChatInner(message, history, radarId, imageData, locale, unlocked, userId, salutationHint);
   } catch (e) {
     log.error("ai.chat 未捕获异常，走全兜底", { error: e instanceof Error ? e.message : String(e) });
     return {
@@ -1051,6 +1141,7 @@ export async function sourcingChat(message: string, history: ChatMsg[], radarId?
       products: [],
       product: null,
       followUp: null,
+      salutation: null, // 全兜底拿不到解析结果——前端保留本地已有称谓即可（null=不更新）
     };
   }
 }

@@ -21,7 +21,8 @@ import { offerWithFactory } from "./queries/products";
 import { getOfferDetail, searchOffers } from "./sourcing/offerService";
 import { classifyAiError, AiUnavailable } from "./lib/ai-client";
 import { channelsForCountry, CARGO_TYPES, CA_SEA_REGIONS, SUSPENDED_CHANNELS } from "../contracts/freightRates";
-import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, appendMessage, listThreads, getThreadMessages } from "./queries/auth";
+import { registerUser, loginUser, AuthError, claimAnonThreads, ensureThread, appendMessage, listThreads, getThreadMessages, updateUserSalutation } from "./queries/auth";
+import { sanitizeSalutation } from "../contracts/salutation";
 import { createInquiry, listMyOrders, getOrderDetail, transitionOrder } from "./queries/orders";
 import * as qc from "./queries/inspection";
 import { opsListGaps, opsGapCandidates, opsGapDeepdive } from "./queries/gapRadar";
@@ -243,12 +244,13 @@ export const appRouter = createRouter({
           locale: z.enum(["zh", "en", "es", "fr", "pt", "ka"]).optional(), // 界面语言：非中文走英文话术体系+语言指令（LLM 按买家语言回复）
           threadId: z.number().int().positive().optional(), // M3a：续写已有会话
           anonId: z.string().max(36).optional(), // M3a：匿名设备 ID，登录后归并
+          salutationHint: z.string().max(40).optional(), // V105：匿名买家 localStorage 里的称谓（登录买家以档案 displayName 为准）
         })
       )
       .mutation(async ({ input, ctx }) => {
         let result: any;
         try {
-          result = await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale, await isUnlockedBuyer(ctx.user?.id), ctx.user?.id ?? null);
+          result = await sourcingChat(input.message, input.history, input.radarId, input.imageData, input.locale, await isUnlockedBuyer(ctx.user?.id), ctx.user?.id ?? null, input.salutationHint ?? null);
         } catch (err) {
           const classified = classifyAiError(err);
           if (classified instanceof AiUnavailable) {
@@ -354,6 +356,15 @@ export const appRouter = createRouter({
       ctx.resHeaders.append("Set-Cookie", clearSessionCookieHeader());
       return { ok: true };
     }),
+    // V105 方案 A 兜底：后台修改"该怎么称呼您"。空串=清除；非空但不过防呆清洗=拒绝（宁窄勿宽小词表，正常名字不会被误伤）
+    updateProfile: authedQuery
+      .input(z.object({ displayName: z.string().max(64) }))
+      .mutation(async ({ input, ctx }) => {
+        const clean = sanitizeSalutation(input.displayName);
+        if (input.displayName.trim() && !clean) throw new TRPCError({ code: "BAD_REQUEST", message: "INVALID_SALUTATION" });
+        await updateUserSalutation(ctx.user.id, clean);
+        return { ok: true, displayName: clean };
+      }),
   }),
 
   // ---- M3a 会话记忆：列表要登录；详情允许本人或匿名归属者读 ----

@@ -1,4 +1,5 @@
 // M4a 我的工作台：进行中订单 + 待办 + 统计 + 快捷入口；未登录引导（不做假数据）
+import { useState } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/auth";
@@ -16,11 +17,26 @@ const POINT_REASON_KEY: Record<string, string> = {
 type PointLedgerRow = { id: number | string; delta: number; reason: string; created_at: string | Date };
 
 export default function Dashboard() {
-  const { me, loading } = useAuth();
+  const { me, loading, refresh } = useAuth();
   const { t } = useT();
   const sumQ = trpc.dashboard.summary.useQuery(undefined, { enabled: !!me });
   const pointsQ = trpc.points.balance.useQuery(undefined, { enabled: !!me });
   const ledgerQ = trpc.points.ledger.useQuery(undefined, { enabled: !!me });
+  // V105 方案 A：后台修改"该怎么称呼您"（与聊天里口头告知同一条档案链路）
+  const [salInput, setSalInput] = useState<string | null>(null); // null=未碰过输入框（显示档案现值）
+  const [salMsg, setSalMsg] = useState<"saved" | "invalid" | null>(null);
+  const updateProfileM = trpc.auth.updateProfile.useMutation({
+    onSuccess: (r) => {
+      setSalMsg("saved");
+      // 档案即真相：写回 localStorage（聊天页开场白读取）并刷新 me
+      try {
+        if (r.displayName) localStorage.setItem("sb.salutation", r.displayName);
+        else localStorage.removeItem("sb.salutation");
+      } catch { /* 隐私模式写不进就算了 */ }
+      refresh();
+    },
+    onError: () => setSalMsg("invalid"),
+  });
 
   if (loading) return null;
 
@@ -73,6 +89,31 @@ export default function Dashboard() {
             <p className="mt-1 text-xs text-[var(--sb-ink-60)]">{it.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* V105 称谓设置（方案 A 兜底）：AI 买手该怎么称呼你；聊天里口头告知也会写回这里 */}
+      <div className="mt-6 rounded-2xl border border-[var(--sb-line)] bg-white p-4">
+        <p className="text-sm font-semibold">{t("dash.salutationTitle")}</p>
+        <p className="mt-1 text-xs text-[var(--sb-ink-60)]">{t("dash.salutationDesc")}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            value={salInput ?? me.displayName ?? ""}
+            onChange={(e) => { setSalInput(e.target.value); setSalMsg(null); }}
+            placeholder={t("dash.salutationPlaceholder")}
+            maxLength={24}
+            className="w-56 rounded-xl border border-[var(--sb-line)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--sb-brand)]"
+          />
+          <button
+            type="button"
+            disabled={updateProfileM.isPending}
+            onClick={() => updateProfileM.mutate({ displayName: salInput ?? me.displayName ?? "" })}
+            className="rounded-xl bg-[var(--sb-brand)] px-4 py-2 text-sm font-semibold text-[#eef4f5] hover:bg-[var(--sb-brand-hover)] disabled:opacity-50"
+          >
+            {t("dash.salutationSave")}
+          </button>
+          {salMsg === "saved" && <span className="text-xs text-emerald-600">{t("dash.salutationSaved")}</span>}
+          {salMsg === "invalid" && <span className="text-xs text-red-600">{t("dash.salutationInvalid")}</span>}
+        </div>
       </div>
 
       {/* 积分卡：余额 + 最近流水 + 冻结规则（全走服务端/字典，不做前端假设） */}

@@ -184,6 +184,8 @@ export const fr = {
   },
   chat: {
     greeting: "Bonjour, je suis votre acheteur IA, plus de dix ans dans le métier. Dites-moi le produit, la quantité et la destination — je trouve les bonnes sources et bons prix ; je connais les usines derrière. Pour chaque recommandation et prix rendu, je montre les preuves ; si la demande est irréaliste, je vous le dis cash.",
+    greetingAsk: "Au fait, comment dois-je vous appeler ? Dites-le-moi, ce sera plus fluide pour la suite.",
+    greetingBack: "{name}, ravi de vous revoir. Qu'est-ce qu'on source cette fois ? Donnez-moi le produit, la quantité et la destination, et je m'y mets.",
     aiBuyerTag: "Acheteur chevronné",
     working: "· En cours",
     stages: [
@@ -444,7 +446,13 @@ export const fr = {
     messagesDesc: "Devis prêts, avancée des commandes : tout se passe ici",
     loginTitle: "Connectez-vous d'abord pour voir le tableau de bord",
     loginBody: "Commandes, devis et adresses suivent votre compte — connectez-vous, c'est votre espace d'achat.",
-    loginCta: "Se connecter"
+    loginCta: "Se connecter",
+    salutationTitle: "Comment votre acheteur IA doit vous appeler",
+    salutationDesc: "Votre acheteur vous appellera ainsi à l'ouverture, lors des résultats clés et des alertes de risque — jamais à chaque phrase. Vous pouvez aussi le lui dire directement dans le chat ; les deux écrivent dans le même profil.",
+    salutationPlaceholder: "ex. : Kevin / M. Dupont",
+    salutationSave: "Enregistrer",
+    salutationSaved: "Enregistré — actif dès votre prochain chat",
+    salutationInvalid: "Ce nom ne passe pas — utilisez un nom ou un titre normal (pas de symboles spéciaux)"
   },
   addr: {
     title: "Adresse de livraison",

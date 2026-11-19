@@ -1,6 +1,9 @@
 export const zhChat = {
   greeting:
     "你好，我是你的 AI 采购买手，干这行十几年了。你要什么货、多少量、发往哪里，告诉我就行——我帮你找源头好货和好价，背后的工厂我都验过底。每一单为什么推荐、到手价多少，摆证据说清楚；需求不靠谱我也会直说。",
+  // V105 称谓（罗总终审：方案 B 首轮开口问 + 三节点用称呼；要温度不要客服感）
+  greetingAsk: "对了，怎么称呼你方便？告诉我一声，后面沟通更顺畅。",
+  greetingBack: "{name}，又见面了。这次想看什么货？品类、数量、目的地报给我，直接开干。",
   aiBuyerTag: "老采购",
   working: "· 作业中",
   stages: [
@@ -581,6 +584,13 @@ export const zhDash = {
   loginTitle: "先看工作台，得登录",
   loginBody: "订单、询价、地址都跟着账号走——登录后这里就是你的采购工作台。",
   loginCta: "去登录",
+  // V105 称谓设置（方案 A 兜底）
+  salutationTitle: "AI 买手怎么称呼你",
+  salutationDesc: "买手会在开场、交付结果和提示风险时这样称呼你——不会句句挂在嘴边。聊天里直接告诉 TA 也行，两边是同一份档案。",
+  salutationPlaceholder: "如：王哥 / Kevin / 张总",
+  salutationSave: "保存",
+  salutationSaved: "已保存——下次开聊生效",
+  salutationInvalid: "这个称呼用不了——换个正常的名字或称谓（不支持特殊符号）",
 };
 
 export const zhAddr = {

@@ -623,12 +623,29 @@ function ProductCard({
   );
 }
 
+// ---- V105 称谓闭环（方案 B 首轮开口问 + localStorage 匿名记忆）----
+// 匿名买家：localStorage "sb.salutation" 记忆，每次请求带给后端（hint）；登录买家：以档案 displayName 为准（后端直读库）
+function readStoredSalutation(): string | null {
+  try {
+    const s = localStorage.getItem("sb.salutation");
+    return s && s.trim() && s.length <= 20 ? s.trim() : null;
+  } catch {
+    return null; // 隐私模式读不了就算了
+  }
+}
+
+// 开场白三态：已知称呼→"又见面了"熟人口径；未知→标准开场白末尾轻问一次称呼（只此一次，不追问）
+function openingGreeting(t: (key: string, vars?: Record<string, string | number>) => string): string {
+  const sal = readStoredSalutation();
+  return sal ? t("chat.greetingBack", { name: sal }) : `${t("chat.greeting")}\n\n${t("chat.greetingAsk")}`;
+}
+
 export default function BuyerChat() {
   const { lang, t } = useT();
-  const [turns, setTurns] = useState<Turn[]>([
+  const [turns, setTurns] = useState<Turn[]>(() => [
     {
       role: "assistant",
-      content: t("chat.greeting"),
+      content: openingGreeting(t),
     },
   ]);
   const [input, setInput] = useState("");
@@ -649,6 +666,19 @@ export default function BuyerChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [params, setParams] = useSearchParams();
   const prefilled = useRef(false);
+
+  // V105：登录买家的档案 displayName 异步到达后——同步进 localStorage（匿名期给的称呼以档案为准）；
+  // 若会话还停在开场白（买家还没说话），把开场白换成带称呼的熟人口径
+  useEffect(() => {
+    const name = me?.displayName?.trim();
+    if (!name || name.length > 20) return;
+    try { localStorage.setItem("sb.salutation", name); } catch { /* 隐私模式写不进就算了 */ }
+    setTurns((ts) =>
+      ts.length === 1 && ts[0].role === "assistant"
+        ? [{ role: "assistant", content: t("chat.greetingBack", { name }) }]
+        : ts
+    );
+  }, [me?.displayName]); // eslint-disable-line react-hooks/exhaustive-deps -- 只在称呼到达时换开场白，语言切换不动已有会话
 
   // 图片压缩：最长边 1024、JPEG 0.82——够视觉模型识别，流量友好
   // 两条解码路径：createImageBitmap 优先，失败回退 <img>+canvas（iPhone 拍照默认 HEIC，
@@ -770,7 +800,7 @@ export default function BuyerChat() {
   // 失败静默重试一次（网络/模型抖动大多是瞬时的）；再失败才诚实告诉买家
   function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean, radarId?: number, imageData?: string) {
     chat.mutate(
-      { message: msg, history, radarId, imageData, locale: lang, threadId: threadId ?? undefined, anonId: anonIdRef.current },
+      { message: msg, history, radarId, imageData, locale: lang, threadId: threadId ?? undefined, anonId: anonIdRef.current, salutationHint: me ? undefined : (readStoredSalutation() ?? undefined) },
       {
         onSuccess: (res) => {
           const tid = (res as any).threadId;
@@ -779,6 +809,11 @@ export default function BuyerChat() {
             // 会话 ID 落 sessionStorage：点进商品/工厂详情再返回时，对话原样恢复
             // （sessionStorage 跨页内跳转存活，关标签页即清，正好符合"本次逛店"语义）
             try { sessionStorage.setItem("sb.thread", String(tid)); } catch { /* 隐私模式写不进就算了 */ }
+          }
+          // V105 称谓闭环：后端回传的生效称谓（本条新抽取 > 档案 > hint）写回本地——下轮请求与新开场白都用它
+          const sal = (res as any).salutation;
+          if (typeof sal === "string" && sal) {
+            try { localStorage.setItem("sb.salutation", sal); } catch { /* 同上 */ }
           }
           setTurns((ts) => [
             ...ts,
@@ -848,7 +883,7 @@ export default function BuyerChat() {
   }
 
   function newChat() {
-    setTurns([{ role: "assistant", content: t("chat.greeting") }]);
+    setTurns([{ role: "assistant", content: openingGreeting(t) }]);
     setThreadId(null);
     try { sessionStorage.removeItem("sb.thread"); } catch { /* 同上 */ }
     setShowHistory(false);
