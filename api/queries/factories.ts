@@ -2,6 +2,7 @@ import { getDb } from "./connection";
 import { factories, factoryScores, factoryCategories, commissionRules } from "../../db/schema";
 import { eq, and, desc, like, gte, lte, sql, type SQL } from "drizzle-orm";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
+import { mentionIsAccessoryCompound } from "../../contracts/productForm";
 import { maskFactory, maskedFactoryName } from "../lib/mask";
 import { proxyImageUrl, proxyImageList } from "../lib/imgProxy";
 import {
@@ -650,7 +651,9 @@ export async function matchFactories(intent: {
   const hasExactProduct = (f: (typeof res.rows)[number]): boolean => {
     if (kwLower.length < 2) return false;
     const blob = `${f.name} ${f.review ?? ""} ${Array.isArray(f.tags) ? (f.tags as string[]).join(" ") : ""}`.toLowerCase();
-    return blob.includes(kwLower);
+    if (!blob.includes(kwLower)) return false;
+    // V104：子串事故排除——"XX马桶刷厂"includes("马桶") 不算做过马桶本体（全是配件复合词命中→false）
+    return !mentionIsAccessoryCompound(blob, kwLower);
   };
 
   return res.rows

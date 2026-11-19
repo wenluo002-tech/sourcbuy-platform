@@ -7,6 +7,7 @@ import { recordGap } from "./gapRadar";
 import { extractOfferId, offerWithFactory } from "./products";
 import { searchOffers, linkTopOffersToFactories, poolSearch, legacyLinkedFactories } from "../sourcing/offerService";
 import { expandQuery, LEXICON } from "../../contracts/lexicon";
+import { looksLikeAccessory, mentionIsAccessoryCompound, queryWantsAccessory } from "../../contracts/productForm";
 import { log } from "../lib/logger";
 import { listRadar, getRadarItem } from "./radar";
 import { extractExternalUrl, resolveExternalLink, type LinkContext } from "./linkResolve";
@@ -169,7 +170,7 @@ Rules:
 10. Hard rule: buyer-side only, never take factory kickbacks; recommendations rank neutrally by score; the scoring algorithm is public (seven weighted dimensions); factories cannot pay for ranking.
 11. If system facts contain searchProducts (real on-sale items with price/sales): they render as cards below your reply. Buyers see goods before factories — comment on the overall price band and sales ("mainstream EXW runs ¥xx–xx; one SKU sells 10k+ a month"), don't recite titles.
 12. If factoryCount=0 but searchProducts is non-empty: honestly say "no vetted factory specializing in this yet — I won't fob you off with unrelated factories", then guide the buyer to pick an item from the cards so you can investigate the supplier behind it (vetted-db cross-check, factory audit if needed). NEVER present factories from other categories as makers of this item — a tent factory once got pushed to a bicycle buyer; never again.
-13. If system facts contain radarContext: the buyer came in from the best-seller radar. First confirm the item's overseas signal in a sentence or two (quote signalText and signalDate verbatim; you may say the source is verifiable), then follow the rules above. factoryPriceMin/Max in radarContext is the live EXW band — quote it directly; retailPriceUsd can be compared against overseas retail. End with a reminder: the board is a demand signal, not a guarantee — test small before scaling.
+13. If system facts contain radarContext: the buyer came in from the best-seller radar. First confirm the item's overseas signal in a sentence or two — restate signalText fully in the buyer's language (signalText is stored in Chinese; NEVER leak raw Chinese into a non-zh reply — translate it faithfully, keeping every number, platform name and the source attribution exact; quote signalDate verbatim). You may say the source is verifiable. Then follow the rules above. factoryPriceMin/Max in radarContext is the live EXW band — quote it directly; retailPriceUsd can be compared against overseas retail. End with a reminder: the board is a demand signal, not a guarantee — test small before scaling.
 14. If system facts contain linkContext: the buyer pasted an overseas retail link. First confirm what you read from the link (platform + item name; quote priceText as the overseas price), then give domestic supply and factories. You may note the gap between priceText and the EXW band as "the margin looks decent", but must warn that retail price is not net profit (platform fees, ads, last-mile not deducted). If linkContext.source is "slug", say "the page blocked scraping — I recognized it from the link path, double-check me"; if fetchFailed=true, honestly say "I couldn't open this link" and ask for a product name or screenshot — never pretend to know the link.
 15. If system facts contain imageContext: the buyer sent a product photo. Confirm what you recognized (quote specsNote verbatim) and add "correct me if I'm wrong". If failed=true, honestly say you couldn't recognize it and ask for a product name — never pretend you understood it.
 16. Every factory in the list carries matchBasis — three evidence grades, strictly distinguished:
@@ -671,8 +672,14 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
         const regionFiltered = intent.region
           ? linked.filter((l) => String(l.factory.location ?? "").includes(intent.region!))
           : linked;
+        // V104：配件货不算"这款货"——「智能马桶泡沫泵 ¥9.5」「马桶盖过滤器 ¥2.6」顶着产品词混成
+        // productLinked 置顶，话术引用成"这款 ¥9.5 起"是事故。买家真要配件时（wantsAcc）不过滤。
+        const accOk = queryWantsAccessory(keyword);
+        const cleanLinked = accOk
+          ? regionFiltered
+          : regionFiltered.filter((l) => !looksLikeAccessory(l.title) && !mentionIsAccessoryCompound(l.title, keyword));
         const byFactory = new Map<number, (typeof linked)[number]>();
-        for (const l of regionFiltered) if (!byFactory.has(l.factory.id)) byFactory.set(l.factory.id, l);
+        for (const l of cleanLinked) if (!byFactory.has(l.factory.id)) byFactory.set(l.factory.id, l);
         // 已在推荐列表里的厂：升级 matchBasis + 挂在售货快照
         factories = factories.map((f) => {
           const l = byFactory.get(f.id);
@@ -730,10 +737,19 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   //   2026-11-18 实测：脐钉/舌钉/鼻钉全部 4 direct 但 zero exactProduct，旧口径下探源永远不会触发）
   // → 建探源单（sourcing_requests，同步毫秒级）并后台拉候选池。TXGC 拉取仍 fire-and-forget 绝不阻塞答话；
   // 同关键词 24h 去重；关键词经词库清洗（整句不拉上游，防空搜白扣费）。sourcingRequestId 透出给路由补会话链+前端挂步骤条卡。
-  const hasEvidenceGradeFactory = factories.some((f) => f.matchBasis === "productLinked" || f.exactProduct);
+  const wantsAcc = keyword ? queryWantsAccessory(keyword) : false;
+  const hasEvidenceGradeFactory = factories.some((f) => {
+    if (f.matchBasis !== "productLinked" && !f.exactProduct) return false;
+    // V104：买家问整机词时，配件货不算"做过这款"的证据（马桶→马桶刷货源压住真缺口的教训）
+    if (!wantsAcc && f.linkedOffer?.title && looksLikeAccessory(f.linkedOffer.title)) return false;
+    return true;
+  });
   let sourcingRequestId: number | null = null;
   if (keyword && !hasEvidenceGradeFactory) {
-    sourcingRequestId = await recordGap(keyword, locale, userId).catch((e) => {
+    sourcingRequestId = await recordGap(keyword, locale, userId, {
+      // LLM 意图抽出的产品词本身可信：LEXICON 提不出词时直接用它拉上游，不再 no_keyword 白丢缺口
+      trustKeyword: keyword === intent.product,
+    }).catch((e) => {
       log.warn("缺口记录失败", { error: e instanceof Error ? e.message : String(e) });
       return null;
     });
@@ -912,7 +928,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     factoryCard, // 买家在打听某家具体工厂时：该厂档案卡（缺字段见 missingFields，liveChecked=刚现场核实过）
     factories: factories.map((f) => ({
       name: f.name,
-      tier: f.tier,
+      tier: tierLabel(f.tier, locale), // 枚举值不过 LLM：中文「优选/金标」裸喂会被原样引用进外语回复（v80/v104 巡检实抓）
       score: f.score,
       years: f.years,
       location: f.location,

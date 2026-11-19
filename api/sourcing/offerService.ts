@@ -603,6 +603,45 @@ export async function linkTopOffersToFactories(items: OfferSearchItem[], limit =
 }
 
 
+// V104 对题率闸口（罗总 11-19 红线：不得轻易说"库里没有"，但也不许拿错类目货充数短路）：
+// 词在导航图上时，池内 top 结果里对题条数（期许类目命中；pool NULL 类目放行）<2
+// → 判定类目级缺货，放弃零成本短路，继续走万邦实时补搜（2 分钱换真产品，回填池子滚雪球）。
+// 实证：马桶（图上归卫浴洁具）池内 top8 全是马桶刷——对题 0 条，旧逻辑会直接展示配件。
+async function countOnTopic(poolItems: OfferSearchItem[], legacyItems: OfferSearchItem[], scopeCats: string[]): Promise<number> {
+  const db = getDb();
+  let n = 0;
+  // 两路 IN 查询并行（V104 性能：串行会让缓存命中路径超 3s 阈值）
+  const [poolRows, legacyRows] = await Promise.all([
+    poolItems.length
+      ? db
+          .select({ offerId: offerPool.offerId, catPath: offerPool.catPath })
+          .from(offerPool)
+          .where(inArray(offerPool.offerId, poolItems.map((i) => i.offerId)))
+      : Promise.resolve([] as { offerId: string; catPath: string | null }[]),
+    legacyItems.length
+      ? db
+          .select({ productId: legacyProducts.productId, fc: legacyProducts.fineCategory })
+          .from(legacyProducts)
+          .where(inArray(legacyProducts.productId, legacyItems.map((i) => i.offerId)))
+      : Promise.resolve([] as { productId: string; fc: string | null }[]),
+  ]);
+  {
+    const m = new Map(poolRows.map((r) => [r.offerId, r.catPath]));
+    for (const it of poolItems) {
+      const cp = m.get(it.offerId);
+      if (!cp || scopeCats.some((c) => cp.includes(c))) n++;
+    }
+  }
+  {
+    const m = new Map(legacyRows.map((r) => [r.productId, r.fc]));
+    for (const it of legacyItems) {
+      const fc = m.get(it.offerId);
+      if (fc && scopeCats.includes(fc)) n++;
+    }
+  }
+  return n;
+}
+
 export async function searchOffers(query: string, page = 1): Promise<OfferSearchResult> {
   const q = query.trim();
   if (!q) return { items: [], total: null, page, source: "cache" };
@@ -628,10 +667,20 @@ export async function searchOffers(query: string, page = 1): Promise<OfferSearch
       const pooled = await poolSearch(q, 8);
       const legacy = pooled.length >= 8 ? [] : await legacySearchItems(q, 8 - pooled.length);
       const seen = new Set(pooled.map((i) => i.offerId));
-      const merged = [...pooled, ...legacy.filter((i) => !seen.has(i.offerId))];
+      const legacyNew = legacy.filter((i) => !seen.has(i.offerId));
+      const merged = [...pooled, ...legacyNew];
       const wholeCount = wantAcc ? merged.length : merged.filter((i) => !looksLikeAccessory(i.title)).length;
       if (wholeCount >= 6) {
-        return { items: merged.slice(0, 8), total: null, page, source: "cache" };
+        // V104 对题率闸口：词在图上时先验对题率，错类目凑数不许短路（马桶→马桶刷的教训）
+        const scopeCats = lookupCategories(q);
+        if (!scopeCats.length) {
+          return { items: merged.slice(0, 8), total: null, page, source: "cache" };
+        }
+        const onTopic = await countOnTopic(pooled, legacyNew, scopeCats).catch(() => 99); // 闸口自身故障=放行，不阻塞买家
+        if (onTopic >= 2) {
+          return { items: merged.slice(0, 8), total: null, page, source: "cache" };
+        }
+        // 对题 <2 条=类目级缺货，落下去走万邦实时补搜
       }
     } catch {
       /* 池查询失败不阻塞，继续走实时搜索 */

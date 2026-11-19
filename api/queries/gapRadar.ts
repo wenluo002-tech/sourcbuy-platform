@@ -32,11 +32,13 @@ export function extractProductWord(text: string): string | null {
 /** 记录缺口并后台拉候选（P0 2026-11-18 起改写探源主表 sourcing_requests，gap_requests 停写只读）。
  *  返回探源单 id（dedup 复用旧单也返回），供路由层补会话链；null=提不出产品词的原话不落单只留 ops 可见性。
  *  轻量部分（查重+建单）同步执行（本地 SQL，毫秒级），TXGC 拉取仍 fire-and-forget。绝不抛错给调用方。 */
-export async function recordGap(keyword: string, locale: string, userId: number | null): Promise<number | null> {
+export async function recordGap(keyword: string, locale: string, userId: number | null, opts?: { trustKeyword?: boolean }): Promise<number | null> {
   const db = getDb();
   const raw = keyword.trim().slice(0, 120);
   if (!raw) return null;
-  const kw = extractProductWord(raw);
+  // V104：调用方保证 keyword 是 LLM 意图抽出的产品词（非整句原话）时，LEXICON 提不出词也直接用它——
+  // 词库外的品类缺口（马桶这类）不能再 no_keyword 白丢，运营工单要靠它接货。长度闸防整句漏网。
+  const kw = extractProductWord(raw) ?? (opts?.trustKeyword && raw.length <= 20 && !/[，。！？!?,.\s]/.test(raw) ? raw : null);
   // 同关键词 DEDUP_HOURS 内已有探源单 → 复用，不重复扣费；上次失败则补跑 enrich
   const [dupRows] = (await db.execute(
     dsql`SELECT id, status FROM sourcing_requests WHERE keyword = ${kw ?? raw} AND created_at >= DATE_SUB(NOW(), INTERVAL ${DEDUP_HOURS} HOUR) ORDER BY id DESC LIMIT 1`,

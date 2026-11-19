@@ -49,6 +49,31 @@ export function looksLikeAccessory(title: string): boolean {
   return ACCESSORY_WORDS.some((w) => title.includes(w)) || ACCESSORY_PATTERNS.some((re) => re.test(title));
 }
 
+// "keyword+后缀"构成配件复合词（马桶→马桶刷/马桶垫，冰箱→冰箱贴）时的常见后缀字。
+// 用途：厂名"XX马桶刷厂"includes("马桶") 是子串事故，不代表这家厂做过马桶本体（V104 缺口雷达修正）。
+// 单字后缀只命中"keyword 后紧跟该字"的位置，keyword 本身以这些字开头/结尾不受影响（"水泵厂"对"水泵"安全）。
+const ACCESSORY_COMPOUND_SUFFIX = [
+  "刷", "垫", "套", "贴", "罩", "膜", "线", "架", "盒", "盖", "座", "圈", "链", "绳", "壳", "布", "柜",
+  "泵", "阀", "芯", "枪", "管", "泡沫泵", "水箱", "盖板", "滤芯", "喷枪", "软管", "密封圈", "法兰", "支架",
+];
+
+/** blob（厂名/评语/标签）中 keyword 的每次出现是否都是"keyword+配件后缀"的复合词。
+ *  全部出现都是复合 → true（该命中不算"做过这款产品"的证据）；只要有一次裸出现 → false。
+ *  keyword 未出现时也返回 false（无命中无排除）。 */
+export function mentionIsAccessoryCompound(blob: string, keyword: string): boolean {
+  const b = blob.toLowerCase();
+  const k = keyword.toLowerCase();
+  if (!k || !b.includes(k)) return false;
+  let idx = b.indexOf(k);
+  let sawPlain = false;
+  while (idx !== -1) {
+    const tail = b.slice(idx + k.length, idx + k.length + 3);
+    if (!ACCESSORY_COMPOUND_SUFFIX.some((s) => tail.startsWith(s))) sawPlain = true;
+    idx = b.indexOf(k, idx + 1);
+  }
+  return !sawPlain;
+}
+
 // 整机优先的稳定排序：搜整机词时配件沉底；搜配件词时原序不动
 export function prioritizeWholeMachines<T extends { title: string }>(query: string, items: T[]): T[] {
   if (queryWantsAccessory(query) || items.length < 2) return items;
