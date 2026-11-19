@@ -224,6 +224,15 @@ export const DEST_WORDS = [
 ];
 
 // LLM 全挂时的本地意图兜底：词库最长产品词 + 数量正则（排除金额）+ 目的地词表，保证无 LLM 时筛厂/搜货链路照跑
+// B 类算力（11-19 罗总授权，前提不损质量）：喂 LLM 的 history 统一截断——最近 8 条 + 单条 800 字符封顶。
+// 只砍 LLM input token；规则判断（证据标注/答卡检测/首轮判定）仍用完整 history，逻辑零变化。
+function llmHistory(history: ChatMsg[]) {
+  return history.slice(-8).map((m) => ({
+    role: m.role,
+    content: m.content.length > 800 ? m.content.slice(0, 800) + "…" : m.content,
+  }) as const);
+}
+
 function localIntentFallback(message: string): z.infer<typeof intentSchema> {
   // 纯问候/寒暄本地判定：不查库，交给 greeting 静态开场白（否则"你好"会被当品类去搜货）
   if (/^(你好|您好|hi|hello|hey|嗨|喂|在吗|在不在|早上好|下午好|晚上好|good\s*(morning|afternoon|evening))\s*[!！~～。.。]*$/i.test(message.trim())) {
@@ -557,7 +566,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
           INTENT_SYSTEM +
           "\n6. 买家消息附带商品图：product 从图里认（翻成中文品类词，尽量具体到产品）；specsNote 一句话写图上可见的规格/材质/颜色；实在看不出是什么，product 与 specsNote 都给 null。",
         messages: [
-          ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
+          ...llmHistory(history),
           {
             role: "user" as const,
             content: [
@@ -583,7 +592,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
         model: kimiGw(process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking"),
         system: INTENT_SYSTEM,
         messages: [
-          ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
+          ...llmHistory(history),
           { role: "user" as const, content: intentInput },
         ],
         schema: intentSchema,
@@ -601,7 +610,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   const intentSources = tagIntentSources(message, historyUserText, intent, { fromImage: !!imageData, fromRadar: !!radarCtx });
 
   const messages = [
-    ...history.slice(-10).map((m) => ({ role: m.role, content: m.content }) as const),
+    ...llmHistory(history),
     { role: "user" as const, content: message },
   ];
 
