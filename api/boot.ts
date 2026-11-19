@@ -141,6 +141,9 @@ app.post(
 const IMG_LOCAL_ROOT = path.join(QC_UPLOAD_ROOT, "img");
 const IMG_EXT_MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif" };
 
+// 轻量探活端点：guard.sh 专用（不查库不渲染，事件循环活着就 200）
+app.get("/api/healthz", (c) => c.json({ ok: true, ts: Date.now() }));
+
 // 本地化图片静态出口（公开只读，文件名是 sha1 无穿越面）
 app.get("/api/img/local/:name", (c) => {
   const name = c.req.param("name");

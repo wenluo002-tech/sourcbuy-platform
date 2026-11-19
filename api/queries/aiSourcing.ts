@@ -1040,7 +1040,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
           ? `[System facts] ${facts}\nReply to the user based on these facts.`
           : `[系统事实] ${facts}\n请基于以上事实回复用户。` },
       ],
-      abortSignal: AbortSignal.timeout(18_000),
+      abortSignal: AbortSignal.timeout(25_000), // 11-19 授权：网关偏慢，reply 18s→25s 减少兜底触发
     });
     reply = r.text;
   } catch (e) {
