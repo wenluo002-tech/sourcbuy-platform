@@ -6,6 +6,8 @@ export const zhChat = {
   greetingBack: "{name}，又见面了。这次想看什么货？品类、数量、目的地报给我，直接开干。",
   aiBuyerTag: "老采购",
   working: "· 作业中",
+  // V106 图1（罗总拍板）：寒暄/报称呼等轻交互的极简等待态——不表演寻源流程
+  thinking: "· 正在看…",
   stages: [
     { label: "解析采购需求", detail: "品类 · 数量 · 目的地 · 认证要求" },
     { label: "搜索真实在售货源", detail: "货源平台同步搜款 · 出厂价" },
@@ -52,7 +54,7 @@ export const zhChat = {
   linkRecognized: "已识别",
   linkFromSlug: "（从链接路径）",
   linkNoTitle: "平台挡了抓取——补一句品名我马上查",
-  stripTitle: "真实在售货源 · 出厂价（未含运费佣金）",
+  stripTitle: "真实在售货源",
   stripCount: "{n} 款",
   sold: "已售 {n}",
   onSale: "在售",
@@ -744,6 +746,8 @@ export const zh = {
     stepShortlisted: "入围",
     stepDelivered: "已交付",
     countScan: "命中 {n} 家档案",
+    // V106 图2：本轮聊天真实搜到的在售款数（进度条与下方商品墙对齐）
+    countOffer: "找到 {n} 款在售",
     countPool: "入池 {n} 家",
     countPass: "通过 {n} 家",
     countShortlist: "入围 {n} 家",

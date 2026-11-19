@@ -402,6 +402,11 @@ export default function ProductDetail() {
             {landed.error && (
               <p className="mt-2 text-xs text-[var(--sb-ink-60)]">{t("product.calcErrorPrefix")}{landed.error.message}{t("product.calcErrorSuffix")}</p>
             )}
+            {/* v61 防跳单经济锁（V106 挪位，罗总授权总负责人拍板）：从列表卡收进报价区——
+                买家算钱、点询价的那一刻看到对照，才是它杀伤力最大的位置 */}
+            <p className="mt-3 border-t border-dashed border-[var(--sb-line)] pt-2.5 text-[11px] leading-relaxed text-[var(--sb-ink-40)]">
+              {t("chat.diyLine")}
+            </p>
           </div>
 
           {/* CTA */}

@@ -14,6 +14,7 @@ import {
   getFactoryPassport,
 } from "./queries/factories";
 import { sourcingChat } from "./queries/aiSourcing";
+import { classifyLite } from "./lib/classifyLite";
 import { tempCheckFactory } from "./queries/tempCheck";
 import { logRecommendation, updateBuyerProfile } from "./queries/context";
 import { listRadar } from "./queries/radar";
@@ -232,7 +233,12 @@ export const appRouter = createRouter({
       }),
   }),
 
-  ai: createRouter({chat: publicQuery
+  ai: createRouter({
+    // V106 图1（罗总 2026-11-19 拍板）：loading 分流预判——纯词库正则零 LLM，只决定 pending 期间播哪种等待动画
+    classify: publicQuery
+      .input(z.object({ message: z.string().min(1).max(2000) }))
+      .query(({ input }) => ({ kind: classifyLite(input.message) })),
+    chat: publicQuery
       .input(
         z.object({
           message: z.string().min(1).max(2000),

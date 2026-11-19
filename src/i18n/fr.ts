@@ -27,6 +27,7 @@ export const fr = {
     stepShortlisted: "Présélectionnées",
     stepDelivered: "Livré",
     countScan: "{n} profils trouvés",
+    countOffer: "{n} offres en vente",
     countPool: "{n} dans le pool",
     countPass: "{n} retenues",
     countShortlist: "{n} présélectionnées",
@@ -188,6 +189,7 @@ export const fr = {
     greetingBack: "{name}, ravi de vous revoir. Qu'est-ce qu'on source cette fois ? Donnez-moi le produit, la quantité et la destination, et je m'y mets.",
     aiBuyerTag: "Acheteur chevronné",
     working: "· En cours",
+    thinking: "· Un instant…",
     stages: [
       {
         label: "Analyse du besoin d’achat",
@@ -249,7 +251,7 @@ export const fr = {
     linkRecognized: "Identifié",
     linkFromSlug: "(d’après le chemin du lien)",
     linkNoTitle: "La plateforme bloque le scraping — donnez le nom du produit, je cherche tout de suite",
-    stripTitle: "Sources réellement en vente · prix usine (hors fret et commission)",
+    stripTitle: "Sources réellement en vente",
     stripCount: "{n} modèles",
     sold: "{n} vendus",
     onSale: "En vente",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { SCORING_FORMULA } from "@contracts/scoring";
@@ -327,6 +327,21 @@ function SourcingStatus() {
   );
 }
 
+/* 轻交互等待态（V106 图1，罗总拍板）：寒暄/报称呼不播四步流程卡——UI 不表演不存在的过程 */
+function ThinkingLite() {
+  const { t } = useT();
+  return (
+    <div className="flex items-center gap-2 leading-none">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--sb-ink-40)]">
+        AI Buyer
+      </span>
+      <span className="text-[11px] font-medium text-[var(--sb-brand)]">{t("chat.aiBuyerTag")}</span>
+      <span className="text-[10px] text-[var(--sb-ink-40)]">{t("chat.thinking")}</span>
+      <span className="sb-dot-live h-1.5 w-1.5 rounded-full bg-[var(--sb-brand)]" />
+    </div>
+  );
+}
+
 const REF_RATE = FX_SETTLEMENT; // 与到手价引擎一致的结汇汇率（牌价 − 0.3，见 contracts/fx.ts）
 
 function fmtSales(n: number, lang: string = "zh"): string {
@@ -336,24 +351,19 @@ function fmtSales(n: number, lang: string = "zh"): string {
   return String(n);
 }
 
-/* 搜索结果商品墙：搜索级数据（图/出厂价/销量），DDP 估算只在详情页有真实重量后给——防伪造精度 */
+/* 搜索结果商品墙（V106 图3，罗总拍板方案 A）：种草位只摆图+标题+在售信号——价格、服务费、
+   到手价试算全部收进详情页（详情页有完整报价拆解与「发起询价」入口）。
+   列表不抛价格：买家被图和介绍打动才点进去看价，回归买手推荐而非货架比价。
+   边界：本瘦身只动搜索商品墙；对话内单产品大卡（ProductCard）本就是报价承接形态，不动。 */
 function ProductStrip({
   products,
-  quantity,
   manualQuote,
 }: {
   products: SearchProduct[];
   quantity?: string | null;
   manualQuote?: boolean;
 }) {
-  const qty = Math.max(0, parseInt(quantity ?? "", 10) || 0);
   const { t, lang } = useT();
-  // 佣金费率表 v1.0（单一事实源在后端 commission_rules 表；卡片按 B 档估，显式标注）
-  const commissionQ = trpc.pricing.commissionTable.useQuery(undefined, { staleTime: 60 * 60_000 });
-  const feeRule = (amtUsd: number) =>
-    commissionQ.data?.find(
-      (r) => r.riskTier === "B" && r.amountFrom <= amtUsd && (r.amountTo === null || amtUsd < r.amountTo)
-    );
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -364,8 +374,6 @@ function ProductStrip({
       </div>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
         {products.map((p) => {
-          const price = p.promotionPrice ?? p.price;
-          const calcUrl = `/calculator?price=${price}${qty ? `&qty=${qty}` : ""}`;
           return (
             <div
               key={p.offerId}
@@ -393,57 +401,23 @@ function ProductStrip({
                     {p.title}
                   </p>
                 </Link>
-                <div className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5">
-                  <span className="sb-num text-base font-bold tracking-tight">
-                    ¥{price}
-                  </span>
-                  <span className="text-[10px] tabular-nums text-[var(--sb-ink-40)]">
-                    ≈ US${(price / REF_RATE).toFixed(2)}
-                  </span>
-                </div>
-                {(() => {
-                  // 建材工业桶：费率估算不适用，换人工核价提示（防伪造精度）
-                  if (manualQuote) {
-                    return (
-                      <p className="mt-1 border-t border-dashed border-[var(--sb-line)] pt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
-                        {t("chat.manualQuoteLine")}
-                      </p>
-                    );
-                  }
-                  const rule = feeRule(((qty || 1) * price) / REF_RATE);
-                  if (!rule) return null;
-                  const minApplied = (((qty || 1) * price) / REF_RATE) * rule.rate < rule.minFee;
-                  return (
-                    <>
-                      <p className="mt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
-                        {t("chat.feeLine", { rate: parseFloat((rule.rate * 100).toFixed(1)) })}
-                        {minApplied ? t("chat.feeMin") : ""}
-                      </p>
-                      <p className="mt-1 border-t border-dashed border-[var(--sb-line)] pt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
-                        {t("chat.diyLine")}
-                      </p>
-                    </>
-                  );
-                })()}
                 <div className="mt-1.5 flex items-center justify-between gap-1">
                   <span className="text-[10px] text-[var(--sb-ink-40)]">
                     {p.sales > 0 ? t("chat.sold", { n: fmtSales(p.sales, lang) }) : t("chat.onSale")}
                   </span>
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to={`/products/${p.offerId}`}
-                      className="text-[10px] font-medium text-[var(--sb-ink-60)] underline-offset-2 hover:text-[var(--sb-brand)] hover:underline"
-                    >
-                      {t("chat.details")}
-                    </Link>
-                    <Link
-                      to={calcUrl}
-                      className="text-[10px] font-semibold text-[var(--sb-brand)] underline-offset-2 hover:underline"
-                    >
-                      {t("chat.calcLink")}
-                    </Link>
-                  </div>
+                  <Link
+                    to={`/products/${p.offerId}`}
+                    className="text-[10px] font-semibold text-[var(--sb-brand)] underline-offset-2 hover:underline"
+                  >
+                    {t("chat.details")}
+                  </Link>
                 </div>
+                {manualQuote && (
+                  // 建材工业桶：不抛价格≠不留核价方式说明——人工核价 48h 是服务承诺不是价格
+                  <p className="mt-1 border-t border-dashed border-[var(--sb-line)] pt-1 text-[10px] leading-snug text-[var(--sb-ink-40)]">
+                    {t("chat.manualQuoteLine")}
+                  </p>
+                )}
               </div>
             </div>
           );
@@ -661,6 +635,41 @@ export default function BuyerChat() {
   const threadsQ = trpc.threads.list.useQuery(undefined, { enabled: !!me && showHistory, staleTime: 10_000 });
   const utils = trpc.useUtils();
   const chat = trpc.ai.chat.useMutation();
+  // V106 图1：loading 分流——发消息时并行预判（零 LLM 纯词库，~10ms）；
+  // 预判未回时默认轻量动画（寒暄占多数时不会闪一下四步卡），命中寻源再升级
+  const [pendingKind, setPendingKind] = useState<"sourcing" | "light">("light");
+  // V106 图2（罗总拍板）：活跃探源单吸顶单卡——会话内同一时刻最多一张钉在对话流顶部，不被新消息顶走；
+  // 完结（delivered/failed）后归档回各自回合内嵌。24h 去重复用旧单时吸顶卡自动指向旧单，不重复挂。
+  const latestSrId = useMemo(() => {
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const id = turns[i].sourcingRequestId;
+      if (id) return id;
+    }
+    return null;
+  }, [turns]);
+  const latestSrQ = trpc.sourcing.get.useQuery(
+    { id: latestSrId ?? 0 },
+    {
+      enabled: latestSrId != null,
+      // 查询中（状态未知）按活跃处理——避免先内嵌后吸顶的布局跳动
+      refetchInterval: (q) => {
+        const s = q.state.data?.status;
+        return s && s !== "delivered" && s !== "failed" ? 8000 : false;
+      },
+    }
+  );
+  const srPinned =
+    latestSrId != null &&
+    latestSrQ.data?.status !== "delivered" &&
+    latestSrQ.data?.status !== "failed";
+  // 触发该探源单的那一轮真实搜到的在售款数——进度条「扫描货源」步与下方商品墙对齐
+  const srLiveOfferCount = useMemo(() => {
+    if (!srPinned) return 0;
+    for (let i = turns.length - 1; i >= 0; i--) {
+      if (turns[i].sourcingRequestId === latestSrId) return turns[i].products?.length ?? 0;
+    }
+    return 0;
+  }, [turns, latestSrId, srPinned]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -789,6 +798,16 @@ export default function BuyerChat() {
     const msg = fileMarker ? `${base ? base + " " : ""}${fileMarker}` : base;
     if (!msg || chat.isPending) return;
     const img = pendingImage;
+    // V106 图1：附件/雷达直达必是寻源（跳过预判直接四步卡）；纯文字并行预判分流
+    const sureSourcing = !!(img || pendingFile || radarId);
+    setPendingKind(sureSourcing ? "sourcing" : "light");
+    if (!sureSourcing) {
+      // query 用 utils 命令式触发：结果只进本地 state，不占 React Query 缓存位
+      utils.ai.classify
+        .fetch({ message: msg })
+        .then((r) => setPendingKind(r.kind === "sourcing" ? "sourcing" : "light"))
+        .catch(() => { /* 预判失败维持轻量动画，答案照常——loading 只是皮肤 */ });
+    }
     const history = turns.map((turn) => ({ role: turn.role, content: turn.content }));
     setTurns((ts) => [...ts, { role: "user", content: msg, imageUrl: img ?? undefined }]);
     setInput("");
@@ -967,6 +986,12 @@ export default function BuyerChat() {
       )}
       {/* 对话区 */}
       <div ref={scrollRef} className="sb-scroll flex-1 space-y-6 overflow-y-auto rounded-[20px] border border-[var(--sb-line)] bg-white p-4 md:p-7">
+        {/* V106 图2：活跃探源卡吸顶——对话滚动时钉在顶部，实时状态始终可见 */}
+        {srPinned && latestSrId != null && (
+          <div className="sticky top-0 z-10 -mx-4 -mt-4 bg-white/95 px-4 pt-4 pb-1 backdrop-blur-sm md:-mx-7 md:-mt-7 md:px-7 md:pt-7">
+            <SourcingProgressCard requestId={latestSrId} liveOfferCount={srLiveOfferCount} />
+          </div>
+        )}
         {turns.map((turn, i) =>
           turn.role === "user" ? (
             <div key={i} className="flex justify-end">
@@ -998,8 +1023,11 @@ export default function BuyerChat() {
               {/* 「我理解的需求」来源行：AI 推断的字段亮明身份（不编数据铁律的界面化） */}
               {turn.intentSources && <IntentEcho sources={turn.intentSources} intent={turn.echoIntent} />}
 
-              {/* 探源步骤条卡（P1）：本轮触发探源单时挂载，读实时 events 流水 */}
-              {turn.sourcingRequestId && <SourcingProgressCard requestId={turn.sourcingRequestId} />}
+              {/* 探源步骤条卡（P1）：本轮触发探源单时挂载，读实时 events 流水；
+                  V106 图2——最新一张活跃单已吸顶，回合内跳过防重复 */}
+              {turn.sourcingRequestId && !(srPinned && turn.sourcingRequestId === latestSrId) && (
+                <SourcingProgressCard requestId={turn.sourcingRequestId} />
+              )}
 
               {/* 补充问题卡：多题同卡一次提交 / 跳过直寻 */}
               {turn.followUp && (
@@ -1189,7 +1217,7 @@ export default function BuyerChat() {
             </div>
           )
         )}
-        {chat.isPending && <SourcingStatus />}
+        {chat.isPending && (pendingKind === "sourcing" ? <SourcingStatus /> : <ThinkingLite />)}
         <div ref={bottomRef} />
       </div>
 

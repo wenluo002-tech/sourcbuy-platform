@@ -20,7 +20,7 @@ const FAIL_COPY: Record<string, string> = {
   zero_candidates: "sr.failZero", manual_pending_timeout: "sr.failManualTimeout",
 };
 
-export function SourcingProgressCard({ requestId }: { requestId: number }) {
+export function SourcingProgressCard({ requestId, liveOfferCount = 0 }: { requestId: number; liveOfferCount?: number }) {
   const { t } = useT();
   const q = trpc.sourcing.get.useQuery(
     { id: requestId },
@@ -57,7 +57,17 @@ export function SourcingProgressCard({ requestId }: { requestId: number }) {
     );
   }
 
-  const stageIdx = STEPS.indexOf(v.status as (typeof STEPS)[number]);
+  // V106 图2（罗总拍板，两处对齐）：
+  // ① 状态语义修正——transition() 在动作「完成后」写入状态，所以 status 是"已完成到哪一步"，
+  //    指针应落在下一步：scanned=扫描已完成→扫描步打勾亮计数、指针停在 AI 初筛（P3 未上线前如实显示排队中）。
+  //    旧映射把 scanned 当"扫描进行中"，探源单终身停在扫描步——罗总截图说的"形同虚设"根因。
+  // ② 与商品墙对齐——本轮聊天已真实搜到 N 款在售、探源单还停在 received（TXGC 扫描未回）时，
+  //    扫描步按本轮真实搜索结果显示完成（计数=N 款在售）；后端事件流水写入后以其为准。
+  const STATUS_IDX: Record<string, number> = {
+    received: 1, scanned: 2, screened: 3, verifying: 3, shortlisted: 4, delivered: 5,
+  };
+  const rawIdx = STATUS_IDX[v.status] ?? STEPS.indexOf(v.status as (typeof STEPS)[number]);
+  const stageIdx = v.status === "received" && liveOfferCount > 0 ? STEPS.indexOf("screened") : rawIdx;
   const lastCountOf = (stage: string) => {
     const ev = [...v.events].reverse().find((e) => e.stage === stage);
     return ev?.count ?? null;
@@ -77,6 +87,8 @@ export function SourcingProgressCard({ requestId }: { requestId: number }) {
         {STEPS.map((s, i) => {
           const cnt = lastCountOf(s);
           const labelKey = COUNT_LABEL[s];
+          // 对齐态：扫描步的事件流水还没写入，用本轮搜索的真实款数（口径=在售款，不是档案家数）
+          const liveCnt = s === "scanned" && cnt == null && done(i) && liveOfferCount > 0 ? liveOfferCount : null;
           return (
             <div key={s} className="flex shrink-0 items-start">
               <div className="flex min-w-[64px] flex-col items-center text-center">
@@ -89,13 +101,18 @@ export function SourcingProgressCard({ requestId }: { requestId: number }) {
                   {t(STEP_LABEL[s])}
                 </span>
                 <span className="mt-0.5 text-[10px] leading-tight text-[var(--sb-ink-40)]">
-                  {done(i) && cnt != null && labelKey
-                    ? t(labelKey).replace("{n}", String(cnt))
-                    : current(i) && v.status !== "delivered"
-                      ? t("sr.running")
-                      : done(i) || current(i)
-                        ? ""
-                        : t("sr.pending")}
+                  {liveCnt != null
+                    ? t("sr.countOffer").replace("{n}", String(liveCnt))
+                    : done(i) && cnt != null && labelKey
+                      ? t(labelKey).replace("{n}", String(cnt))
+                      : current(i) && v.status !== "delivered"
+                        // 扫描已完成、粗筛未启动（P3 未上线）：如实说"排队中"，不谎称"进行中"
+                        ? v.status === "scanned" && s === "screened"
+                          ? t("sr.pending")
+                          : t("sr.running")
+                        : done(i) || current(i)
+                          ? ""
+                          : t("sr.pending")}
                 </span>
               </div>
               {i < STEPS.length - 1 && (

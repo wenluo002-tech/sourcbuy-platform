@@ -27,6 +27,7 @@ export const es = {
     stepShortlisted: "Preseleccionadas",
     stepDelivered: "Entregado",
     countScan: "{n} perfiles encontrados",
+    countOffer: "{n} productos en venta",
     countPool: "{n} en el grupo",
     countPass: "{n} aprobadas",
     countShortlist: "{n} preseleccionadas",
@@ -188,6 +189,7 @@ export const es = {
     greetingBack: "{name}, qué bueno verte de nuevo. ¿Qué buscamos esta vez? Dame categoría, cantidad y destino, y me pongo manos a la obra.",
     aiBuyerTag: "Comprador veterano",
     working: "· Trabajando",
+    thinking: "· Echando un vistazo…",
     stages: [
       {
         label: "Analizando tu solicitud",
@@ -249,7 +251,7 @@ export const es = {
     linkRecognized: "Identificado",
     linkFromSlug: "(desde la URL del enlace)",
     linkNoTitle: "La plataforma bloqueó el rastreo — dime el nombre del producto y lo busco ahora",
-    stripTitle: "Productos reales en venta · Precio de fábrica (sin flete ni comisión)",
+    stripTitle: "Productos reales en venta",
     stripCount: "{n} modelos",
     sold: "Vendidos {n}",
     onSale: "En venta",

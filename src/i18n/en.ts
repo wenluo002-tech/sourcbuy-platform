@@ -9,6 +9,8 @@ const enChat: Messages["chat"] = {
   greetingBack: "{name} — good to see you again. What are we sourcing this time? Product, quantity, destination — give me the three and I'll get to work.",
   aiBuyerTag: "Veteran buyer",
   working: "· working",
+  // V106: minimal waiting state for light interactions (greetings, names) — no fake pipeline theatre
+  thinking: "· Taking a look…",
   stages: [
     { label: "Parsing your request", detail: "Category · quantity · destination · certifications" },
     { label: "Searching live supply", detail: "Real-time listings · EXW prices" },
@@ -55,7 +57,7 @@ const enChat: Messages["chat"] = {
   linkRecognized: "recognized",
   linkFromSlug: " (from link path)",
   linkNoTitle: "The platform blocked scraping — tell me the product name and I'll search right away",
-  stripTitle: "Live supply · EXW prices (freight & commission not included)",
+  stripTitle: "Live supply",
   stripCount: "{n} items",
   sold: "{n} sold",
   onSale: "On sale",
@@ -748,6 +750,8 @@ export const en: Messages = {
     stepShortlisted: "Shortlisted",
     stepDelivered: "Delivered",
     countScan: "{n} profiles found",
+    // V106: listings this chat turn actually surfaced (aligns the stepper with the product wall below)
+    countOffer: "{n} listings found",
     countPool: "{n} entered the pool",
     countPass: "{n} passed",
     countShortlist: "{n} shortlisted",
