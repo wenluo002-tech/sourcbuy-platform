@@ -82,7 +82,7 @@ export function RadarCard({ it, i }: { it: RadarItem; i: number }) {
       </div>
 
       {/* 品名 */}
-      <h3 className="sb-display mt-3 text-[21px] leading-snug text-[var(--sb-ink)]">{lang !== "zh" && it.titleEn ? it.titleEn : it.title}</h3>
+      <h3 className="sb-display mt-3 text-[21px] leading-snug text-[var(--sb-ink)]">{it.title}</h3>
       {it.titleEn && lang !== "en" && (
         <p className="mt-1 line-clamp-1 text-[11px] tracking-[0.04em] text-[var(--sb-ink-40)]">{it.titleEn}</p>
       )}

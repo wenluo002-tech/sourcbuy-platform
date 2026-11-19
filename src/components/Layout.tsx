@@ -40,7 +40,9 @@ export default function Layout() {
               Agent
             </span>
           </Link>
-          <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center justify-end">
+          {/* 四个页面链接横滑区；登录/语言切换是关键操作，钉死在右侧绝不进横滑区（390 实测被挤没） */}
+          <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-1.5">
             {NAV.map((n) => {
               const active =
                 n.to === "/" ? pathname === "/" : pathname.startsWith(n.to);
@@ -70,7 +72,8 @@ export default function Layout() {
                 </Link>
               );
             })}
-            {me ? (
+          </nav>
+          {me ? (
               <span className="ml-1 flex shrink-0 items-center gap-1.5 sm:ml-2">
                 <Link
                   to="/dashboard"
@@ -88,7 +91,7 @@ export default function Layout() {
                 </span>
                 <button
                   onClick={() => logout()}
-                  className="border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)]"
+                  className="hidden border border-[var(--sb-rule)] px-2 py-1 text-[10px] font-semibold tracking-[0.12em] text-[var(--sb-ink-60)] transition-colors hover:border-[var(--sb-brand)] hover:text-[var(--sb-brand)] sm:block"
                 >
                   {t("nav.signOut")}
                 </button>
@@ -115,7 +118,7 @@ export default function Layout() {
                 </option>
               ))}
             </select>
-          </nav>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8">

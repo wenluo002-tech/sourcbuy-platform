@@ -228,7 +228,7 @@ export const appRouter = createRouter({
         // 翻译纪律：绝不阻塞响应——lookupCached 同步替换已缓存译文，缺失 fire-and-forget 后台补；
         // 缓存由版本发布前的 i18n 巡检器（db/i18n-scan.ts）铺满，线上用户永远命中快路径
         const { translateFields } = await import("./lib/translate");
-        await translateFields(data.items as any[], ["signalText", "note"], input?.locale);
+        await translateFields(data.items as any[], ["title", "signalText", "note"], input?.locale);
         return data;
       }),
   }),
