@@ -48,9 +48,15 @@ export async function fetchOffer(offerId: string): Promise<NormalizedOffer | nul
   const d = body?.Data;
   if (!body?.Success || !d) return null;
 
+  // Range 三种形态都见过：对象 {BeginAmount} / 直接数字 / 数字字符串（"20"）——逐个兜，NaN 落 0 不污染排序
+  const toMinQty = (p: any): number => {
+    const raw = p?.Range?.BeginAmount ?? p?.BeginAmount ?? (typeof p?.Range === "object" ? 0 : p?.Range) ?? 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  };
   const priceTiers = (d.PriceRangeInfos ?? d.OriginalPriceRangeInfos ?? [])
     .map((p: any) => ({
-      minQty: Number(p.Range?.BeginAmount ?? p.BeginAmount ?? 0),
+      minQty: toMinQty(p),
       price: Number(p.Price ?? 0),
     }))
     .filter((p: any) => p.price > 0)

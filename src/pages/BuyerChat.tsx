@@ -521,6 +521,38 @@ function ProductCard({
               ))}
             </div>
           )}
+          {(() => {
+            // V110 议价建议卡（罗总 P1）：纯前端阶梯价计算，零 LLM 零成本。
+            // 出卡条件：买家给了数量 + 存在下一档 + 省幅≥3% + 加量≤3倍（不现实的建议不出）；
+            // 已到顶档 → 引导人工专案价（承诺=既有 48h 人工通道，不吹）。
+            // 防呆：起订量全同（上游档位信息缺失，如全 0）时无法判断"当前档/下一档"，
+            // 一律不出卡——否则任何数量都会误判"已到最大量价档"，误导买家（不编数据铁律）。
+            if (tiers.length < 2 || qty <= 0 || !main) return null;
+            if (new Set(tiers.map((p) => p.minQty)).size < 2) return null;
+            const top = tiers[tiers.length - 1];
+            if (main === top) {
+              return (
+                <p className="mt-2 rounded-md bg-[var(--sb-brand-soft)] px-2.5 py-1.5 text-[11px] leading-snug text-[var(--sb-brand)]">
+                  {t("chat.bargainTop")}
+                </p>
+              );
+            }
+            const next = tiers.find((p) => p.minQty > qty);
+            if (!next) return null;
+            const save = (main.price - next.price) / main.price;
+            if (save < 0.03 || next.minQty > qty * 3) return null;
+            return (
+              <p className="mt-2 rounded-md bg-[var(--sb-brand-soft)] px-2.5 py-1.5 text-[11px] leading-snug text-[var(--sb-brand)]">
+                {t("chat.bargainTip", {
+                  qty: next.minQty.toLocaleString(),
+                  unit: unitLabel(offer.unit, lang, t),
+                  from: main.price,
+                  to: next.price,
+                  pct: Math.round(save * 100),
+                })}
+              </p>
+            );
+          })()}
           <p className="mt-2 text-[10px] leading-relaxed text-[var(--sb-ink-40)]">
             {t("chat.fxNote", { rate: REF_RATE })}
           </p>

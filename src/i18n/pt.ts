@@ -134,10 +134,10 @@ export const pt = {
       培育: "Em desenvolvimento"
     },
     medalName: {
-      一钻工厂: "Fábrica 1 diamante", 二钻工厂: "Fábrica 2 diamantes", 三钻工厂: "Fábrica 3 diamantes", 四钻工厂: "Fábrica 4 diamantes",
+      一钻工厂: "Fábrica 1 estrela", 二钻工厂: "Fábrica 2 estrelas", 三钻工厂: "Fábrica 3 estrelas", 四钻工厂: "Fábrica 4 estrelas",
       铜牌工厂: "Fábrica bronze", 银牌工厂: "Fábrica prata", 金牌工厂: "Fábrica ouro",
-      金牌制造: "Fabricante ouro", 金牌制造1钻: "Fabricante ouro · 1 diamante", 金牌制造2钻: "Fabricante ouro · 2 diamantes",
-      金牌制造3钻: "Fabricante ouro · 3 diamantes", 金牌制造4钻: "Fabricante ouro · 4 diamantes", 无牌工厂: "Fábrica sem classificação",
+      金牌制造: "Fabricante ouro", 金牌制造1钻: "Fabricante ouro · 1 estrela", 金牌制造2钻: "Fabricante ouro · 2 estrelas",
+      金牌制造3钻: "Fabricante ouro · 3 estrelas", 金牌制造4钻: "Fabricante ouro · 4 estrelas", 无牌工厂: "Fábrica sem classificação",
     } as Record<string, string>,
     tierDesc: {
       金标: "Topo da pirâmide, grandes pedidos sem preocupação",
@@ -262,6 +262,8 @@ export const pt = {
     u_pcs: "un.", u_pairs: "pares", u_sets: "conjuntos", u_boxes: "caixas", u_units: "unidades", u_rolls: "rolos", u_bottles: "garrafas", u_packs: "pacotes", u_bags: "sacos", u_dozen: "dúzias",
     perUnitExw: "/ {unit} · preço de fábrica",
     qtyTier: "faixa de {qty} {unit}",
+    bargainTip: "Dica do comprador: suba para {qty} {unit} e o preço unitário cai de ¥{from} para ¥{to} (−{pct}%).",
+    bargainTop: "Você já está no melhor nível de volume desta fábrica. Para um lote maior, envie-me a quantidade — eu negocio um preço de projeto manualmente.",
     fxNote: "Convertido pelo câmbio de liquidação {rate} (taxa do dia − 0.3); custo final = preço de fábrica + frete + tarifa aduaneira + comissão; toque em “Calcular custo final” para simular linha a linha",
     feeLine: "Serviço {rate}% · estimado na faixa B (o cálculo final usa categoria e valor reais)",
     echoTitle: "O que entendi da necessidade",
@@ -544,7 +546,7 @@ export const pt = {
     emptyTitle: "Nenhuma fábrica corresponde diretamente",
     emptyBody: "Tente termos mais amplos (ex.: \"roupas\" em vez de \"moletom\") ou limpe os filtros. Se não encontrar, deixe o agente de compras com IA buscar manualmente — o banco de fábricas cresce toda semana.",
     emptyReset: "Limpar filtros e ver tudo",
-    superFactory: "Super fábrica",
+    superFactory: "Verificada no local",
     yearsSuffix: "ano",
     repurchase: "Recompra {n}%",
     tempTitle: "Não está no banco? Informe o nome para verificação em tempo real",
@@ -600,7 +602,7 @@ export const pt = {
     loading: "Carregando…",
     notFound: "Fábrica não existe.",
     scoreLabel: "Pontuação Seleção Premium",
-    superFactory: "Super Fábrica",
+    superFactory: "Verificada no local",
     factLabels: {
       location: "Região",
       years: "Anos de credibilidade",

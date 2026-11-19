@@ -134,10 +134,10 @@ export const es = {
       培育: "En desarrollo"
     },
     medalName: {
-      一钻工厂: "Fábrica 1 diamante", 二钻工厂: "Fábrica 2 diamantes", 三钻工厂: "Fábrica 3 diamantes", 四钻工厂: "Fábrica 4 diamantes",
+      一钻工厂: "Fábrica 1 estrella", 二钻工厂: "Fábrica 2 estrellas", 三钻工厂: "Fábrica 3 estrellas", 四钻工厂: "Fábrica 4 estrellas",
       铜牌工厂: "Fábrica bronce", 银牌工厂: "Fábrica plata", 金牌工厂: "Fábrica oro",
-      金牌制造: "Fabricante oro", 金牌制造1钻: "Fabricante oro · 1 diamante", 金牌制造2钻: "Fabricante oro · 2 diamantes",
-      金牌制造3钻: "Fabricante oro · 3 diamantes", 金牌制造4钻: "Fabricante oro · 4 diamantes", 无牌工厂: "Fábrica sin clasificar",
+      金牌制造: "Fabricante oro", 金牌制造1钻: "Fabricante oro · 1 estrella", 金牌制造2钻: "Fabricante oro · 2 estrellas",
+      金牌制造3钻: "Fabricante oro · 3 estrellas", 金牌制造4钻: "Fabricante oro · 4 estrellas", 无牌工厂: "Fábrica sin clasificar",
     } as Record<string, string>,
     tierDesc: {
       金标: "La élite; confía pedidos grandes sin dudar",
@@ -262,6 +262,8 @@ export const es = {
     u_pcs: "uds.", u_pairs: "pares", u_sets: "juegos", u_boxes: "cajas", u_units: "unidades", u_rolls: "rollos", u_bottles: "botellas", u_packs: "paquetes", u_bags: "bolsas", u_dozen: "docenas",
     perUnitExw: "/ {unit} · Precio de fábrica",
     qtyTier: "Escalón según {qty} {unit}",
+    bargainTip: "Consejo del comprador: sube a {qty} {unit} y el precio unitario baja de ¥{from} a ¥{to} ({pct}% menos).",
+    bargainTop: "Ya estás en el mejor nivel por volumen de esta fábrica. Para una tirada mayor, mándame la cifra — negocio un precio de proyecto a mano.",
     fxNote: "Convertido al tipo de cambio {rate} (cotización del día − 0.3); precio final = precio de fábrica + flete + aranceles + comisión. Pulsa «Calcular precio final» para verlo línea por línea",
     feeLine: "Servicio {rate}% · estimado con escalón B (el cálculo final usa la categoría e importe exactos)",
     echoTitle: "Lo que entendí",
@@ -544,7 +546,7 @@ export const es = {
     emptyTitle: "No hay fábricas que coincidan directamente",
     emptyBody: "Prueba términos más amplios (p. ej. \"ropa\" en vez de \"sudadera\") o limpia los filtros. Si no encuentras un producto, el comprador IA puede buscarlo a mano: el directorio crece cada semana.",
     emptyReset: "Limpiar filtros y ver todo",
-    superFactory: "Súper fábrica",
+    superFactory: "Verificada en sitio",
     yearsSuffix: "años",
     repurchase: "Recompra {n}%",
     tempTitle: "¿No está en la base? Dinos el nombre y lo verificamos en tiempo real",
@@ -600,7 +602,7 @@ export const es = {
     loading: "Cargando…",
     notFound: "La fábrica no existe.",
     scoreLabel: "Puntuación premium",
-    superFactory: "Súper fábrica",
+    superFactory: "Verificada en sitio",
     factLabels: {
       location: "Ubicación",
       years: "Años de solvencia",

@@ -66,6 +66,8 @@ export const zhChat = {
   u_pcs: "件", u_pairs: "双", u_sets: "套", u_boxes: "箱", u_units: "台", u_rolls: "卷", u_bottles: "瓶", u_packs: "包", u_bags: "袋", u_dozen: "打",
   perUnitExw: "/ {unit} · 出厂价",
   qtyTier: "按 {qty} {unit}档",
+  bargainTip: "老采购建议：加到 {qty} {unit}，单价 ¥{from} → ¥{to}，省 {pct}%",
+  bargainTop: "已是该厂最大量价档。量再大，发我具体数字——我按专案价替你人工谈。",
   fxNote:
     "按结汇汇率 {rate} 折算（当日牌价 − 0.3）；到手价 = 出厂价 + 运费 + 关税 + 履约佣金，点「算到手价」逐行试算",
   feeLine: "服务费 {rate}% · 按 B 档估（到手价试算按实际类目与金额精确算）",
@@ -155,7 +157,7 @@ export const zhFactories = {
   emptyTitle: "没有直接匹配的工厂",
   emptyBody: "试试更宽泛的词（如\"服饰\"代替\"卫衣\"），或清空筛选条件。找不到的品可以交给 AI 买手人工补源——工厂库每周都在扩充。",
   emptyReset: "清空筛选，查看全部",
-  superFactory: "超级工厂",
+  superFactory: "实地验厂",
   yearsSuffix: " 年",
   repurchase: "复购 {n}%",
   tempTitle: "库里没有？报名字实时核查",
@@ -213,7 +215,7 @@ export const zhFactoryDetail = {
   loading: "加载中…",
   notFound: "工厂不存在。",
   scoreLabel: "严选评分",
-  superFactory: "超级工厂",
+  superFactory: "实地验厂",
   factLabels: {
     location: "所在地区",
     years: "诚信年限",
@@ -844,10 +846,10 @@ export const zh = {
     tierSuffix: "工厂",
     tierName: { 金标: "金标", 银标: "银标", 铜标: "铜标", 优选: "优选", 培育: "培育" } as Record<string, string>,
     medalName: {
-      一钻工厂: "一钻工厂", 二钻工厂: "二钻工厂", 三钻工厂: "三钻工厂", 四钻工厂: "四钻工厂",
+      一钻工厂: "一星工厂", 二钻工厂: "二星工厂", 三钻工厂: "三星工厂", 四钻工厂: "四星工厂",
       铜牌工厂: "铜牌工厂", 银牌工厂: "银牌工厂", 金牌工厂: "金牌工厂",
-      金牌制造: "金牌制造", 金牌制造1钻: "金牌制造1钻", 金牌制造2钻: "金牌制造2钻",
-      金牌制造3钻: "金牌制造3钻", 金牌制造4钻: "金牌制造4钻", 无牌工厂: "无牌工厂",
+      金牌制造: "金牌制造", 金牌制造1钻: "金牌制造1星", 金牌制造2钻: "金牌制造2星",
+      金牌制造3钻: "金牌制造3星", 金牌制造4钻: "金牌制造4星", 无牌工厂: "无牌工厂",
     } as Record<string, string>,
     tierDesc: {
       金标: "金字塔尖，大单放心托付",

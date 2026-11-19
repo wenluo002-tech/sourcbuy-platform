@@ -134,10 +134,10 @@ export const fr = {
       培育: "En développement"
     },
     medalName: {
-      一钻工厂: "Usine 1 diamant", 二钻工厂: "Usine 2 diamants", 三钻工厂: "Usine 3 diamants", 四钻工厂: "Usine 4 diamants",
+      一钻工厂: "Usine 1 étoile", 二钻工厂: "Usine 2 étoiles", 三钻工厂: "Usine 3 étoiles", 四钻工厂: "Usine 4 étoiles",
       铜牌工厂: "Usine bronze", 银牌工厂: "Usine argent", 金牌工厂: "Usine or",
-      金牌制造: "Fabricant or", 金牌制造1钻: "Fabricant or · 1 diamant", 金牌制造2钻: "Fabricant or · 2 diamants",
-      金牌制造3钻: "Fabricant or · 3 diamants", 金牌制造4钻: "Fabricant or · 4 diamants", 无牌工厂: "Usine non classée",
+      金牌制造: "Fabricant or", 金牌制造1钻: "Fabricant or · 1 étoile", 金牌制造2钻: "Fabricant or · 2 étoiles",
+      金牌制造3钻: "Fabricant or · 3 étoiles", 金牌制造4钻: "Fabricant or · 4 étoiles", 无牌工厂: "Usine non classée",
     } as Record<string, string>,
     tierDesc: {
       金标: "Le sommet, confiez les grosses commandes en toute confiance",
@@ -262,6 +262,8 @@ export const fr = {
     u_pcs: "pcs", u_pairs: "paires", u_sets: "ensembles", u_boxes: "boîtes", u_units: "unités", u_rolls: "rouleaux", u_bottles: "bouteilles", u_packs: "packs", u_bags: "sacs", u_dozen: "douzaines",
     perUnitExw: "/ {unit} · prix usine",
     qtyTier: "Palier {qty} {unit}",
+    bargainTip: "Conseil d'acheteur : passez à {qty} {unit} et le prix unitaire tombe de ¥{from} à ¥{to} (−{pct} %).",
+    bargainTop: "Vous êtes déjà au meilleur palier volume de cette usine. Pour un volume supérieur, envoyez-moi le chiffre — je négocie un prix projet à la main.",
     fxNote: "Converti au taux de change {rate} (cotation du jour − 0.3) ; prix rendu = prix usine + fret + droits + commission d’exécution — appuyez sur « Calc. prix rendu » pour le détail ligne à ligne",
     feeLine: "Frais de service {rate}% · estimé palier B (le prix rendu final est calculé selon catégorie et montant réels)",
     echoTitle: "Ce que j’ai compris",
@@ -544,7 +546,7 @@ export const fr = {
     emptyTitle: "Aucune usine ne correspond directement",
     emptyBody: "Essayez des termes plus larges (« vêtements » au lieu de « sweat »), ou videz les filtres. Si introuvable, confiez le produit à l’acheteur IA pour sourcing manuel — la banque s’étoffe chaque semaine.",
     emptyReset: "Vider les filtres, tout voir",
-    superFactory: "Super usine",
+    superFactory: "Vérifiée sur site",
     yearsSuffix: "ans",
     repurchase: "Réachat {n}%",
     tempTitle: "Pas dans la banque ? Donnez un nom, on vérifie en temps réel",
@@ -600,7 +602,7 @@ export const fr = {
     loading: "Chargement…",
     notFound: "Usine introuvable.",
     scoreLabel: "Score sélection",
-    superFactory: "Super usine",
+    superFactory: "Vérifiée sur site",
     factLabels: {
       location: "Région",
       years: "Ancienneté",

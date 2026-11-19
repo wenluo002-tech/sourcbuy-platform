@@ -69,6 +69,8 @@ const enChat: Messages["chat"] = {
   u_pcs: "pcs", u_pairs: "pairs", u_sets: "sets", u_boxes: "boxes", u_units: "units", u_rolls: "rolls", u_bottles: "bottles", u_packs: "packs", u_bags: "bags", u_dozen: "dozen",
   perUnitExw: "/ {unit} · EXW",
   qtyTier: "Tier at {qty} {unit}",
+  bargainTip: "Buyer's tip: bump to {qty} {unit} and the unit price drops ¥{from} → ¥{to} ({pct}% less).",
+  bargainTop: "You're at this factory's best volume tier. For a bigger run, send me the number — I'll negotiate a project price by hand.",
   fxNote:
     "Converted at settlement rate {rate} (daily fix − 0.3). Landed cost = EXW + freight + duty + fulfillment commission — tap 'Landed cost' for the line-item breakdown",
   feeLine: "Service fee {rate}% · Tier B estimate (the calculator prices your exact category & amount)",
@@ -158,7 +160,7 @@ const enFactories: Messages["factories"] = {
   emptyTitle: "No direct matches",
   emptyBody: "Try a broader term (e.g. \"apparel\" instead of \"hoodies\"), or clear the filters. If you can't find it, hand it to the AI buyer for manual sourcing — the library grows every week.",
   emptyReset: "Clear filters, view all",
-  superFactory: "Super factory",
+  superFactory: "Field-verified",
   yearsSuffix: " yrs",
   repurchase: "{n}% repurchase",
   tempTitle: "Not in the pool? Run a live check",
@@ -216,7 +218,7 @@ const enFactoryDetail: Messages["factoryDetail"] = {
   loading: "Loading…",
   notFound: "Factory not found.",
   scoreLabel: "Vetting score",
-  superFactory: "Super factory",
+  superFactory: "Field-verified",
   factLabels: {
     location: "Location",
     years: "Trust years",
@@ -848,10 +850,10 @@ export const en: Messages = {
     tierSuffix: "",
     tierName: { 金标: "Gold", 银标: "Silver", 铜标: "Bronze", 优选: "Rising", 培育: "New" },
     medalName: {
-      一钻工厂: "1-Diamond Factory", 二钻工厂: "2-Diamond Factory", 三钻工厂: "3-Diamond Factory", 四钻工厂: "4-Diamond Factory",
+      一钻工厂: "1-Star Factory", 二钻工厂: "2-Star Factory", 三钻工厂: "3-Star Factory", 四钻工厂: "4-Star Factory",
       铜牌工厂: "Bronze Factory", 银牌工厂: "Silver Factory", 金牌工厂: "Gold Factory",
-      金牌制造: "Gold Manufacturer", 金牌制造1钻: "Gold Manufacturer · 1 Diamond", 金牌制造2钻: "Gold Manufacturer · 2 Diamonds",
-      金牌制造3钻: "Gold Manufacturer · 3 Diamonds", 金牌制造4钻: "Gold Manufacturer · 4 Diamonds", 无牌工厂: "Unrated Factory",
+      金牌制造: "Gold Manufacturer", 金牌制造1钻: "Gold Manufacturer · 1 Star", 金牌制造2钻: "Gold Manufacturer · 2 Stars",
+      金牌制造3钻: "Gold Manufacturer · 3 Stars", 金牌制造4钻: "Gold Manufacturer · 4 Stars", 无牌工厂: "Unrated Factory",
     } as Record<string, string>,
     tierDesc: {
       金标: "Top tier — safe for big orders",
