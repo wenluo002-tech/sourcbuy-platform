@@ -68,11 +68,22 @@ interface LinkRef {
   fetchFailed: boolean;
 }
 
+/* V111 主推标注（后端单一事实源）：前端大卡推荐理由 chips 与 QA 断言用 */
+interface TopPickData {
+  id: number;
+  linked: boolean; // 最硬证据=严选厂在卖这款
+  exactProduct: boolean;
+  tier: string | null; // 档位定性，不抛分数（CO-001 口径）
+  years: number | null;
+  location: string | null;
+}
+
 interface Turn {
   role: "user" | "assistant";
   content: string;
   imageUrl?: string;
   factories?: MatchedFactory[];
+  topPick?: TopPickData | null; // V111 主推标注
   product?: LinkedProduct | null;
   products?: SearchProduct[];
   linkRef?: LinkRef | null;
@@ -423,6 +434,197 @@ function ProductStrip({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* 工厂卡（V111 收敛版）：primary=主推大卡（「主推」徽章+推荐理由 chips），备选/逃生口复用同款 */
+function FactoryCardItem({
+  f,
+  primary,
+  topPick,
+}: {
+  f: MatchedFactory;
+  primary?: boolean;
+  topPick?: TopPickData | null;
+}) {
+  const { t } = useT();
+  return (
+    <div
+      className={
+        primary
+          ? "rounded-xl border-2 border-[var(--sb-brand)] bg-white p-4 transition-shadow hover:shadow-[0_2px_8px_rgba(11,11,11,0.06)]"
+          : "rounded-xl border border-[var(--sb-line)] bg-white p-4 transition-shadow hover:shadow-[0_2px_8px_rgba(11,11,11,0.06)]"
+      }
+    >
+      {primary && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <span className="rounded bg-[var(--sb-brand)] px-1.5 py-0.5 text-xs font-bold text-white">
+            {t("chat.topPick")}
+          </span>
+          {topPick?.linked && (
+            <span className="rounded-full bg-[#fdf6e3] px-2 py-0.5 text-[10px] font-medium text-[#92610a] ring-1 ring-[#e9d5a1]">
+              {t("chat.topReasonLinked")}
+            </span>
+          )}
+          {topPick?.tier && (
+            <span className="rounded-full border border-[var(--sb-line)] px-2 py-0.5 text-[10px] text-[var(--sb-ink-60)]">{topPick.tier}</span>
+          )}
+          {topPick?.years ? (
+            <span className="rounded-full border border-[var(--sb-line)] px-2 py-0.5 text-[10px] text-[var(--sb-ink-60)]">
+              {topPick.years}
+              {t("chat.yearsSuffix")}
+            </span>
+          ) : null}
+        </div>
+      )}
+                      {f.productImages && f.productImages.length > 0 && (
+                        <div className="mb-3 flex gap-1.5">
+                          {f.productImages.map((src, j) => (
+                            <img
+                              key={j}
+                              src={src}
+                              alt=""
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                              className="h-16 w-16 rounded-lg border border-[var(--sb-line)] object-cover"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-start justify-between gap-2">
+                        <Link
+                          to={`/factories/${f.id}`}
+                          className="line-clamp-1 text-sm font-semibold hover:text-[var(--sb-brand)]"
+                        >
+                          {/* 未解锁代号按界面语言显示（后端 mask 固定中文模板，外语界面这里换 i18n 版） */}
+                          {(f as any).masked ? t("chat.maskedName", { n: String(f.id).padStart(4, "0") }) : f.name}
+                        </Link>
+                        {/* 裸分不外露（v101 口径合规）：改亮档位徽章 */}
+                        {f.tier && (
+                          <span className="shrink-0 rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
+                            {t(`home.tierName.${f.tier}`)}
+                          </span>
+                        )}
+                      </div>
+                      {(f as any).masked && (
+                        <p className="mt-1 flex items-center gap-1 text-[10px] text-[var(--sb-ink-40)]">
+                          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          {t("chat.maskedHint")}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-[var(--sb-ink-40)]">
+                        {[f.tier ? t(`home.tierName.${f.tier}`) : null, f.location, f.years ? `${f.years}${t("chat.yearsSuffix")}` : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      {f.matchBasis === "productLinked" && f.linkedOffer ? (
+                        /* 有这款在售货：标题直达商品页（罗总 11-12 反馈：推荐厂没产品链接，买家看不到货下不了单） */
+                        <Link
+                          to={`/products/${f.linkedOffer.offerId}`}
+                          className="mt-1.5 line-clamp-2 block text-xs leading-relaxed text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
+                        >
+                          {t("chat.sellingItem", { title: f.linkedOffer.title.slice(0, 30) })}
+                        </Link>
+                      ) : (
+                        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
+                          {f.reason === "严选库在册 · 有这款在售货" ? t("chat.shopVettedShort") || f.reason : f.reason}
+                        </p>
+                      )}
+                      {f.tags && f.tags.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {f.tags.slice(0, 4).map((tg) => (
+                            <span
+                              key={tg}
+                              className="rounded-full border border-[var(--sb-line)] px-2 py-0.5 text-[10px] text-[var(--sb-ink-60)]"
+                            >
+                              {tg}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {f.categoryRank && (
+                        <p className="mt-2 text-xs font-semibold text-[var(--sb-brand)]">
+                          {t("chat.rankLine", { cat: f.categoryRank.category, rank: f.categoryRank.rank, total: f.categoryRank.total })}
+                        </p>
+                      )}
+                      {f.matchBasis === "productLinked" && f.linkedOffer && (
+                        <Link
+                          to={`/products/${f.linkedOffer.offerId}`}
+                          className="mt-2 block rounded-md bg-[#fdf6e3] px-2 py-1.5 text-xs font-medium leading-relaxed text-[#92610a] ring-1 ring-[#e9d5a1] transition-shadow hover:shadow-[0_2px_6px_rgba(146,97,10,0.18)]"
+                        >
+                          {f.linkedOffer.sales > 0
+                            ? t("chat.goldBadge", { price: f.linkedOffer.price, sales: f.linkedOffer.sales.toLocaleString() })
+                            : t("chat.goldBadgeArchive", { price: f.linkedOffer.price })}
+                          <span aria-hidden="true" className="ml-1">→</span>
+                        </Link>
+                      )}
+                      {f.matchBasis === "bucket" && (
+                        <p className="mt-2 text-xs font-medium text-[#b45309]">
+                          {t("chat.bucketNote")}
+                        </p>
+                      )}
+                      {f.evidence.length > 0 && (
+                        <details className="mt-2.5 text-xs">
+                          <summary className="cursor-pointer select-none font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline">
+                            {t("chat.whyRecommend", { n: f.evidence.length })}
+                          </summary>
+                          <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed text-[var(--sb-ink-60)]">
+                            {f.evidence.map((e, j) => (
+                              <li key={j}>{e}</li>
+                            ))}
+                          </ul>
+                          {f.subScores && (
+                            <div className="mt-2.5 space-y-1">
+                              {SCORING_FORMULA.dimensions.map((d) => {
+                                const v = f.subScores?.[d.key];
+                                if (v == null) return null;
+                                return (
+                                  <div key={d.key} className="flex items-center gap-1.5">
+                                    <span className="w-14 shrink-0 text-[10px] text-[var(--sb-ink-40)]">
+                                      {t(`chat.scoreDim.${d.key}`)}
+                                    </span>
+                                    <div className="h-1.5 flex-1 rounded-full bg-[var(--sb-paper)]">
+                                      <div
+                                        className="h-1.5 rounded-full bg-[var(--sb-brand)]/70"
+                                        style={{ width: `${Math.min(100, v)}%` }}
+                                      />
+                                    </div>
+                                    <span className="w-7 shrink-0 text-right text-[10px] text-[var(--sb-ink-40)]">
+                                      {v}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </details>
+                      )}
+                      <div className="mt-3 flex items-center gap-3 border-t border-[var(--sb-line)] pt-2.5">
+                        {f.matchBasis === "productLinked" && f.linkedOffer && (
+                          <Link
+                            to={`/products/${f.linkedOffer.offerId}`}
+                            className="text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
+                          >
+                            {t("chat.viewProduct")}
+                          </Link>
+                        )}
+                        <Link
+                          to={`/factories/${f.id}`}
+                          className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
+                        >
+                          {t("chat.factoryProfile")}
+                        </Link>
+                        <Link
+                          to="/calculator"
+                          className="text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
+                        >
+                          {t("chat.calcLink")}
+                        </Link>
+                      </div>
     </div>
   );
 }
@@ -872,6 +1074,7 @@ export default function BuyerChat() {
               role: "assistant",
               content: res.reply,
               factories: res.factories,
+              topPick: (res as any).topPick ?? null,
               product: (res as any).product ?? null,
               products: (res as any).products?.length ? (res as any).products : undefined,
               linkRef: (res as any).linkContext ?? null,
@@ -915,6 +1118,7 @@ export default function BuyerChat() {
                 role: "assistant" as const,
                 content: m.content,
                 factories: p.factories?.length ? p.factories : undefined,
+                topPick: p.topPick ?? null,
                 product: p.product ?? null,
                 products: p.products?.length ? p.products : undefined,
                 linkRef: p.linkContext ?? null,
@@ -1087,165 +1291,47 @@ export default function BuyerChat() {
                 <ProductStrip products={turn.products} quantity={turn.quantity} manualQuote={turn.manualQuote} />
               )}
 
-              {/* 工厂卡 */}
-              {turn.factories && turn.factories.length > 0 && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {turn.factories.map((f) => (
-                    <div
-                      key={f.id}
-                      className="rounded-xl border border-[var(--sb-line)] bg-white p-4 transition-shadow hover:shadow-[0_2px_8px_rgba(11,11,11,0.06)]"
-                    >
-                      {f.productImages && f.productImages.length > 0 && (
-                        <div className="mb-3 flex gap-1.5">
-                          {f.productImages.map((src, j) => (
-                            <img
-                              key={j}
-                              src={src}
-                              alt=""
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                              className="h-16 w-16 rounded-lg border border-[var(--sb-line)] object-cover"
-                            />
+              {/* 工厂卡（V111 收敛：1 主推+2 备选+「全库再筛」逃生口；有商品墙时整区默认折叠为证据模块） */}
+              {turn.factories && turn.factories.length > 0 && (() => {
+                const [primary, ...restAll] = turn.factories;
+                const alternates = restAll.slice(0, 2);
+                const escaped = restAll.slice(2);
+                const body = (
+                  <div className="space-y-3">
+                    <FactoryCardItem f={primary} primary topPick={turn.topPick} />
+                    {alternates.length > 0 && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {alternates.map((f) => (
+                          <FactoryCardItem key={f.id} f={f} />
+                        ))}
+                      </div>
+                    )}
+                    {escaped.length > 0 && (
+                      <details className="rounded-xl border border-[var(--sb-line)] bg-white px-4 py-3">
+                        <summary className="cursor-pointer select-none text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline">
+                          {t("chat.reshowAll", { n: escaped.length })}
+                        </summary>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          {escaped.map((f) => (
+                            <FactoryCardItem key={f.id} f={f} />
                           ))}
                         </div>
-                      )}
-                      <div className="flex items-start justify-between gap-2">
-                        <Link
-                          to={`/factories/${f.id}`}
-                          className="line-clamp-1 text-sm font-semibold hover:text-[var(--sb-brand)]"
-                        >
-                          {/* 未解锁代号按界面语言显示（后端 mask 固定中文模板，外语界面这里换 i18n 版） */}
-                          {(f as any).masked ? t("chat.maskedName", { n: String(f.id).padStart(4, "0") }) : f.name}
-                        </Link>
-                        {/* 裸分不外露（v101 口径合规）：改亮档位徽章 */}
-                        {f.tier && (
-                          <span className="shrink-0 rounded bg-[var(--sb-brand-soft)] px-1.5 py-0.5 text-xs font-semibold text-[var(--sb-brand)]">
-                            {t(`home.tierName.${f.tier}`)}
-                          </span>
-                        )}
-                      </div>
-                      {(f as any).masked && (
-                        <p className="mt-1 flex items-center gap-1 text-[10px] text-[var(--sb-ink-40)]">
-                          <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                          {t("chat.maskedHint")}
-                        </p>
-                      )}
-                      <p className="mt-1 text-xs text-[var(--sb-ink-40)]">
-                        {[f.tier ? t(`home.tierName.${f.tier}`) : null, f.location, f.years ? `${f.years}${t("chat.yearsSuffix")}` : null]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                      {f.matchBasis === "productLinked" && f.linkedOffer ? (
-                        /* 有这款在售货：标题直达商品页（罗总 11-12 反馈：推荐厂没产品链接，买家看不到货下不了单） */
-                        <Link
-                          to={`/products/${f.linkedOffer.offerId}`}
-                          className="mt-1.5 line-clamp-2 block text-xs leading-relaxed text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
-                        >
-                          {t("chat.sellingItem", { title: f.linkedOffer.title.slice(0, 30) })}
-                        </Link>
-                      ) : (
-                        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--sb-ink-60)]">
-                          {f.reason === "严选库在册 · 有这款在售货" ? t("chat.shopVettedShort") || f.reason : f.reason}
-                        </p>
-                      )}
-                      {f.tags && f.tags.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {f.tags.slice(0, 4).map((tg) => (
-                            <span
-                              key={tg}
-                              className="rounded-full border border-[var(--sb-line)] px-2 py-0.5 text-[10px] text-[var(--sb-ink-60)]"
-                            >
-                              {tg}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {f.categoryRank && (
-                        <p className="mt-2 text-xs font-semibold text-[var(--sb-brand)]">
-                          {t("chat.rankLine", { cat: f.categoryRank.category, rank: f.categoryRank.rank, total: f.categoryRank.total })}
-                        </p>
-                      )}
-                      {f.matchBasis === "productLinked" && f.linkedOffer && (
-                        <Link
-                          to={`/products/${f.linkedOffer.offerId}`}
-                          className="mt-2 block rounded-md bg-[#fdf6e3] px-2 py-1.5 text-xs font-medium leading-relaxed text-[#92610a] ring-1 ring-[#e9d5a1] transition-shadow hover:shadow-[0_2px_6px_rgba(146,97,10,0.18)]"
-                        >
-                          {f.linkedOffer.sales > 0
-                            ? t("chat.goldBadge", { price: f.linkedOffer.price, sales: f.linkedOffer.sales.toLocaleString() })
-                            : t("chat.goldBadgeArchive", { price: f.linkedOffer.price })}
-                          <span aria-hidden="true" className="ml-1">→</span>
-                        </Link>
-                      )}
-                      {f.matchBasis === "bucket" && (
-                        <p className="mt-2 text-xs font-medium text-[#b45309]">
-                          {t("chat.bucketNote")}
-                        </p>
-                      )}
-                      {f.evidence.length > 0 && (
-                        <details className="mt-2.5 text-xs">
-                          <summary className="cursor-pointer select-none font-medium text-[var(--sb-brand)] underline-offset-4 hover:underline">
-                            {t("chat.whyRecommend", { n: f.evidence.length })}
-                          </summary>
-                          <ul className="mt-2 list-disc space-y-1 pl-4 leading-relaxed text-[var(--sb-ink-60)]">
-                            {f.evidence.map((e, j) => (
-                              <li key={j}>{e}</li>
-                            ))}
-                          </ul>
-                          {f.subScores && (
-                            <div className="mt-2.5 space-y-1">
-                              {SCORING_FORMULA.dimensions.map((d) => {
-                                const v = f.subScores?.[d.key];
-                                if (v == null) return null;
-                                return (
-                                  <div key={d.key} className="flex items-center gap-1.5">
-                                    <span className="w-14 shrink-0 text-[10px] text-[var(--sb-ink-40)]">
-                                      {t(`chat.scoreDim.${d.key}`)}
-                                    </span>
-                                    <div className="h-1.5 flex-1 rounded-full bg-[var(--sb-paper)]">
-                                      <div
-                                        className="h-1.5 rounded-full bg-[var(--sb-brand)]/70"
-                                        style={{ width: `${Math.min(100, v)}%` }}
-                                      />
-                                    </div>
-                                    <span className="w-7 shrink-0 text-right text-[10px] text-[var(--sb-ink-40)]">
-                                      {v}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </details>
-                      )}
-                      <div className="mt-3 flex items-center gap-3 border-t border-[var(--sb-line)] pt-2.5">
-                        {f.matchBasis === "productLinked" && f.linkedOffer && (
-                          <Link
-                            to={`/products/${f.linkedOffer.offerId}`}
-                            className="text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
-                          >
-                            {t("chat.viewProduct")}
-                          </Link>
-                        )}
-                        <Link
-                          to={`/factories/${f.id}`}
-                          className="text-xs font-medium text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline"
-                        >
-                          {t("chat.factoryProfile")}
-                        </Link>
-                        <Link
-                          to="/calculator"
-                          className="text-xs font-semibold text-[var(--sb-brand)] underline-offset-4 hover:underline"
-                        >
-                          {t("chat.calcLink")}
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      </details>
+                    )}
+                  </div>
+                );
+                // 产品为锚（CO-001-1）：商品墙在场时工厂证据默认折叠；无货时工厂是主角直接展开
+                return turn.products && turn.products.length > 0 ? (
+                  <details className="rounded-xl border border-dashed border-[var(--sb-line)] bg-white/60 px-4 py-3">
+                    <summary className="cursor-pointer select-none text-xs font-semibold text-[var(--sb-ink-60)] underline-offset-4 hover:text-[var(--sb-brand)] hover:underline">
+                      {t("chat.factoryEvidence", { n: turn.factories.length })}
+                    </summary>
+                    <div className="mt-3">{body}</div>
+                  </details>
+                ) : (
+                  body
+                );
+              })()}
             </div>
           )
         )}

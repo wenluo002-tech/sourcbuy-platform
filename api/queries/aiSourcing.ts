@@ -121,7 +121,7 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 你会收到：用户消息、对话历史、抽取的采购意图、以及系统真实筛出的工厂清单（JSON，可能为空数组）。
 
 规则：
-1. 工厂卡片会由界面展示在你的话下面（含评分、分层、类目排名、推荐证据），你不要逐家罗列工厂名，只做点评、给建议、提示风险（一两句点到即可）。引用工厂的真实数据点评（评分、年限、复购率、回复率等），但不要在话术里报类目池子总数（如"484 家严选厂里的前 6 名"这种表达禁止）——排名交给卡片展示，你只说"类目头部""该类目前列"这类定性判断。
+1. 叙事结构（产品为锚，三段式，CO-001 口径）：先讲货——这批货的价格带/销量/现货水平怎么样；再一句工厂背书——只用档位定性（金标/银标档）+年限+在售证据（如"主推这家是金标档、12 年老厂、这款正在售"），绝不抛评分数字、绝不逐家罗列厂名；最后一句兜底——下单走平台，双检+先行赔付，货不对板不用买家自己找工厂扯皮（一句即可，不展开承诺细节）。工厂卡片由界面展示在你的话下面（分层、排名、证据都在卡上），你只做点评、给建议、提示风险（一两句点到即可）。不要在话术里报类目池子总数（如"484 家严选厂里的前 6 名"这种表达禁止），只说"类目头部""该类目前列"这类定性判断。
 2. 清单为空时必须诚实说明"这个品类词库里暂时没匹配到合适的工厂"，并给 1-2 个替代建议（换个更通用的品类词 / 放宽条件 / 留需求给人工买手）。绝不允许声称"已筛出/下面是对比"等没有发生的事。
 3. 需求不靠谱要直说：预算明显低于成本要劝，起订量太小别推源头大厂。不当应声虫。
 4. 还差关键信息（数量/目标价）时，在话尾补一个追问，一次只问一个。
@@ -172,7 +172,7 @@ const REPLY_SYSTEM_EN = `You are SourcBuy's AI sourcing agent. Persona: a vetera
 You receive: the user's message, chat history, the extracted sourcing intent, and the system's real matched factory list (JSON, possibly empty).
 
 Rules:
-1. Factory cards render below your reply (score, tier, category rank, evidence). Don't enumerate factories — comment, advise, flag risks in a sentence or two. Quote their real data (score, years, repurchase rate), but never quote category pool sizes ("top 6 out of 484 vetted factories" is forbidden) — ranks show on the cards; you only say "top of the category" as a qualitative judgment.
+1. Narrative structure (product-anchored, three beats): FIRST the goods — price band / sales / availability. THEN one line of factory backing — qualitative tier only (gold/silver tier) + years + live-selling evidence (e.g. "the top pick is a gold-tier factory, 12 years in, selling this exact item now"); NEVER quote score numbers, NEVER enumerate factory names. LAST one safety line — orders run through the platform with dual inspection and buyer-first compensation, so a mismatched shipment never becomes the buyer's own fight (one line, no fine print). Factory cards render below your reply (tier, rank, evidence on the cards) — you only comment, advise, flag risks in a sentence or two. Never quote category pool sizes ("top 6 out of 484 vetted factories" is forbidden) — say "top of the category" as a qualitative judgment.
 2. If the list is empty, say honestly that no suitable factory in our vetted database matched this item yet, and offer 1-2 alternatives (a broader product word / looser constraints / leave it to a human buyer). Never claim you shortlisted or compared anything that didn't happen.
 3. Push back on unrealistic asks: a budget clearly below cost gets pushback; don't point tiny orders at big source factories. Don't be a yes-man.
 4. If key info is missing (quantity / target price), end with ONE follow-up question — only one.
@@ -383,6 +383,8 @@ function buildFallbackReply(
     const band = prices.length ? `主流出厂价带在 ¥${Math.min(...prices)} 到 ¥${Math.max(...prices)}` : "";
     parts.push(`在售货源给你列在下面了，${band ? band + "，" : ""}看中哪款点进去，规格、阶梯价、到手价都能算。`);
   }
+  // V111 三段式收尾：工厂背书之后一句兜底（双检+先行赔付），一句即可不展开
+  if (factories.length > 0) parts.push("下单走平台：出厂一检、入仓二检我盯着，货不对板我先行赔付——你不用自己找工厂扯皮。");
   if (!intent.quantity) parts.push("你打算拿多少量？量不同，我谈的价和选的厂都不一样。");
   else if (!intent.destination) parts.push("发往哪个国家？目的地定了，到手价我给你算到个位数。");
   parts.push("（刚才话术生成有点慢，我先把真数据给你，细节咱接着聊。）");
@@ -459,6 +461,8 @@ function buildFallbackReplyEn(
     const band = prices.length ? `mainstream EXW band runs ¥${Math.min(...prices)} to ¥${Math.max(...prices)}` : "";
     parts.push(`Live listings are below${band ? ", " + band : ""}. Tap whatever catches your eye — specs, ladder pricing and landed cost are all in there.`);
   }
+  // V111 three-beat closer: after the factory backing, one safety line (dual inspection + buyer-first compensation)
+  if (factories.length > 0) parts.push("Order through the platform: pre-shipment inspection plus warehouse re-check are on me, and if the goods don't match I compensate you first — you never have to chase the factory yourself.");
   if (!intent.quantity) parts.push("How many units are you thinking? Quantity changes both the price I negotiate and the factories I pick.");
   else if (!intent.destination) parts.push("Which country is it headed to? With a destination I'll price the landed cost down to the cent.");
   parts.push("(The write-up ran slow just now, so I've given you the real data first — details as we go.)");
@@ -1120,6 +1124,18 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     manualQuote, // 建材工业桶：前端据此把费率估算行换成"人工核价"提示
     sourcingRequestId, // 探源单 id（无缺口触发时为 null）；前端挂步骤条卡、路由补会话链
     factories,
+    // V111 推荐收敛 1+2：factories[0]=主推（已按 productLinked 优先+评分排序），[1,2]=备选，[3+]=「全库再筛」逃生口。
+    // 主推标注显式下发：前端大卡推荐理由 chips 与 QA 断言用，口径单一事实源在后端。
+    topPick: factories.length
+      ? {
+          id: factories[0].id,
+          linked: factories[0].matchBasis === "productLinked", // 最硬证据=严选厂在卖这款
+          exactProduct: !!factories[0].exactProduct,
+          tier: tierLabel(factories[0].tier, locale), // 档位定性，不抛分数（CO-001 口径）
+          years: factories[0].years,
+          location: factories[0].location,
+        }
+      : null,
     products: searchProducts,
     linkContext: linkCtx
       ? { platform: linkCtx.platform, title: linkCtx.title, image: proxyImageUrl(linkCtx.image), priceText: linkCtx.priceText, url: linkCtx.url, source: linkCtx.source, fetchFailed: linkCtx.fetchFailed ?? false }

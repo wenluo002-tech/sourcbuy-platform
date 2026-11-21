@@ -99,6 +99,10 @@ const enChat: Messages["chat"] = {
   goldBadge: "✓ Vetted & selling this exact item: from ¥{price} · {sales} sold (verified live)",
   goldBadgeArchive: "✓ Vetted & selling this exact item: from ¥{price}",
   bucketNote: "High scorer in the broader category · confirm with photos before assuming they make this",
+  topPick: "Top pick",
+  topReasonLinked: "Sells this item",
+  reshowAll: "Rescan the pool ({n} more)",
+  factoryEvidence: "Factory evidence ({n} vetted)",
   whyRecommend: "Why this one? ({n} pieces of evidence)",
   factoryProfile: "Factory profile →",
   scoreDim: {

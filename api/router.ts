@@ -287,6 +287,7 @@ export const appRouter = createRouter({
             followUp: result.followUp ?? null,
             manualQuote: (result as any).manualQuote ?? false,
             sourcingRequestId: result.sourcingRequestId ?? null,
+            topPick: (result as any).topPick ?? null, // V111 主推标注（回放用）
           });
           // 探源单会话链回填（P0）：客服可回溯"买家哪句话触发的这张单"
           if (result.sourcingRequestId) {

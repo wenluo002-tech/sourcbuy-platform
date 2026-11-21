@@ -96,6 +96,10 @@ export const zhChat = {
   goldBadge: "✓ 严选库在册 · 有这款在售：¥{price} 起 · 销量 {sales}（已实时核对）",
   goldBadgeArchive: "✓ 严选库在册 · 有这款在售：¥{price} 起",
   bucketNote: "同大类高分厂 · 做这款请先拿图确认",
+  topPick: "主推",
+  topReasonLinked: "在售同款",
+  reshowAll: "全库再筛（还有 {n} 家候选）",
+  factoryEvidence: "工厂证据（{n} 家严选厂）",
   whyRecommend: "为什么推荐它？（{n} 条证据）",
   factoryProfile: "工厂档案 →",
   scoreDim: {

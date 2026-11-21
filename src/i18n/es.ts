@@ -290,6 +290,10 @@ export const es = {
     goldBadge: "✓ Registrada en banco verificado · con stock: desde ¥{price} · ventas {sales}（verificado en tiempo real）",
     goldBadgeArchive: "✓ Registrada en banco verificado · con stock: desde ¥{price}",
     bucketNote: "Fábrica de alto puntaje en la misma categoría · para este producto, confirma primero con fotos",
+    topPick: "Recomendada",
+    topReasonLinked: "Vende este artículo",
+    reshowAll: "Revisar todo el pool ({n} más)",
+    factoryEvidence: "Evidencia de fábricas ({n} verificadas)",
     whyRecommend: "¿Por qué la recomendamos?（{n} evidencias）",
     factoryProfile: "Expediente de fábrica →",
     scoreDim: {

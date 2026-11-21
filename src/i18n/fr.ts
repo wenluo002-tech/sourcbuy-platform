@@ -290,6 +290,10 @@ export const fr = {
     goldBadge: "✓ Réseau sélectionné · ce produit en vente : dès ¥{price} · ventes {sales} (vérifié en temps réel)",
     goldBadgeArchive: "✓ Réseau sélectionné · ce produit en vente : dès ¥{price}",
     bucketNote: "Usine à haute note, même grand domaine · envoyez vos plans pour confirmer ce produit",
+    topPick: "Choix principal",
+    topReasonLinked: "Vend cet article",
+    reshowAll: "Rescanner tout le pool ({n} de plus)",
+    factoryEvidence: "Preuves usines ({n} vérifiées)",
     whyRecommend: "Pourquoi cette recommandation ? ({n} preuves)",
     factoryProfile: "Dossier usine →",
     scoreDim: {
