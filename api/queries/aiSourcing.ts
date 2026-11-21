@@ -361,15 +361,22 @@ function buildFallbackReply(
   const what = intent.product ? `「${intent.product}」` : "这个品";
   const linkedCount = factories.filter((f) => f.matchBasis === "productLinked").length;
   const directCount = factories.filter((f) => f.matchBasis === "direct").length;
+  // V111.1 收敛对齐：兜底话术与界面「1 主推大卡 + 2 备选 + 全库再筛」同口径，主推引导先行，不再逐类枚举家数
+  const altTail =
+    factories.length > 3
+      ? "另配了 2 家备选做对比；还想多看就点「全库再筛」，其余候选都在里面。"
+      : factories.length > 1
+        ? `另附 ${factories.length - 1} 家候选做对比。`
+        : "";
   if (linkedCount > 0) {
     const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
-    const sample = l0?.linkedOffer ? `比如清单最前这家（${l0.name}），这款它正在卖，出厂 ¥${l0.linkedOffer.price} 起${l0.linkedOffer.sales > 0 ? `、上游销量 ${l0.linkedOffer.sales.toLocaleString()}——在售数据我刚核过` : "——在册档案货源"}` : "";
+    const sample = l0?.linkedOffer ? `——这款它正在卖，出厂 ¥${l0.linkedOffer.price} 起${l0.linkedOffer.sales > 0 ? `、上游销量 ${l0.linkedOffer.sales.toLocaleString()}，在售数据我刚核过` : "，在册档案货源"}` : "";
     parts.push(
-      `${what}有个硬证据：${linkedCount} 家严选厂就在卖这款，在售链接、出厂价、销量我都逐一核对过${sample ? "——" + sample : ""}。${directCount > 0 ? `另有 ${directCount} 家明确做这类产品的厂，` : ""}${factories.length - linkedCount - directCount > 0 ? `再附 ${factories.length - linkedCount - directCount} 家同大类高分厂做参考，` : ""}卡片在下面，证据都摊开着。`,
+      `${what}有个硬证据：${linkedCount} 家严选厂就在卖这款，在售链接、出厂价、销量我都逐一核对过。清单最前面那张大卡是我最推荐的${l0 ? `（${l0.name}）` : ""}${sample}。${altTail}`,
     );
   } else if (factories.length > 0 && directCount > 0) {
     parts.push(
-      `${what}我筛出 ${directCount} 家明确做这类产品的严选厂${factories.length > directCount ? `，另外附了 ${factories.length - directCount} 家同大类高分厂做参考` : ""}，卡片在下面——评分、年限、证据都摊开着，你自己核对。${relaxed ? "这回我把评分门槛放宽了些，别嫌厂多。" : ""}`,
+      `${what}我筛出 ${directCount} 家明确做这类产品的严选厂——清单最前面那张大卡是我最推荐的。${altTail}档位、年限、在售证据都在卡片上，你自己核对。${relaxed ? "这回我把门槛放宽了些，别嫌厂多。" : ""}`,
     );
   } else if (factories.length > 0) {
     parts.push(
@@ -439,15 +446,22 @@ function buildFallbackReplyEn(
   const enName = (n: string) => n.replace(/^严选工厂 No\.(\d+)$/, "Vetted Factory No.$1");
   const linkedCount = factories.filter((f) => f.matchBasis === "productLinked").length;
   const directCount = factories.filter((f) => f.matchBasis === "direct").length;
+  // V111.1 convergence alignment: fallback copy mirrors the UI's "1 top pick + 2 alternates + Rescan the pool", no per-bucket enumeration
+  const altTail =
+    factories.length > 3
+      ? ' Two alternates are paired in for comparison; want more, open "Rescan the pool" — the rest are in there.'
+      : factories.length > 1
+        ? ` ${factories.length - 1} more candidate${factories.length - 1 > 1 ? "s" : ""} alongside for comparison.`
+        : "";
   if (linkedCount > 0) {
     const l0 = factories.find((f) => f.matchBasis === "productLinked" && f.linkedOffer);
-    const sample = l0?.linkedOffer ? ` The top pick (${enName(l0.name)}) is selling this exact item — from ¥${l0.linkedOffer.price}${l0.linkedOffer.sales > 0 ? `, upstream sales ${l0.linkedOffer.sales.toLocaleString()}; I verified the listing just now.` : " — a vetted-archive listing."}` : "";
+    const sample = l0?.linkedOffer ? ` — from ¥${l0.linkedOffer.price}${l0.linkedOffer.sales > 0 ? `, upstream sales ${l0.linkedOffer.sales.toLocaleString()}, verified live just now` : ", a vetted-archive listing"}.` : "";
     parts.push(
-      `${what} comes with hard evidence: ${linkedCount} vetted factories are selling this exact item — listing, EXW price and sales all checked live.${sample}${directCount > 0 ? ` Another ${directCount} explicitly make this kind of product.` : ""}${factories.length - linkedCount - directCount > 0 ? ` Plus ${factories.length - linkedCount - directCount} high scorers in the broader category for reference.` : ""} Cards are below, evidence laid out.`,
+      `${what} comes with hard evidence: ${linkedCount} vetted ${linkedCount > 1 ? "factories are" : "factory is"} selling this exact item — listing, EXW price and sales all checked live. The big card up top is my top pick${l0 ? ` (${enName(l0.name)})` : ""}${sample || "."}${altTail}`,
     );
   } else if (factories.length > 0 && directCount > 0) {
     parts.push(
-      `For ${what} I shortlisted ${directCount} vetted factories that explicitly make this kind of product${factories.length > directCount ? `, plus ${factories.length - directCount} high scorers in the broader category for reference` : ""} — cards below, with scores, years and evidence laid out for you to check.${relaxed ? " I loosened the score bar a bit this time, so excuse the longer list." : ""}`,
+      `For ${what} I shortlisted ${directCount} vetted ${directCount > 1 ? "factories" : "factory"} that explicitly make this kind of product — the big card up top is my top pick.${altTail} Tier, years and listing evidence are on the cards for you to check.${relaxed ? " I loosened the bar a bit this time, so excuse the longer list." : ""}`,
     );
   } else if (factories.length > 0) {
     parts.push(
