@@ -1026,7 +1026,7 @@ export default function BuyerChat() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [turns, chat.isPending]);
 
-  function send(text: string, radarId?: number) {
+  function send(text: string, radarId?: number, historyOverride?: { role: "user" | "assistant"; content: string }[], forceTid?: number) {
     const fileMarker = pendingFile ? (lang !== "zh" ? `[Drawing attached: ${pendingFile}]` : `[图纸附件：${pendingFile}]`) : "";
     const base = text.trim() || (pendingImage ? t("chat.defaultImageMsg") : pendingFile ? t("chat.defaultDocMsg") : "");
     const msg = fileMarker ? `${base ? base + " " : ""}${fileMarker}` : base;
@@ -1042,18 +1042,20 @@ export default function BuyerChat() {
         .then((r) => setPendingKind(r.kind === "sourcing" ? "sourcing" : "light"))
         .catch(() => { /* 预判失败维持轻量动画，答案照常——loading 只是皮肤 */ });
     }
-    const history = turns.map((turn) => ({ role: turn.role, content: turn.content }));
+    // V112.1：historyOverride=详情页 CTA 跳入时先恢复的既有会话历史（state 异步来不及，直接显式传）
+    const history = historyOverride ?? turns.map((turn) => ({ role: turn.role, content: turn.content }));
     setTurns((ts) => [...ts, { role: "user", content: msg, imageUrl: img ?? undefined }]);
     setInput("");
     setPendingImage(null);
     setPendingFile(null);
-    doMutate(msg, history, false, radarId, img ?? undefined);
+    doMutate(msg, history, false, radarId, img ?? undefined, forceTid);
   }
 
   // 失败静默重试一次（网络/模型抖动大多是瞬时的）；再失败才诚实告诉买家
-  function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean, radarId?: number, imageData?: string) {
+  // V112.1：forceTid=会话续接时强制写入的既有会话 ID（state 异步来不及，显式传；重试也必须带上，否则续接断掉）
+  function doMutate(msg: string, history: { role: "user" | "assistant"; content: string }[], isRetry: boolean, radarId?: number, imageData?: string, forceTid?: number) {
     chat.mutate(
-      { message: msg, history, radarId, imageData, locale: lang, threadId: threadId ?? undefined, anonId: anonIdRef.current, salutationHint: me ? undefined : (readStoredSalutation() ?? undefined) },
+      { message: msg, history, radarId, imageData, locale: lang, threadId: (forceTid ?? threadId) ?? undefined, anonId: anonIdRef.current, salutationHint: me ? undefined : (readStoredSalutation() ?? undefined) },
       {
         onSuccess: (res) => {
           const tid = (res as any).threadId;
@@ -1089,7 +1091,7 @@ export default function BuyerChat() {
         },
         onError: () => {
           if (!isRetry) {
-            setTimeout(() => doMutate(msg, history, true, radarId), 2000);
+            setTimeout(() => doMutate(msg, history, true, radarId, imageData, forceTid), 2000);
             return;
           }
           setTurns((ts) => [
@@ -1105,10 +1107,15 @@ export default function BuyerChat() {
   }
 
   // M3a：载入历史会话——卡片数据从 payload 快照原样回放（不重新花钱查询）；追问卡不回放（会话已过期，防旧卡误提交）
-  async function loadThread(id: number) {
+  // V112.1：返回恢复的对话内容（供详情页 CTA 续接时作为 LLM 历史显式下传）；载入失败返回 null
+  async function loadThread(id: number): Promise<{ role: "user" | "assistant"; content: string }[] | null> {
     try {
       const data = await utils.threads.detail.fetch({ threadId: id, anonId: anonIdRef.current });
-      if (!data) return;
+      if (!data) return null;
+      const restored: { role: "user" | "assistant"; content: string }[] = data.messages.map((m: any) => ({
+        role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+        content: m.content,
+      }));
       setTurns(
         data.messages.map((m: any) => {
           const p = m.payload ?? {};
@@ -1134,7 +1141,10 @@ export default function BuyerChat() {
       setThreadId(id);
       try { sessionStorage.setItem("sb.thread", String(id)); } catch { /* 同上 */ }
       setShowHistory(false);
-    } catch { /* 载入失败就停在当前会话 */ }
+      return restored;
+    } catch {
+      return null; /* 载入失败就停在当前会话 */
+    }
   }
 
   function newChat() {
@@ -1152,7 +1162,20 @@ export default function BuyerChat() {
       const radarIdRaw = params.get("radar");
       const radarId = radarIdRaw && /^\d+$/.test(radarIdRaw) ? Number(radarIdRaw) : undefined;
       setParams({}, { replace: true });
-      send(pre, radarId);
+      // V112.1 会话续接（罗总实测痛点：详情页点「老采购跟进这一款」新开空白会话，前面聊的 1500 个全忘了）。
+      // 本次逛店已有会话（sb.thread）→ 先恢复原会话，再把这句发进同一会话（历史显式下传给 LLM）；
+      // 没有既有会话才新起。恢复失败静默退化为新会话，不阻塞买家发话。
+      let saved: string | null = null;
+      try { saved = sessionStorage.getItem("sb.thread"); } catch { /* 隐私模式 */ }
+      if (saved && /^\d+$/.test(saved)) {
+        const tid = Number(saved);
+        void (async () => {
+          const restored = await loadThread(tid);
+          send(pre, radarId, restored ?? undefined, restored ? tid : undefined);
+        })();
+      } else {
+        send(pre, radarId);
+      }
       return;
     }
     // M4a：从「我的询价」/工作台跳入，按 URL thread 参数直接回放该会话
