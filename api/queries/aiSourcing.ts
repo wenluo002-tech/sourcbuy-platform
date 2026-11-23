@@ -155,7 +155,8 @@ const REPLY_SYSTEM = `你是 SourcBuy 的 AI 采购代理，人格是"替买家�
 - buyerSalutationJustGiven=true：买家在这条消息里刚告诉你称呼——先自然确认一句（如"好，王哥，记下了"），立刻回到正事，别围着称呼聊。
 - buyerSalutationRejected=true：买家刚给的称呼不合规（脏话/特殊符号）——绝不复述原词，也别假装记下了；一句带过"这个称呼用不了，换一个试试"，然后回正事。
 - buyerSalutation 为空且 shouldAskSalutation=true：先把正事答完，结尾用一句轻量的话问怎么称呼（如"对了，怎么称呼你方便？后面沟通顺畅些"）。只问这一次；买家不接茬就永远别再提。
-- buyerSalutation 为空且 shouldAskSalutation=false：全程不提称呼的事，直接谈正事。`;
+- buyerSalutation 为空且 shouldAskSalutation=false：全程不提称呼的事，直接谈正事。
+24. 职责边界（不可突破，V112 罗总拍板）：你只办采购相关的事——找货、找厂、核价、验厂、物流、订单、平台使用答疑。买家要求做无关的事（生成图片或视频、写诗写小说、算命、闲聊八卦、写代码、翻译与采购无关的文本、查天气新闻等），一律一句礼貌拒绝并立刻拉回采购主线，如"这个不归我管——我专管帮你找货找厂。说回正事，你最近要采什么？"。绝不执行无关请求，绝不为满足无关请求调用任何能力，道歉最多一句。`;
 
 export interface ChatMsg {
   role: "user" | "assistant";
@@ -209,7 +210,8 @@ Rules:
 - If buyerSalutationJustGiven=true, the buyer just told you their preferred name in this message — acknowledge it in a few words ("Got it, Kevin") and get straight back to business; don't dwell on it.
 - If buyerSalutationRejected=true, the name they just gave failed our checks (profanity / invalid characters) — never repeat it, never pretend you saved it; one line — "that one won't work, try another" — then back to business.
 - If buyerSalutation is empty and shouldAskSalutation=true: answer the substance first, then close with one light question asking what to call them ("by the way, what should I call you? Keeps the back-and-forth smooth"). Ask once only — if they don't bite, never bring it up again.
-- If buyerSalutation is empty and shouldAskSalutation=false: never mention names at all — just talk business.`;
+- If buyerSalutation is empty and shouldAskSalutation=false: never mention names at all — just talk business.
+26. Scope boundary (non-negotiable, boss-mandated): you ONLY handle sourcing-related work — finding products/factories, pricing, factory vetting, logistics, orders, platform how-tos. If the buyer asks for anything unrelated (generating images or videos, poems or stories, fortune-telling, chit-chat, coding, translating non-sourcing text, weather/news, etc.), decline in ONE polite line and steer straight back to sourcing, e.g. "That's not my desk — I'm here to source products and vet factories for you. Back to business: what are you buying next?" Never perform the unrelated request; apologize at most once.`;
 
 // greeting 英文静态开场白
 const GREETING_FALLBACK_EN =
@@ -492,7 +494,7 @@ const REPLY_LANG_NAME: Record<string, string> = { es: "Spanish", fr: "French", p
 function replySystemFor(locale: string): string {
   if (locale === "zh") return REPLY_SYSTEM;
   const langName = REPLY_LANG_NAME[locale];
-  return REPLY_SYSTEM_EN + (langName ? `\n26. Always reply in ${langName}.` : "");
+  return REPLY_SYSTEM_EN + (langName ? `\n27. Always reply in ${langName}.` : "");
 }
 
 async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: number, imageData?: string, locale: string = "zh", unlocked = false, userId: number | null = null, salutationHint: string | null = null) {
@@ -569,6 +571,9 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
     ? `【买家贴了${linkCtx.platform}商品链接，页面标题：${linkCtx.title}${linkCtx.priceText ? `，海外售价约 ${linkCtx.priceText}` : ""}】买家原话：${message}`
     : message;
   const defaultModelId = modelsRes.status === "fulfilled" ? modelsRes.value.defaultModelId : process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking";
+  // V112 经济账（罗总 11-23 拍板：对话不追高配，够用+快+省）：意图抽取与答卡话术走轻量模型 k2d8-preview；
+  // 图片识别保留网关默认模型（需视觉能力）。轻量模型顺带根治 thinking 版 25s 超时频发走兜底的问题
+  const MODEL_FAST = process.env.KIMI_AGENTGW_MODEL ?? "k2d8-preview";
   // 意图抽取失败绝不抛 500：降级到本地词库兜底，筛厂/搜货链路照跑
   let imageSpecsNote: string | null = null;
   let imageFailed = false;
@@ -607,7 +612,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   } else {
     try {
       const r = await generateObject({
-        model: kimiGw(process.env.KIMI_AGENTGW_MODEL ?? "kimi-k2-thinking"),
+        model: kimiGw(MODEL_FAST),
         system: INTENT_SYSTEM,
         messages: [
           ...llmHistory(history),
@@ -691,7 +696,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
         : "";
     try {
       const { text } = await generateText({
-        model: kimiGw(defaultModelId),
+        model: kimiGw(MODEL_FAST),
         system: replySystemFor(locale),
         prompt: locale !== "zh"
           ? `User message: ${message}\nSourcing intent: small talk / no clear category\nFactory list: []${salHintEn}`
@@ -1059,7 +1064,7 @@ async function sourcingChatInner(message: string, history: ChatMsg[], radarId?: 
   let reply: string;
   try {
     const r = await generateText({
-      model: kimiGw(defaultModelId),
+      model: kimiGw(MODEL_FAST),
       system: replySystemFor(locale),
       messages: [
         ...messages,
